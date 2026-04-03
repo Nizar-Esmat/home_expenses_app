@@ -1,73 +1,39 @@
 import React, { useCallback, useState } from 'react';
 import {
-  View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  Switch, Alert, Modal, TextInput,
+  View, Text, ScrollView, TouchableOpacity, StyleSheet, Switch,
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/theme/ThemeContext';
 import { getSettings, saveSettings } from '@/services/database';
-import { DEFAULT_CATEGORIES, CURRENCY_OPTIONS } from '@/services/constants';
+import { CURRENCY_OPTIONS } from '@/services/constants';
 import { Settings } from '@/types';
 import AppButton from '@/components/AppButton';
-
-const EMOJI_OPTIONS = ['🍕','🚗','🏠','👗','🎮','📱','✈️','🎓','💊','🛒','☕','🎁','💡','🐾','⚽'];
 
 export default function SettingsScreen() {
   const { colors, isDark, toggleTheme } = useTheme();
   const router = useRouter();
 
-  const [settings, setSettings] = useState<Settings | null>(null);
   const [currency, setCurrency] = useState('EGP');
-  const [customCategories, setCustomCategories] = useState<string[]>([]);
-  const [customEmojiMap, setCustomEmojiMap] = useState<Record<string, string>>({});
-  const [newCategory, setNewCategory] = useState('');
-  const [newCatEmoji, setNewCatEmoji] = useState('📦');
-  const [emojiPickTarget, setEmojiPickTarget] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   const load = useCallback(() => {
-    getSettings().then((s) => {
-      setSettings(s);
-      setCurrency(s.currency ?? 'EGP');
-      setCustomCategories(s.customCategories ?? []);
-      setCustomEmojiMap(s.customCategoryEmojis ?? {});
-    });
+    getSettings().then((s: Settings) => setCurrency(s.currency ?? 'EGP'));
   }, []);
 
   useFocusEffect(load);
 
   const saveAll = async () => {
     setSaving(true);
-    await saveSettings({
-      currency,
-      customCategories,
-      customCategoryEmojis: customEmojiMap,
-    });
+    await saveSettings({ currency });
     setSaving(false);
     router.back();
   };
 
-  const addCategory = () => {
-    const name = newCategory.trim();
-    if (!name) return;
-    if ([...DEFAULT_CATEGORIES, ...customCategories].includes(name)) {
-      Alert.alert('Duplicate', 'This category already exists.');
-      return;
-    }
-    setCustomCategories(prev => [...prev, name]);
-    setCustomEmojiMap(prev => ({ ...prev, [name]: newCatEmoji }));
-    setNewCategory('');
-    setNewCatEmoji('📦');
-  };
-
-  const removeCategory = (cat: string) => {
-    setCustomCategories(prev => prev.filter(c => c !== cat));
-    setCustomEmojiMap(prev => { const n = { ...prev }; delete n[cat]; return n; });
-  };
-
   return (
     <View style={[styles.screen, { backgroundColor: colors.background }]}>
+
+      {/* Header */}
       <View style={[styles.header, { borderBottomColor: colors.border }]}>
         <TouchableOpacity onPress={() => router.back()}>
           <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
@@ -79,15 +45,17 @@ export default function SettingsScreen() {
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
 
         {/* Currency */}
-        <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>Currency</Text>
+        <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>CURRENCY</Text>
         <View style={styles.currencyRow}>
-          {CURRENCY_OPTIONS.map(c => (
+          {CURRENCY_OPTIONS.map((c) => (
             <TouchableOpacity
               key={c}
               style={[
                 styles.currencyPill,
-                { backgroundColor: currency === c ? colors.primary : colors.inputFill,
-                  borderColor: currency === c ? colors.primary : colors.border },
+                {
+                  backgroundColor: currency === c ? colors.primary : colors.inputFill,
+                  borderColor: currency === c ? colors.primary : colors.border,
+                },
               ]}
               onPress={() => setCurrency(c)}
             >
@@ -98,9 +66,15 @@ export default function SettingsScreen() {
           ))}
         </View>
 
-        {/* Dark mode */}
-        <View style={[styles.row, { backgroundColor: colors.card }]}>
-          <Text style={[styles.rowLabel, { color: colors.textPrimary }]}>🌙 Dark Mode</Text>
+        {/* Appearance */}
+        <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>APPEARANCE</Text>
+        <View style={[styles.navRow, { backgroundColor: colors.card }]}>
+          <View style={styles.navRowLeft}>
+            <View style={[styles.navIcon, { backgroundColor: '#285A48' }]}>
+              <Ionicons name="moon-outline" size={16} color="#B0E4CC" />
+            </View>
+            <Text style={[styles.navLabel, { color: colors.textPrimary }]}>Dark Mode</Text>
+          </View>
           <Switch
             value={isDark}
             onValueChange={toggleTheme}
@@ -109,79 +83,30 @@ export default function SettingsScreen() {
           />
         </View>
 
-        {/* Custom categories */}
-        <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>Custom Categories</Text>
-
-        {customCategories.map(cat => (
-          <View key={cat} style={[styles.catRow, { backgroundColor: colors.card }]}>
-            <TouchableOpacity
-              style={styles.catEmoji}
-              onPress={() => setEmojiPickTarget(cat)}
-            >
-              <Text style={{ fontSize: 22 }}>{customEmojiMap[cat] ?? '📦'}</Text>
-            </TouchableOpacity>
-            <Text style={[styles.catName, { color: colors.textPrimary }]}>{cat}</Text>
-            <TouchableOpacity onPress={() => removeCategory(cat)}>
-              <Ionicons name="trash-outline" size={20} color={colors.danger} />
-            </TouchableOpacity>
+        {/* Categories */}
+        <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>CATEGORIES</Text>
+        <TouchableOpacity
+          style={[styles.navRow, { backgroundColor: colors.card }]}
+          onPress={() => router.push('/categories')}
+          activeOpacity={0.75}
+        >
+          <View style={styles.navRowLeft}>
+            <View style={[styles.navIcon, { backgroundColor: colors.primary + '33' }]}>
+              <Ionicons name="pricetags-outline" size={16} color={colors.primary} />
+            </View>
+            <View>
+              <Text style={[styles.navLabel, { color: colors.textPrimary }]}>Manage Categories</Text>
+              <Text style={[styles.navSub, { color: colors.textSecondary }]}>
+                Add, edit & organise expense categories
+              </Text>
+            </View>
           </View>
-        ))}
-
-        <View style={[styles.addRow, { backgroundColor: colors.card }]}>
-          <TouchableOpacity
-            style={styles.emojiBtn}
-            onPress={() => setEmojiPickTarget('__new__')}
-          >
-            <Text style={{ fontSize: 22 }}>{newCatEmoji}</Text>
-          </TouchableOpacity>
-          <TextInput
-            style={[styles.addInput, { color: colors.textPrimary, borderColor: colors.border }]}
-            placeholder="New category name"
-            placeholderTextColor={colors.textSecondary}
-            value={newCategory}
-            onChangeText={setNewCategory}
-          />
-          <TouchableOpacity
-            style={[styles.addBtn, { backgroundColor: colors.primary }]}
-            onPress={addCategory}
-          >
-            <Ionicons name="add" size={20} color={colors.background} />
-          </TouchableOpacity>
-        </View>
+          <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
+        </TouchableOpacity>
 
         <AppButton label="Save Settings" onPress={saveAll} loading={saving} />
         <View style={{ height: 60 }} />
       </ScrollView>
-
-      {/* Emoji picker modal */}
-      <Modal visible={!!emojiPickTarget} transparent animationType="slide">
-        <View style={styles.overlay}>
-          <View style={[styles.emojiModal, { backgroundColor: colors.card }]}>
-            <Text style={[styles.emojiTitle, { color: colors.textPrimary }]}>Pick an emoji</Text>
-            <View style={styles.emojiGrid}>
-              {EMOJI_OPTIONS.map(em => (
-                <TouchableOpacity
-                  key={em}
-                  style={styles.emojiOpt}
-                  onPress={() => {
-                    if (emojiPickTarget === '__new__') {
-                      setNewCatEmoji(em);
-                    } else if (emojiPickTarget) {
-                      setCustomEmojiMap(prev => ({ ...prev, [emojiPickTarget]: em }));
-                    }
-                    setEmojiPickTarget(null);
-                  }}
-                >
-                  <Text style={{ fontSize: 28 }}>{em}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-            <TouchableOpacity onPress={() => setEmojiPickTarget(null)}>
-              <Text style={[styles.cancel, { color: colors.textSecondary }]}>Cancel</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
     </View>
   );
 }
@@ -194,37 +119,16 @@ const styles = StyleSheet.create({
   },
   title: { fontSize: 18, fontWeight: '700' },
   content: { padding: 20 },
-  sectionLabel: { fontSize: 13, fontWeight: '600', marginBottom: 10, marginTop: 6 },
-  currencyRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 20 },
-  currencyPill: {
-    paddingHorizontal: 18, paddingVertical: 10,
-    borderRadius: 10, borderWidth: 1.5,
-  },
+  sectionLabel: { fontSize: 11, fontWeight: '700', letterSpacing: 1, marginBottom: 10, marginTop: 6 },
+  currencyRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 24 },
+  currencyPill: { paddingHorizontal: 18, paddingVertical: 10, borderRadius: 10, borderWidth: 1.5 },
   currencyText: { fontSize: 14, fontWeight: '600' },
-  row: {
+  navRow: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    padding: 16, borderRadius: 14, marginBottom: 20,
+    padding: 14, borderRadius: 14, marginBottom: 10,
   },
-  rowLabel: { fontSize: 15, fontWeight: '600' },
-  catRow: {
-    flexDirection: 'row', alignItems: 'center',
-    padding: 14, borderRadius: 12, marginBottom: 8,
-  },
-  catEmoji: { marginRight: 10 },
-  catName: { flex: 1, fontSize: 15, fontWeight: '600' },
-  addRow: {
-    flexDirection: 'row', alignItems: 'center',
-    padding: 12, borderRadius: 12, marginBottom: 20,
-  },
-  emojiBtn: { padding: 4, marginRight: 8 },
-  addInput: {
-    flex: 1, fontSize: 14, borderBottomWidth: 1, paddingVertical: 4, marginRight: 10,
-  },
-  addBtn: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
-  overlay: { flex: 1, backgroundColor: '#00000066', justifyContent: 'flex-end' },
-  emojiModal: { borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 24 },
-  emojiTitle: { fontSize: 16, fontWeight: '700', marginBottom: 16, textAlign: 'center' },
-  emojiGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 12 },
-  emojiOpt: { padding: 8 },
-  cancel: { textAlign: 'center', marginTop: 16, fontSize: 15 },
+  navRowLeft: { flexDirection: 'row', alignItems: 'center', flex: 1 },
+  navIcon: { width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center', marginRight: 12 },
+  navLabel: { fontSize: 15, fontWeight: '600' },
+  navSub: { fontSize: 12, marginTop: 2 },
 });

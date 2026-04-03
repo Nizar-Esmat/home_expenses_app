@@ -6,9 +6,9 @@ import {
 import { useFocusEffect, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/theme/ThemeContext';
-import { getExpensesByMonth, getIncomesByMonth, deleteExpense, deleteIncome, getSettings } from '@/services/database';
+import { getExpensesByMonth, getIncomesByMonth, deleteExpense, deleteIncome, getSettings, getCategories } from '@/services/database';
 import { currentMonthKey, monthKeyToLabel, formatCurrency } from '@/services/constants';
-import { Expense, Income, Settings } from '@/types';
+import { Category, Expense, Income, Settings } from '@/types';
 import SummaryCard from '@/components/SummaryCard';
 import ExpenseTile from '@/components/ExpenseTile';
 import IncomeTile from '@/components/IncomeTile';
@@ -27,6 +27,7 @@ export default function HomeScreen() {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [incomes, setIncomes] = useState<Income[]>([]);
   const [settings, setSettings] = useState<Settings | null>(null);
+  const [categoryMap, setCategoryMap] = useState<Record<string, Category>>({});
   const [loading, setLoading] = useState(true);
   const [fabOpen, setFabOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<'expenses' | 'income'>('expenses');
@@ -37,10 +38,14 @@ export default function HomeScreen() {
       getExpensesByMonth(monthKey),
       getIncomesByMonth(monthKey),
       getSettings(),
-    ]).then(([exps, incs, sets]) => {
+      getCategories(),
+    ]).then(([exps, incs, sets, cats]) => {
       setExpenses(exps);
       setIncomes(incs);
       setSettings(sets);
+      const map: Record<string, Category> = {};
+      cats.forEach((c) => (map[c.name] = c));
+      setCategoryMap(map);
       setLoading(false);
     });
   }, [monthKey]);
@@ -168,7 +173,8 @@ export default function HomeScreen() {
                 key={exp.id}
                 expense={exp}
                 currency={settings?.currency ?? 'EGP'}
-                customEmojiMap={settings?.customCategoryEmojis ?? {}}
+                categoryEmoji={categoryMap[exp.category]?.emoji ?? '📦'}
+                categoryColor={categoryMap[exp.category]?.color ?? '#408A71'}
                 onEdit={() => router.push({ pathname: '/add-expense', params: { expenseId: String(exp.id) } })}
                 onDelete={() => handleDeleteExpense(exp.id)}
               />

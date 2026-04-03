@@ -1,5 +1,6 @@
 import * as SQLite from 'expo-sqlite';
-import { Expense, Income, Settings, MonthSummary } from '@/types';
+import { Category, Expense, Income, Settings, MonthSummary } from '@/types';
+import { DEFAULT_CATEGORIES, DEFAULT_CATEGORY_COLORS } from '@/services/constants';
 
 let _db: SQLite.SQLiteDatabase | null = null;
 
@@ -10,6 +11,8 @@ async function getDb(): Promise<SQLite.SQLiteDatabase> {
   }
   return _db;
 }
+
+// ── Schema ────────────────────────────────────────────────────
 
 async function initDb(db: SQLite.SQLiteDatabase): Promise<void> {
   await db.execAsync(`
@@ -36,7 +39,67 @@ async function initDb(db: SQLite.SQLiteDatabase): Promise<void> {
       key   TEXT PRIMARY KEY,
       value TEXT NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS categories (
+      id        INTEGER PRIMARY KEY AUTOINCREMENT,
+      name      TEXT    NOT NULL UNIQUE,
+      emoji     TEXT    NOT NULL DEFAULT '📦',
+      color     TEXT    NOT NULL DEFAULT '#408A71',
+      isDefault INTEGER NOT NULL DEFAULT 0,
+      sortOrder INTEGER NOT NULL DEFAULT 0,
+      createdAt TEXT    NOT NULL
+    );
   `);
+
+  await seedCategories(db);
+}
+
+// ── Category seed & migration ─────────────────────────────────
+
+const BUILT_IN: { name: string; emoji: string; sortOrder: number }[] = [
+  { name: 'Food',      emoji: '🍔', sortOrder: 0 },
+  { name: 'Bills',     emoji: '💡', sortOrder: 1 },
+  { name: 'Transport', emoji: '🚗', sortOrder: 2 },
+  { name: 'Shopping',  emoji: '🛍️', sortOrder: 3 },
+  { name: 'Home',      emoji: '🏠', sortOrder: 4 },
+  { name: 'Other',     emoji: '📦', sortOrder: 5 },
+];
+
+async function seedCategories(db: SQLite.SQLiteDatabase): Promise<void> {
+  const count = await db.getFirstAsync<{ n: number }>('SELECT COUNT(*) AS n FROM categories');
+  if (count && count.n > 0) return; // already seeded
+
+  const now = new Date().toISOString();
+
+  // Insert built-in categories
+  for (const cat of BUILT_IN) {
+    await db.runAsync(
+      'INSERT OR IGNORE INTO categories (name, emoji, color, isDefault, sortOrder, createdAt) VALUES (?,?,?,1,?,?)',
+      [cat.name, cat.emoji, DEFAULT_CATEGORY_COLORS[cat.name] ?? '#408A71', cat.sortOrder, now],
+    );
+  }
+
+  // Migrate old customCategories from settings JSON (if any)
+  const customCatsRow = await db.getFirstAsync<{ value: string }>(
+    "SELECT value FROM settings WHERE key='customCategories'",
+  );
+  const customEmojiRow = await db.getFirstAsync<{ value: string }>(
+    "SELECT value FROM settings WHERE key='customCategoryEmojis'",
+  );
+
+  if (customCatsRow?.value) {
+    const cats: string[] = JSON.parse(customCatsRow.value);
+    const emojis: Record<string, string> = customEmojiRow?.value
+      ? JSON.parse(customEmojiRow.value)
+      : {};
+    let sortOrder = BUILT_IN.length;
+    for (const cat of cats) {
+      await db.runAsync(
+        'INSERT OR IGNORE INTO categories (name, emoji, color, isDefault, sortOrder, createdAt) VALUES (?,?,?,0,?,?)',
+        [cat, emojis[cat] ?? '📦', '#408A71', sortOrder++, now],
+      );
+    }
+  }
 }
 
 // ── Helpers ───────────────────────────────────────────────────
@@ -48,6 +111,117 @@ function nowIso(): string {
 function toMonthKey(iso: string): string {
   const d = new Date(iso);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
+// ── Categories CRUD ───────────────────────────────────────────
+
+export async function getCategories(): Promise<Category[]> {
+  const db = await getDb();
+  return db.getAllAsync<Category>(
+    'SELECT * FROM categories ORDER BY sortOrder ASC, id ASC',
+  );
+}
+
+export async function addCategory(
+  name: string,
+  emoji: string,
+  color: string,
+): Promise<number> {
+  const db = await getDb();
+  const trimmed = name.trim();
+
+  const existing = await db.getFirstAsync<{ n: number }>(
+    'SELECT COUNT(*) AS n FROM categories WHERE LOWER(name)=LOWER(?)',
+    [trimmed],
+  );
+  if (existing && existing.n > 0) throw new Error('A category with this name already exists.');
+
+  const maxSort = await db.getFirstAsync<{ m: number }>(
+    'SELECT MAX(sortOrder) AS m FROM categories',
+  );
+  const sortOrder = (maxSort?.m ?? -1) + 1;
+
+  const result = await db.runAsync(
+    'INSERT INTO categories (name, emoji, color, isDefault, sortOrder, createdAt) VALUES (?,?,?,0,?,?)',
+    [trimmed, emoji, color, sortOrder, nowIso()],
+  );
+  return result.lastInsertRowId;
+}
+
+export async function updateCategory(
+  id: number,
+  name: string,
+  emoji: string,
+  color: string,
+): Promise<void> {
+  const db = await getDb();
+  const trimmed = name.trim();
+
+  const cat = await db.getFirstAsync<Category>(
+    'SELECT * FROM categories WHERE id=?',
+    [id],
+  );
+  if (!cat) throw new Error('Category not found.');
+
+  // Only check name uniqueness for custom (non-default) categories
+  if (!cat.isDefault) {
+    const dup = await db.getFirstAsync<{ n: number }>(
+      'SELECT COUNT(*) AS n FROM categories WHERE LOWER(name)=LOWER(?) AND id!=?',
+      [trimmed, id],
+    );
+    if (dup && dup.n > 0) throw new Error('A category with this name already exists.');
+  }
+
+  await db.runAsync(
+    'UPDATE categories SET emoji=?, color=?, name=? WHERE id=?',
+    [emoji, color, cat.isDefault ? cat.name : trimmed, id],
+  );
+
+  // Rename all expenses that use the old name (only relevant for custom categories)
+  if (!cat.isDefault && cat.name !== trimmed) {
+    await db.runAsync(
+      'UPDATE expenses SET category=? WHERE category=?',
+      [trimmed, cat.name],
+    );
+  }
+}
+
+export async function deleteCategory(
+  id: number,
+): Promise<{ ok: boolean; reason?: string }> {
+  const db = await getDb();
+
+  const cat = await db.getFirstAsync<Category>(
+    'SELECT * FROM categories WHERE id=?',
+    [id],
+  );
+  if (!cat) return { ok: false, reason: 'Category not found.' };
+  if (cat.isDefault) return { ok: false, reason: 'Built-in categories cannot be deleted.' };
+
+  const used = await db.getFirstAsync<{ n: number }>(
+    'SELECT COUNT(*) AS n FROM expenses WHERE category=?',
+    [cat.name],
+  );
+  if (used && used.n > 0) {
+    return {
+      ok: false,
+      reason: `"${cat.name}" is used by ${used.n} expense${used.n > 1 ? 's' : ''}. Delete those expenses first.`,
+    };
+  }
+
+  await db.runAsync('DELETE FROM categories WHERE id=?', [id]);
+  return { ok: true };
+}
+
+/** Returns a map of { [categoryName]: expenseCount } for all categories */
+export async function getCategoryUsageCounts(): Promise<Record<string, number>> {
+  const db = await getDb();
+  const rows = await db.getAllAsync<{ category: string; cnt: number }>(
+    'SELECT category, COUNT(*) AS cnt FROM expenses GROUP BY category',
+  );
+  const map: Record<string, number> = {};
+  rows.forEach((r) => (map[r.category] = r.cnt));
+  return map;
 }
 
 // ── Expenses ──────────────────────────────────────────────────
@@ -123,7 +297,6 @@ export async function getIncomesByMonth(monthKey: string): Promise<Income[]> {
 export async function getMonthHistory(): Promise<MonthSummary[]> {
   const db = await getDb();
 
-  // Get all months that appear in either table
   const months = await db.getAllAsync<{ monthKey: string }>(
     `SELECT DISTINCT monthKey FROM expenses
      UNION
@@ -131,7 +304,7 @@ export async function getMonthHistory(): Promise<MonthSummary[]> {
      ORDER BY monthKey DESC`,
   );
 
-  const summaries: MonthSummary[] = await Promise.all(
+  return Promise.all(
     months.map(async ({ monthKey }) => {
       const expRow = await db.getFirstAsync<{ total: number; cnt: number }>(
         'SELECT COALESCE(SUM(price),0) AS total, COUNT(*) AS cnt FROM expenses WHERE monthKey=?',
@@ -149,8 +322,6 @@ export async function getMonthHistory(): Promise<MonthSummary[]> {
       };
     }),
   );
-
-  return summaries;
 }
 
 // ── Settings ──────────────────────────────────────────────────

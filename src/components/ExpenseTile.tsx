@@ -2,20 +2,22 @@ import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Expense } from '@/types';
-import { CATEGORY_EMOJIS, formatCurrency, formatDate } from '@/services/constants';
+import { formatCurrency, formatDate } from '@/services/constants';
 import { useTheme } from '@/theme/ThemeContext';
 
 interface Props {
   expense: Expense;
   currency: string;
-  customEmojiMap: Record<string, string>;
+  categoryEmoji: string;
+  categoryColor: string;
   onEdit: () => void;
   onDelete: () => void;
 }
 
-export default function ExpenseTile({ expense, currency, customEmojiMap, onEdit, onDelete }: Props) {
+export default function ExpenseTile({
+  expense, currency, categoryEmoji, categoryColor, onEdit, onDelete,
+}: Props) {
   const { colors } = useTheme();
-  const emoji = CATEGORY_EMOJIS[expense.category] ?? customEmojiMap[expense.category] ?? '📦';
 
   const confirmDelete = () =>
     Alert.alert('Delete Expense', 'Are you sure you want to delete this expense?', [
@@ -24,10 +26,12 @@ export default function ExpenseTile({ expense, currency, customEmojiMap, onEdit,
     ]);
 
   return (
-    <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-      <View style={[styles.icon, { backgroundColor: colors.inputFill }]}>
-        <Text style={styles.emoji}>{emoji}</Text>
+    <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+      {/* Colored category badge */}
+      <View style={[styles.badge, { backgroundColor: categoryColor }]}>
+        <Text style={styles.emoji}>{categoryEmoji}</Text>
       </View>
+
       <View style={styles.info}>
         <Text style={[styles.category, { color: colors.textPrimary }]}>{expense.category}</Text>
         {expense.note ? (
@@ -37,14 +41,16 @@ export default function ExpenseTile({ expense, currency, customEmojiMap, onEdit,
         ) : null}
         <Text style={[styles.date, { color: colors.textSecondary }]}>{formatDate(expense.createdAt)}</Text>
       </View>
+
       <Text style={[styles.price, { color: colors.danger }]}>
         -{formatCurrency(expense.price, currency)}
       </Text>
+
       <View style={styles.actions}>
-        <TouchableOpacity onPress={onEdit} style={styles.action}>
+        <TouchableOpacity onPress={onEdit} style={styles.action} hitSlop={{ top:8,bottom:8,left:8,right:8 }}>
           <Ionicons name="pencil-outline" size={18} color={colors.textSecondary} />
         </TouchableOpacity>
-        <TouchableOpacity onPress={confirmDelete} style={styles.action}>
+        <TouchableOpacity onPress={confirmDelete} style={styles.action} hitSlop={{ top:8,bottom:8,left:8,right:8 }}>
           <Ionicons name="trash-outline" size={18} color={colors.danger} />
         </TouchableOpacity>
       </View>
@@ -54,19 +60,12 @@ export default function ExpenseTile({ expense, currency, customEmojiMap, onEdit,
 
 const styles = StyleSheet.create({
   card: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 14,
-    borderRadius: 14,
-    borderWidth: 1,
-    marginBottom: 10,
+    flexDirection: 'row', alignItems: 'center',
+    padding: 14, borderRadius: 14, borderWidth: 1, marginBottom: 10,
   },
-  icon: {
-    width: 44, height: 44,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
+  badge: {
+    width: 44, height: 44, borderRadius: 22,
+    alignItems: 'center', justifyContent: 'center', marginRight: 12,
   },
   emoji: { fontSize: 22 },
   info: { flex: 1 },
