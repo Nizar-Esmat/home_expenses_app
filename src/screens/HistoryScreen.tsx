@@ -16,12 +16,13 @@ export default function HistoryScreen() {
   const [settings, setSettings] = useState<Settings | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const load = useCallback(async () => {
+  const load = useCallback(() => {
     setLoading(true);
-    const [hist, sets] = await Promise.all([getMonthHistory(), getSettings()]);
-    setMonths(hist);
-    setSettings(sets);
-    setLoading(false);
+    Promise.all([getMonthHistory(), getSettings()]).then(([hist, sets]) => {
+      setMonths(hist);
+      setSettings(sets);
+      setLoading(false);
+    });
   }, []);
 
   useFocusEffect(load);

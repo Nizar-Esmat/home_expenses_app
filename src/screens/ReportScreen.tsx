@@ -20,13 +20,14 @@ export default function ReportScreen() {
   const [settings, setSettings] = useState<Settings | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const load = useCallback(async () => {
+  const load = useCallback(() => {
     if (!monthKey) return;
     setLoading(true);
-    const [exps, sets] = await Promise.all([getExpensesByMonth(monthKey), getSettings()]);
-    setExpenses(exps);
-    setSettings(sets);
-    setLoading(false);
+    Promise.all([getExpensesByMonth(monthKey), getSettings()]).then(([exps, sets]) => {
+      setExpenses(exps);
+      setSettings(sets);
+      setLoading(false);
+    });
   }, [monthKey]);
 
   useFocusEffect(load);

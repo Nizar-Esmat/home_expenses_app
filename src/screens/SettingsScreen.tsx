@@ -28,13 +28,14 @@ export default function SettingsScreen() {
   const [emojiPickTarget, setEmojiPickTarget] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
-  const load = useCallback(async () => {
-    const s = await getSettings();
-    setSettings(s);
-    setSalary(s.salary ? String(s.salary) : '');
-    setCurrency(s.currency ?? 'EGP');
-    setCustomCategories(s.customCategories ?? []);
-    setCustomEmojiMap(s.customCategoryEmojis ?? {});
+  const load = useCallback(() => {
+    getSettings().then((s) => {
+      setSettings(s);
+      setSalary(s.salary ? String(s.salary) : '');
+      setCurrency(s.currency ?? 'EGP');
+      setCustomCategories(s.customCategories ?? []);
+      setCustomEmojiMap(s.customCategoryEmojis ?? {});
+    });
   }, []);
 
   useFocusEffect(load);
