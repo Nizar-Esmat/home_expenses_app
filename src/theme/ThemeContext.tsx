@@ -18,22 +18,34 @@ const ThemeContext = createContext<ThemeContextType>({
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const systemScheme = useColorScheme();
   const [isDark, setIsDark] = useState(true);
+  const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    getSettings().then((s) => {
-      if (s.themeMode === 'system') {
-        setIsDark(systemScheme === 'dark');
-      } else {
-        setIsDark(s.themeMode !== 'light');
-      }
-    });
-  }, [systemScheme]);
+    getSettings()
+      .then((s) => {
+        if (s.themeMode === 'system') {
+          setIsDark(systemScheme === 'dark');
+        } else {
+          setIsDark(s.themeMode !== 'light');
+        }
+      })
+      .catch(() => {
+        // DB failed — fall back to dark mode
+        setIsDark(true);
+      })
+      .finally(() => {
+        setReady(true);
+      });
+  }, []);
 
-  const toggleTheme = async () => {
+  const toggleTheme = () => {
     const next = !isDark;
     setIsDark(next);
-    await saveSetting('themeMode', next ? 'dark' : 'light');
+    saveSetting('themeMode', next ? 'dark' : 'light').catch(() => {});
   };
+
+  // Don't render children until theme is loaded from DB
+  if (!ready) return null;
 
   return (
     <ThemeContext.Provider value={{ colors: isDark ? dark : light, isDark, toggleTheme }}>
