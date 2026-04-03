@@ -9,7 +9,6 @@ import { useTheme } from '@/theme/ThemeContext';
 import { getSettings, saveSettings } from '@/services/database';
 import { DEFAULT_CATEGORIES, CURRENCY_OPTIONS } from '@/services/constants';
 import { Settings } from '@/types';
-import AppInput from '@/components/AppInput';
 import AppButton from '@/components/AppButton';
 
 const EMOJI_OPTIONS = ['🍕','🚗','🏠','👗','🎮','📱','✈️','🎓','💊','🛒','☕','🎁','💡','🐾','⚽'];
@@ -19,7 +18,6 @@ export default function SettingsScreen() {
   const router = useRouter();
 
   const [settings, setSettings] = useState<Settings | null>(null);
-  const [salary, setSalary] = useState('');
   const [currency, setCurrency] = useState('EGP');
   const [customCategories, setCustomCategories] = useState<string[]>([]);
   const [customEmojiMap, setCustomEmojiMap] = useState<Record<string, string>>({});
@@ -31,7 +29,6 @@ export default function SettingsScreen() {
   const load = useCallback(() => {
     getSettings().then((s) => {
       setSettings(s);
-      setSalary(s.salary ? String(s.salary) : '');
       setCurrency(s.currency ?? 'EGP');
       setCustomCategories(s.customCategories ?? []);
       setCustomEmojiMap(s.customCategoryEmojis ?? {});
@@ -42,9 +39,7 @@ export default function SettingsScreen() {
 
   const saveAll = async () => {
     setSaving(true);
-    const v = parseFloat(salary.replace(',', '.'));
     await saveSettings({
-      salary: isNaN(v) ? 0 : v,
       currency,
       customCategories,
       customCategoryEmojis: customEmojiMap,
@@ -82,15 +77,6 @@ export default function SettingsScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-
-        {/* Salary */}
-        <AppInput
-          label="Monthly Salary"
-          value={salary}
-          onChangeText={setSalary}
-          placeholder="Enter monthly salary"
-          keyboardType="decimal-pad"
-        />
 
         {/* Currency */}
         <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>Currency</Text>
