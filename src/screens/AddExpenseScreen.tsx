@@ -4,14 +4,14 @@ import {
 } from 'react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
-import { useTheme } from '../theme/ThemeContext';
-import { addExpense, updateExpense, getSettings } from '../services/database';
+import { useTheme } from '@/theme/ThemeContext';
+import { addExpense, updateExpense, getSettings } from '@/services/database';
 import {
   DEFAULT_CATEGORIES, CATEGORY_EMOJIS, CUSTOM_EMOJI_OPTIONS, formatCurrency,
-} from '../services/constants';
-import { Expense, Settings } from '../types';
-import AppInput from '../components/AppInput';
-import AppButton from '../components/AppButton';
+} from '@/services/constants';
+import { Expense, Settings } from '@/types';
+import AppInput from '@/components/AppInput';
+import AppButton from '@/components/AppButton';
 
 type RouteParams = { expense?: Expense };
 

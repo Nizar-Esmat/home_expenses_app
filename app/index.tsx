@@ -1,6 +1,6 @@
 import { SafeAreaView, StyleSheet } from 'react-native';
-import HomeScreen from '../src/screens/HomeScreen';
-import { useTheme } from '../src/theme/ThemeContext';
+import HomeScreen from '@/screens/HomeScreen';
+import { useTheme } from '@/theme/ThemeContext';
 
 export default function Index() {
   const { colors } = useTheme();

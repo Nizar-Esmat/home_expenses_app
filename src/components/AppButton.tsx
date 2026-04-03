@@ -2,7 +2,7 @@ import React from 'react';
 import {
   TouchableOpacity, Text, ActivityIndicator, StyleSheet, ViewStyle,
 } from 'react-native';
-import { useTheme } from '../theme/ThemeContext';
+import { useTheme } from '@/theme/ThemeContext';
 
 interface Props {
   label: string;

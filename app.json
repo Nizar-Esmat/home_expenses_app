@@ -25,7 +25,9 @@
         {
           "enableFTS": false
         }
-      ]
+      ],
+      "expo-asset",
+      "expo-font"
     ],
     "scheme": "budgetbuddy",
     "experiments": {

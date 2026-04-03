@@ -5,14 +5,14 @@ import {
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
-import { useTheme } from '../theme/ThemeContext';
-import { getSettings, saveSettings } from '../services/database';
+import { useTheme } from '@/theme/ThemeContext';
+import { getSettings, saveSettings } from '@/services/database';
 import {
   DEFAULT_CATEGORIES, CATEGORY_EMOJIS, CUSTOM_EMOJI_OPTIONS,
-} from '../services/constants';
-import { Settings } from '../types';
-import AppInput from '../components/AppInput';
-import AppButton from '../components/AppButton';
+} from '@/services/constants';
+import { Settings } from '@/types';
+import AppInput from '@/components/AppInput';
+import AppButton from '@/components/AppButton';
 
 export default function SettingsScreen() {
   const { colors, isDark, toggleTheme } = useTheme();

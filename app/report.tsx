@@ -1,6 +1,6 @@
 import { SafeAreaView, StyleSheet } from 'react-native';
-import ReportScreen from '../src/screens/ReportScreen';
-import { useTheme } from '../src/theme/ThemeContext';
+import ReportScreen from '@/screens/ReportScreen';
+import { useTheme } from '@/theme/ThemeContext';
 
 export default function ReportPage() {
   const { colors } = useTheme();

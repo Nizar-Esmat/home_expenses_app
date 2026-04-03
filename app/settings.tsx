@@ -1,6 +1,6 @@
 import { SafeAreaView, StyleSheet } from 'react-native';
-import SettingsScreen from '../src/screens/SettingsScreen';
-import { useTheme } from '../src/theme/ThemeContext';
+import SettingsScreen from '@/screens/SettingsScreen';
+import { useTheme } from '@/theme/ThemeContext';
 
 export default function SettingsPage() {
   const { colors } = useTheme();

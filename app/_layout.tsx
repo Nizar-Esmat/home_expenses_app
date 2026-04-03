@@ -1,6 +1,6 @@
 import { Stack } from 'expo-router';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { ThemeProvider, useTheme } from '../src/theme/ThemeContext';
+import { ThemeProvider, useTheme } from '@/theme/ThemeContext';
 import { StatusBar } from 'expo-status-bar';
 
 function RootLayoutNav() {

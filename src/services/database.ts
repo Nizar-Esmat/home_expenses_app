@@ -1,5 +1,5 @@
 import * as SQLite from 'expo-sqlite';
-import { Expense, Settings, MonthSummary } from '../types';
+import { Expense, Settings, MonthSummary } from '@/types';
 
 let _db: SQLite.SQLiteDatabase | null = null;
 

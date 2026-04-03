@@ -5,16 +5,16 @@ import {
 } from 'react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
-import { useTheme } from '../theme/ThemeContext';
+import { useTheme } from '@/theme/ThemeContext';
 import {
   getExpensesByMonth, deleteExpense, getSettings,
-} from '../services/database';
+} from '@/services/database';
 import {
   currentMonthKey, monthKeyToLabel, formatCurrency, DEFAULT_CATEGORIES,
-} from '../services/constants';
-import { Expense, Settings } from '../types';
-import SummaryCard from '../components/SummaryCard';
-import ExpenseTile from '../components/ExpenseTile';
+} from '@/services/constants';
+import { Expense, Settings } from '@/types';
+import SummaryCard from '@/components/SummaryCard';
+import ExpenseTile from '@/components/ExpenseTile';
 
 export default function HomeScreen() {
   const { colors } = useTheme();

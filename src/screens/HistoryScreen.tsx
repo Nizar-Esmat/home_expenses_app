@@ -4,10 +4,10 @@ import {
 } from 'react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
-import { useTheme } from '../theme/ThemeContext';
-import { getMonthHistory, getSettings } from '../services/database';
-import { currentMonthKey, monthKeyToLabel, formatCurrency, MONTH_EMOJIS } from '../services/constants';
-import { MonthSummary, Settings } from '../types';
+import { useTheme } from '@/theme/ThemeContext';
+import { getMonthHistory, getSettings } from '@/services/database';
+import { currentMonthKey, monthKeyToLabel, formatCurrency, MONTH_EMOJIS } from '@/services/constants';
+import { MonthSummary, Settings } from '@/types';
 
 export default function HistoryScreen() {
   const { colors } = useTheme();

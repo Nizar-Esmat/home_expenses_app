@@ -5,12 +5,12 @@ import {
 } from 'react-native';
 import { useFocusEffect, useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
-import { useTheme } from '../theme/ThemeContext';
-import { getExpensesByMonth, deleteExpense, getSettings } from '../services/database';
-import { currentMonthKey, monthKeyToLabel, formatCurrency } from '../services/constants';
-import { Expense, Settings } from '../types';
-import ExpenseTile from '../components/ExpenseTile';
-import CategoryBar from '../components/CategoryBar';
+import { useTheme } from '@/theme/ThemeContext';
+import { getExpensesByMonth, deleteExpense, getSettings } from '@/services/database';
+import { currentMonthKey, monthKeyToLabel, formatCurrency } from '@/services/constants';
+import { Expense, Settings } from '@/types';
+import ExpenseTile from '@/components/ExpenseTile';
+import CategoryBar from '@/components/CategoryBar';
 
 type RouteParams = { monthKey?: string };
 

@@ -1,9 +1,9 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Expense } from '../types';
-import { CATEGORY_EMOJIS, formatCurrency, formatDate } from '../services/constants';
-import { useTheme } from '../theme/ThemeContext';
+import { Expense } from '@/types';
+import { CATEGORY_EMOJIS, formatCurrency, formatDate } from '@/services/constants';
+import { useTheme } from '@/theme/ThemeContext';
 
 interface Props {
   expense: Expense;

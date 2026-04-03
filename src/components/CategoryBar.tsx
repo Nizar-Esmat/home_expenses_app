@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { CATEGORY_EMOJIS, formatCurrency } from '../services/constants';
-import { useTheme } from '../theme/ThemeContext';
+import { CATEGORY_EMOJIS, formatCurrency } from '@/services/constants';
+import { useTheme } from '@/theme/ThemeContext';
 
 interface Props {
   category: string;

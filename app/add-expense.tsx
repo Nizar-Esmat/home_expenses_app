@@ -1,6 +1,6 @@
 import { SafeAreaView, StyleSheet } from 'react-native';
-import AddExpenseScreen from '../src/screens/AddExpenseScreen';
-import { useTheme } from '../src/theme/ThemeContext';
+import AddExpenseScreen from '@/screens/AddExpenseScreen';
+import { useTheme } from '@/theme/ThemeContext';
 
 export default function AddExpensePage() {
   const { colors } = useTheme();
