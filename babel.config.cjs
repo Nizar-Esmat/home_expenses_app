@@ -2,17 +2,13 @@ module.exports = function (api) {
   api.cache(true);
   return {
     presets: ['babel-preset-expo'],
-    // Babel 7 assumptions: avoids Reflect.construct / wrapNativeSuper
-    // which crashes on Hermes when extending native classes (e.g. Error)
+    // superIsCallableConstructor: true tells Babel to call super() as a regular
+    // function instead of using Reflect.construct / wrapNativeSuper.
+    // This avoids the Hermes crash when extending native classes like Error.
     assumptions: {
-      setPublicClassFields: true,
-      privateFieldsAsProperties: true,
-      superIsCallableConstructor: false,
+      superIsCallableConstructor: true,
     },
     plugins: [
-      ['@babel/plugin-transform-classes',          { loose: true }],
-      ['@babel/plugin-transform-class-properties', { loose: true }],
-      ['@babel/plugin-transform-private-methods',  { loose: true }],
       [
         'module-resolver',
         {
