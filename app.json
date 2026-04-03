@@ -1,0 +1,35 @@
+{
+  "expo": {
+    "name": "BudgetBuddy",
+    "slug": "budget-buddy",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "splash": {
+      "backgroundColor": "#091413"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#091413"
+      },
+      "package": "com.budgetbuddy.app"
+    },
+    "ios": {
+      "bundleIdentifier": "com.budgetbuddy.app"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-sqlite",
+        {
+          "enableFTS": false
+        }
+      ]
+    ],
+    "scheme": "budgetbuddy",
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}
