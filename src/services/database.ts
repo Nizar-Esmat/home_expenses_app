@@ -1,5 +1,5 @@
 import * as SQLite from 'expo-sqlite';
-import { Expense, Settings, MonthSummary } from '@/types';
+import { Expense, Income, Settings, MonthSummary } from '@/types';
 
 let _db: SQLite.SQLiteDatabase | null = null;
 
@@ -11,7 +11,7 @@ async function getDb(): Promise<SQLite.SQLiteDatabase> {
   return _db;
 }
 
-async function initDb(db: SQLite.SQLiteDatabase) {
+async function initDb(db: SQLite.SQLiteDatabase): Promise<void> {
   await db.execAsync(`
     PRAGMA journal_mode = WAL;
 
@@ -24,6 +24,14 @@ async function initDb(db: SQLite.SQLiteDatabase) {
       monthKey  TEXT    NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS incomes (
+      id        INTEGER PRIMARY KEY AUTOINCREMENT,
+      amount    REAL    NOT NULL,
+      note      TEXT,
+      createdAt TEXT    NOT NULL,
+      monthKey  TEXT    NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS settings (
       key   TEXT PRIMARY KEY,
       value TEXT NOT NULL
@@ -31,7 +39,18 @@ async function initDb(db: SQLite.SQLiteDatabase) {
   `);
 }
 
-// ── Expenses ─────────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────
+
+function nowIso(): string {
+  return new Date().toISOString();
+}
+
+function toMonthKey(iso: string): string {
+  const d = new Date(iso);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
+// ── Expenses ──────────────────────────────────────────────────
 
 export async function addExpense(
   price: number,
@@ -39,12 +58,10 @@ export async function addExpense(
   note: string | null,
 ): Promise<void> {
   const db = await getDb();
-  const now = new Date();
-  const createdAt = now.toISOString();
-  const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  const createdAt = nowIso();
   await db.runAsync(
     'INSERT INTO expenses (price, category, note, createdAt, monthKey) VALUES (?, ?, ?, ?, ?)',
-    [price, category, note ?? null, createdAt, monthKey],
+    [price, category, note ?? null, createdAt, toMonthKey(createdAt)],
   );
 }
 
@@ -68,34 +85,75 @@ export async function deleteExpense(id: number): Promise<void> {
 
 export async function getExpensesByMonth(monthKey: string): Promise<Expense[]> {
   const db = await getDb();
-  return await db.getAllAsync<Expense>(
+  return db.getAllAsync<Expense>(
     'SELECT * FROM expenses WHERE monthKey=? ORDER BY createdAt DESC',
     [monthKey],
   );
 }
 
-export async function getRecentExpenses(limit = 10): Promise<Expense[]> {
+// ── Incomes ───────────────────────────────────────────────────
+
+export async function addIncome(
+  amount: number,
+  note: string | null,
+): Promise<void> {
   const db = await getDb();
-  return await db.getAllAsync<Expense>(
-    'SELECT * FROM expenses ORDER BY createdAt DESC LIMIT ?',
-    [limit],
+  const createdAt = nowIso();
+  await db.runAsync(
+    'INSERT INTO incomes (amount, note, createdAt, monthKey) VALUES (?, ?, ?, ?)',
+    [amount, note ?? null, createdAt, toMonthKey(createdAt)],
   );
 }
+
+export async function deleteIncome(id: number): Promise<void> {
+  const db = await getDb();
+  await db.runAsync('DELETE FROM incomes WHERE id=?', [id]);
+}
+
+export async function getIncomesByMonth(monthKey: string): Promise<Income[]> {
+  const db = await getDb();
+  return db.getAllAsync<Income>(
+    'SELECT * FROM incomes WHERE monthKey=? ORDER BY createdAt DESC',
+    [monthKey],
+  );
+}
+
+// ── History (expenses + income combined) ─────────────────────
 
 export async function getMonthHistory(): Promise<MonthSummary[]> {
   const db = await getDb();
-  const rows = await db.getAllAsync<MonthSummary>(
-    `SELECT monthKey,
-            SUM(price) AS totalSpent,
-            COUNT(*)   AS count
-     FROM expenses
-     GROUP BY monthKey
+
+  // Get all months that appear in either table
+  const months = await db.getAllAsync<{ monthKey: string }>(
+    `SELECT DISTINCT monthKey FROM expenses
+     UNION
+     SELECT DISTINCT monthKey FROM incomes
      ORDER BY monthKey DESC`,
   );
-  return rows;
+
+  const summaries: MonthSummary[] = await Promise.all(
+    months.map(async ({ monthKey }) => {
+      const expRow = await db.getFirstAsync<{ total: number; cnt: number }>(
+        'SELECT COALESCE(SUM(price),0) AS total, COUNT(*) AS cnt FROM expenses WHERE monthKey=?',
+        [monthKey],
+      );
+      const incRow = await db.getFirstAsync<{ total: number }>(
+        'SELECT COALESCE(SUM(amount),0) AS total FROM incomes WHERE monthKey=?',
+        [monthKey],
+      );
+      return {
+        monthKey,
+        totalSpent: expRow?.total ?? 0,
+        totalIncome: incRow?.total ?? 0,
+        count: expRow?.cnt ?? 0,
+      };
+    }),
+  );
+
+  return summaries;
 }
 
-// ── Settings ─────────────────────────────────────────────────
+// ── Settings ──────────────────────────────────────────────────
 
 export async function saveSetting(key: string, value: string): Promise<void> {
   const db = await getDb();
@@ -105,15 +163,6 @@ export async function saveSetting(key: string, value: string): Promise<void> {
   );
 }
 
-export async function getSetting(key: string): Promise<string | null> {
-  const db = await getDb();
-  const row = await db.getFirstAsync<{ value: string }>(
-    'SELECT value FROM settings WHERE key=?',
-    [key],
-  );
-  return row?.value ?? null;
-}
-
 export async function getSettings(): Promise<Settings> {
   const db = await getDb();
   const rows = await db.getAllAsync<{ key: string; value: string }>(
@@ -121,25 +170,18 @@ export async function getSettings(): Promise<Settings> {
   );
   const map: Record<string, string> = {};
   rows.forEach((r) => (map[r.key] = r.value));
-
   return {
     salary: parseFloat(map['salary'] ?? '0'),
     currency: map['currency'] ?? 'EGP',
     themeMode: (map['themeMode'] as Settings['themeMode']) ?? 'dark',
-    customCategories: map['customCategories']
-      ? JSON.parse(map['customCategories'])
-      : [],
-    customCategoryEmojis: map['customCategoryEmojis']
-      ? JSON.parse(map['customCategoryEmojis'])
-      : {},
+    customCategories: map['customCategories'] ? JSON.parse(map['customCategories']) : [],
+    customCategoryEmojis: map['customCategoryEmojis'] ? JSON.parse(map['customCategoryEmojis']) : {},
   };
 }
 
 export async function saveSettings(settings: Partial<Settings>): Promise<void> {
-  const entries = Object.entries(settings) as [string, unknown][];
-  for (const [key, value] of entries) {
-    const str =
-      typeof value === 'object' ? JSON.stringify(value) : String(value);
+  for (const [key, value] of Object.entries(settings) as [string, unknown][]) {
+    const str = typeof value === 'object' ? JSON.stringify(value) : String(value);
     await saveSetting(key, str);
   }
 }

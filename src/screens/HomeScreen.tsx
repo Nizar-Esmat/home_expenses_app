@@ -3,28 +3,43 @@ import {
   View, Text, ScrollView, TouchableOpacity,
   StyleSheet, ActivityIndicator,
 } from 'react-native';
-import { useFocusEffect } from 'expo-router';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/theme/ThemeContext';
-import { getExpensesByMonth, deleteExpense, getSettings } from '@/services/database';
+import { getExpensesByMonth, getIncomesByMonth, deleteExpense, deleteIncome, getSettings } from '@/services/database';
 import { currentMonthKey, monthKeyToLabel, formatCurrency } from '@/services/constants';
-import { Expense, Settings } from '@/types';
+import { Expense, Income, Settings } from '@/types';
 import SummaryCard from '@/components/SummaryCard';
 import ExpenseTile from '@/components/ExpenseTile';
+import IncomeTile from '@/components/IncomeTile';
+
+function todayLabel(): string {
+  return new Date().toLocaleDateString('en-US', {
+    weekday: 'short', day: 'numeric', month: 'short', year: 'numeric',
+  });
+}
 
 export default function HomeScreen() {
   const { colors } = useTheme();
   const router = useRouter();
+  const monthKey = currentMonthKey();
+
   const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [incomes, setIncomes] = useState<Income[]>([]);
   const [settings, setSettings] = useState<Settings | null>(null);
   const [loading, setLoading] = useState(true);
-  const monthKey = currentMonthKey();
+  const [fabOpen, setFabOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<'expenses' | 'income'>('expenses');
 
   const load = useCallback(() => {
     setLoading(true);
-    Promise.all([getExpensesByMonth(monthKey), getSettings()]).then(([exps, sets]) => {
+    Promise.all([
+      getExpensesByMonth(monthKey),
+      getIncomesByMonth(monthKey),
+      getSettings(),
+    ]).then(([exps, incs, sets]) => {
       setExpenses(exps);
+      setIncomes(incs);
       setSettings(sets);
       setLoading(false);
     });
@@ -32,13 +47,17 @@ export default function HomeScreen() {
 
   useFocusEffect(load);
 
+  const totalIncome = incomes.reduce((s, i) => s + i.amount, 0);
   const totalSpent = expenses.reduce((s, e) => s + e.price, 0);
-  const remaining = (settings?.salary ?? 0) - totalSpent;
-  const progress = settings?.salary ? Math.min(totalSpent / settings.salary, 1) : 0;
+  const available = totalIncome - totalSpent;
+  const progress = totalIncome > 0 ? Math.min(totalSpent / totalIncome, 1) : 0;
 
-  const handleDelete = async (id: number) => {
-    await deleteExpense(id);
-    load();
+  const handleDeleteExpense = (id: number) => {
+    deleteExpense(id).then(load);
+  };
+
+  const handleDeleteIncome = (id: number) => {
+    deleteIncome(id).then(load);
   };
 
   if (loading) {
@@ -54,10 +73,15 @@ export default function HomeScreen() {
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
 
         {/* Header */}
-        <View style={styles.header}>
-          <Text style={[styles.title, { color: colors.textPrimary }]}>
-            💰 {monthKeyToLabel(monthKey)}
-          </Text>
+        <View style={styles.headerRow}>
+          <View>
+            <Text style={[styles.monthTitle, { color: colors.textPrimary }]}>
+              {monthKeyToLabel(monthKey)}
+            </Text>
+            <Text style={[styles.dateSubtitle, { color: colors.textSecondary }]}>
+              📅 {todayLabel()}
+            </Text>
+          </View>
           <View style={styles.headerActions}>
             <TouchableOpacity onPress={() => router.push('/history')} style={styles.iconBtn}>
               <Ionicons name="time-outline" size={22} color={colors.textSecondary} />
@@ -68,36 +92,34 @@ export default function HomeScreen() {
           </View>
         </View>
 
-        {/* Salary warning */}
-        {(!settings?.salary || settings.salary === 0) && (
-          <TouchableOpacity
-            style={[styles.banner, { backgroundColor: colors.warning + '22', borderColor: colors.warning }]}
-            onPress={() => router.push('/settings')}
-          >
-            <Ionicons name="warning-outline" size={16} color={colors.warning} />
-            <Text style={[styles.bannerText, { color: colors.warning }]}>
-              {' '}Set your monthly salary in Settings
-            </Text>
-          </TouchableOpacity>
-        )}
-
         {/* Summary cards */}
         <View style={styles.cards}>
-          <SummaryCard icon="💼" title="Salary"
-            value={formatCurrency(settings?.salary ?? 0, settings?.currency)} flex />
+          <SummaryCard icon="💰" title="Income"
+            value={formatCurrency(totalIncome, settings?.currency)}
+            valueColor={colors.success} flex />
           <SummaryCard icon="📉" title="Spent"
             value={formatCurrency(totalSpent, settings?.currency)}
             valueColor={colors.danger} flex />
         </View>
-        <View style={[styles.cards, { marginTop: 0 }]}>
-          <SummaryCard
-            icon={remaining >= 0 ? '✅' : '🚨'} title="Remaining"
-            value={formatCurrency(Math.abs(remaining), settings?.currency)}
-            valueColor={remaining >= 0 ? colors.success : colors.danger} flex />
+
+        {/* Available balance */}
+        <View style={[
+          styles.balanceCard,
+          { backgroundColor: available >= 0 ? colors.successBg : colors.dangerBg },
+        ]}>
+          <Text style={[styles.balanceLabel, { color: colors.textSecondary }]}>
+            Available Balance
+          </Text>
+          <Text style={[
+            styles.balanceValue,
+            { color: available >= 0 ? colors.success : colors.danger },
+          ]}>
+            {available >= 0 ? '' : '-'}{formatCurrency(Math.abs(available), settings?.currency)}
+          </Text>
         </View>
 
         {/* Progress bar */}
-        {(settings?.salary ?? 0) > 0 && (
+        {totalIncome > 0 && (
           <View style={[styles.progressTrack, { backgroundColor: colors.border }]}>
             <View style={[
               styles.progressFill,
@@ -115,38 +137,103 @@ export default function HomeScreen() {
           <Text style={[styles.reportBtnText, { color: colors.primary }]}>  View Full Report</Text>
         </TouchableOpacity>
 
-        {/* Recent expenses */}
-        <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Recent Expenses</Text>
+        {/* Tab switcher */}
+        <View style={[styles.tabs, { backgroundColor: colors.inputFill }]}>
+          {(['expenses', 'income'] as const).map((tab) => (
+            <TouchableOpacity
+              key={tab}
+              style={[
+                styles.tab,
+                activeTab === tab && { backgroundColor: colors.primary },
+              ]}
+              onPress={() => setActiveTab(tab)}
+            >
+              <Text style={[
+                styles.tabText,
+                { color: activeTab === tab ? colors.background : colors.textSecondary },
+              ]}>
+                {tab === 'expenses' ? '📉 Expenses' : '💰 Income'}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
 
-        {expenses.length === 0 ? (
-          <View style={styles.empty}>
-            <Text style={styles.emptyEmoji}>🧾</Text>
-            <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
-              No expenses this month yet
-            </Text>
-          </View>
+        {/* List */}
+        {activeTab === 'expenses' ? (
+          expenses.length === 0 ? (
+            <EmptyState emoji="🧾" text="No expenses this month" />
+          ) : (
+            expenses.map((exp) => (
+              <ExpenseTile
+                key={exp.id}
+                expense={exp}
+                currency={settings?.currency ?? 'EGP'}
+                customEmojiMap={settings?.customCategoryEmojis ?? {}}
+                onEdit={() => router.push({ pathname: '/add-expense', params: { expenseId: String(exp.id) } })}
+                onDelete={() => handleDeleteExpense(exp.id)}
+              />
+            ))
+          )
         ) : (
-          expenses.slice(0, 10).map((exp) => (
-            <ExpenseTile
-              key={exp.id}
-              expense={exp}
-              currency={settings?.currency ?? 'EGP'}
-              customEmojiMap={settings?.customCategoryEmojis ?? {}}
-              onEdit={() => router.push({ pathname: '/add-expense', params: { expenseId: String(exp.id) } })}
-              onDelete={() => handleDelete(exp.id)}
-            />
-          ))
+          incomes.length === 0 ? (
+            <EmptyState emoji="💸" text="No income recorded this month" />
+          ) : (
+            incomes.map((inc) => (
+              <IncomeTile
+                key={inc.id}
+                income={inc}
+                currency={settings?.currency ?? 'EGP'}
+                onDelete={() => handleDeleteIncome(inc.id)}
+              />
+            ))
+          )
         )}
-        <View style={{ height: 100 }} />
+
+        <View style={{ height: 120 }} />
       </ScrollView>
 
-      {/* FAB */}
-      <TouchableOpacity
-        style={[styles.fab, { backgroundColor: colors.primary }]}
-        onPress={() => router.push('/add-expense')}
-      >
-        <Ionicons name="add" size={28} color={colors.background} />
-      </TouchableOpacity>
+      {/* FAB overlay to close */}
+      {fabOpen && (
+        <TouchableOpacity style={styles.overlay} onPress={() => setFabOpen(false)} />
+      )}
+
+      {/* FAB group */}
+      <View style={styles.fabGroup}>
+        {fabOpen && (
+          <>
+            <TouchableOpacity
+              style={[styles.fabMini, { backgroundColor: colors.success }]}
+              onPress={() => { setFabOpen(false); router.push('/add-income'); }}
+            >
+              <Ionicons name="trending-up-outline" size={20} color={colors.background} />
+              <Text style={[styles.fabMiniLabel, { color: colors.background }]}>Income</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.fabMini, { backgroundColor: colors.danger }]}
+              onPress={() => { setFabOpen(false); router.push('/add-expense'); }}
+            >
+              <Ionicons name="trending-down-outline" size={20} color={colors.background} />
+              <Text style={[styles.fabMiniLabel, { color: colors.background }]}>Expense</Text>
+            </TouchableOpacity>
+          </>
+        )}
+        <TouchableOpacity
+          style={[styles.fab, { backgroundColor: colors.primary }]}
+          onPress={() => setFabOpen((o) => !o)}
+        >
+          <Ionicons name={fabOpen ? 'close' : 'add'} size={28} color={colors.background} />
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+}
+
+function EmptyState({ emoji, text }: { emoji: string; text: string }) {
+  const { colors } = useTheme();
+  return (
+    <View style={styles.empty}>
+      <Text style={styles.emptyEmoji}>{emoji}</Text>
+      <Text style={[styles.emptyText, { color: colors.textSecondary }]}>{text}</Text>
     </View>
   );
 }
@@ -155,32 +242,51 @@ const styles = StyleSheet.create({
   screen: { flex: 1 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   content: { padding: 20 },
-  header: { flexDirection: 'row', alignItems: 'center', marginBottom: 16 },
-  title: { flex: 1, fontSize: 20, fontWeight: '700' },
-  headerActions: { flexDirection: 'row' },
+  headerRow: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 16 },
+  monthTitle: { fontSize: 20, fontWeight: '700' },
+  dateSubtitle: { fontSize: 12, marginTop: 3 },
+  headerActions: { flexDirection: 'row', marginLeft: 'auto' },
   iconBtn: { padding: 6, marginLeft: 4 },
-  banner: {
-    flexDirection: 'row', alignItems: 'center',
-    padding: 10, borderRadius: 10, borderWidth: 1, marginBottom: 14,
+  cards: { flexDirection: 'row', marginBottom: 10 },
+  balanceCard: {
+    borderRadius: 16, padding: 18, alignItems: 'center', marginBottom: 12,
   },
-  bannerText: { fontSize: 13, fontWeight: '600' },
-  cards: { flexDirection: 'row', marginBottom: 8 },
-  progressTrack: { height: 8, borderRadius: 4, marginVertical: 12, overflow: 'hidden' },
+  balanceLabel: { fontSize: 13, fontWeight: '600', marginBottom: 4 },
+  balanceValue: { fontSize: 28, fontWeight: '800' },
+  progressTrack: { height: 8, borderRadius: 4, marginBottom: 16, overflow: 'hidden' },
   progressFill: { height: 8, borderRadius: 4 },
   reportBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
     borderWidth: 1.5, borderRadius: 12, paddingVertical: 10, marginBottom: 20,
   },
   reportBtnText: { fontSize: 14, fontWeight: '600' },
-  sectionTitle: { fontSize: 16, fontWeight: '700', marginBottom: 12 },
+  tabs: {
+    flexDirection: 'row', borderRadius: 12, padding: 4, marginBottom: 16,
+  },
+  tab: {
+    flex: 1, paddingVertical: 10, borderRadius: 10, alignItems: 'center',
+  },
+  tabText: { fontSize: 14, fontWeight: '600' },
   empty: { alignItems: 'center', paddingVertical: 40 },
   emptyEmoji: { fontSize: 40, marginBottom: 10 },
   emptyText: { fontSize: 14 },
-  fab: {
+  overlay: { ...StyleSheet.absoluteFillObject, zIndex: 1 },
+  fabGroup: {
     position: 'absolute', bottom: 28, right: 24,
+    alignItems: 'flex-end', zIndex: 2,
+  },
+  fab: {
     width: 56, height: 56, borderRadius: 28,
     alignItems: 'center', justifyContent: 'center',
     elevation: 4, shadowOpacity: 0.3, shadowRadius: 4,
     shadowOffset: { width: 0, height: 2 },
   },
+  fabMini: {
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: 16, paddingVertical: 12,
+    borderRadius: 28, marginBottom: 10,
+    elevation: 3, shadowOpacity: 0.2, shadowRadius: 3,
+    shadowOffset: { width: 0, height: 1 },
+  },
+  fabMiniLabel: { fontSize: 14, fontWeight: '700', marginLeft: 8 },
 });

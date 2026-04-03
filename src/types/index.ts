@@ -3,12 +3,20 @@ export interface Expense {
   price: number;
   category: string;
   note: string | null;
-  createdAt: string;   // ISO string
-  monthKey: string;    // "YYYY-MM"
+  createdAt: string;
+  monthKey: string;
+}
+
+export interface Income {
+  id: number;
+  amount: number;
+  note: string | null;
+  createdAt: string;
+  monthKey: string;
 }
 
 export interface Settings {
-  salary: number;
+  salary: number;          // kept as optional budget reference
   currency: string;
   themeMode: 'dark' | 'light' | 'system';
   customCategories: string[];
@@ -18,5 +26,6 @@ export interface Settings {
 export interface MonthSummary {
   monthKey: string;
   totalSpent: number;
+  totalIncome: number;
   count: number;
 }

@@ -55,8 +55,10 @@ export default function HistoryScreen() {
           </View>
         ) : (
           months.map((m) => {
-            const pct = settings?.salary ? Math.min(m.totalSpent / settings.salary, 1) : 0;
-            const over = settings?.salary ? m.totalSpent > settings.salary : false;
+            const available = m.totalIncome - m.totalSpent;
+            const pct = m.totalIncome > 0 ? Math.min(m.totalSpent / m.totalIncome, 1) : 0;
+            const over = available < 0;
+
             return (
               <TouchableOpacity
                 key={m.monthKey}
@@ -69,20 +71,40 @@ export default function HistoryScreen() {
                   </Text>
                   <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
                 </View>
-                <Text style={[styles.amount, { color: over ? colors.danger : colors.primary }]}>
-                  {formatCurrency(m.totalSpent, settings?.currency)}
-                </Text>
+
+                <View style={styles.statsRow}>
+                  <View style={styles.stat}>
+                    <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Income</Text>
+                    <Text style={[styles.statValue, { color: colors.success }]}>
+                      +{formatCurrency(m.totalIncome, settings?.currency)}
+                    </Text>
+                  </View>
+                  <View style={styles.stat}>
+                    <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Spent</Text>
+                    <Text style={[styles.statValue, { color: colors.danger }]}>
+                      -{formatCurrency(m.totalSpent, settings?.currency)}
+                    </Text>
+                  </View>
+                  <View style={styles.stat}>
+                    <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Net</Text>
+                    <Text style={[styles.statValue, { color: over ? colors.danger : colors.primary }]}>
+                      {over ? '-' : ''}{formatCurrency(Math.abs(available), settings?.currency)}
+                    </Text>
+                  </View>
+                </View>
+
                 <Text style={[styles.txCount, { color: colors.textSecondary }]}>
-                  {m.count} transaction{m.count !== 1 ? 's' : ''}
+                  {m.count} expense{m.count !== 1 ? 's' : ''}
                 </Text>
-                {settings?.salary ? (
+
+                {m.totalIncome > 0 && (
                   <View style={[styles.track, { backgroundColor: colors.border }]}>
                     <View style={[
                       styles.fill,
                       { width: `${pct * 100}%`, backgroundColor: over ? colors.danger : colors.primary },
                     ]} />
                   </View>
-                ) : null}
+                )}
               </TouchableOpacity>
             );
           })
@@ -102,12 +124,15 @@ const styles = StyleSheet.create({
   },
   title: { fontSize: 18, fontWeight: '700' },
   content: { padding: 20 },
-  card: {
-    borderRadius: 16, padding: 18, marginBottom: 14,
+  card: { borderRadius: 16, padding: 18, marginBottom: 14 },
+  cardRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12,
   },
-  cardRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 },
   monthLabel: { fontSize: 16, fontWeight: '700' },
-  amount: { fontSize: 22, fontWeight: '800', marginBottom: 4 },
+  statsRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
+  stat: { alignItems: 'center' },
+  statLabel: { fontSize: 11, fontWeight: '600', marginBottom: 2 },
+  statValue: { fontSize: 13, fontWeight: '700' },
   txCount: { fontSize: 12, marginBottom: 8 },
   track: { height: 6, borderRadius: 3, overflow: 'hidden' },
   fill: { height: 6, borderRadius: 3 },

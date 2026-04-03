@@ -11,6 +11,7 @@ function RootLayoutNav() {
       <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.background } }}>
         <Stack.Screen name="index" />
         <Stack.Screen name="add-expense" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="add-income" options={{ presentation: 'modal' }} />
         <Stack.Screen name="report" />
         <Stack.Screen name="history" />
         <Stack.Screen name="settings" />
