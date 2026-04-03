@@ -1,5 +1,7 @@
 export const DEFAULT_CATEGORIES = ['Food', 'Bills', 'Transport', 'Shopping', 'Home', 'Other'];
 
+export const CURRENCY_OPTIONS = ['EGP', 'USD', 'EUR', 'GBP', 'SAR', 'AED'];
+
 export const CATEGORY_EMOJIS: Record<string, string> = {
   Food: '🍔',
   Bills: '💡',
