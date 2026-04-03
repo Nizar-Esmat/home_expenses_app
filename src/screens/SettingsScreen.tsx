@@ -1,193 +1,200 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
-  View, Text, ScrollView, TouchableOpacity, Switch,
-  StyleSheet, Alert, TextInput,
+  View, Text, ScrollView, TouchableOpacity, StyleSheet,
+  Switch, Alert, Modal, TextInput,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/theme/ThemeContext';
 import { getSettings, saveSettings } from '@/services/database';
-import {
-  DEFAULT_CATEGORIES, CATEGORY_EMOJIS, CUSTOM_EMOJI_OPTIONS,
-} from '@/services/constants';
+import { DEFAULT_CATEGORIES, CURRENCY_OPTIONS } from '@/services/constants';
 import { Settings } from '@/types';
 import AppInput from '@/components/AppInput';
 import AppButton from '@/components/AppButton';
 
+const EMOJI_OPTIONS = ['🍕','🚗','🏠','👗','🎮','📱','✈️','🎓','💊','🛒','☕','🎁','💡','🐾','⚽'];
+
 export default function SettingsScreen() {
   const { colors, isDark, toggleTheme } = useTheme();
-  const navigation = useNavigation<any>();
+  const router = useRouter();
 
   const [settings, setSettings] = useState<Settings | null>(null);
   const [salary, setSalary] = useState('');
-  const [salaryError, setSalaryError] = useState('');
+  const [currency, setCurrency] = useState('EGP');
+  const [customCategories, setCustomCategories] = useState<string[]>([]);
+  const [customEmojiMap, setCustomEmojiMap] = useState<Record<string, string>>({});
+  const [newCategory, setNewCategory] = useState('');
+  const [newCatEmoji, setNewCatEmoji] = useState('📦');
+  const [emojiPickTarget, setEmojiPickTarget] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const [newCat, setNewCat] = useState('');
-  const [selectedEmoji, setSelectedEmoji] = useState(CUSTOM_EMOJI_OPTIONS[0]);
-  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
 
-  useEffect(() => {
-    getSettings().then((s) => {
-      setSettings(s);
-      if (s.salary > 0) setSalary(s.salary.toFixed(2));
-    });
+  const load = useCallback(async () => {
+    const s = await getSettings();
+    setSettings(s);
+    setSalary(s.salary ? String(s.salary) : '');
+    setCurrency(s.currency ?? 'EGP');
+    setCustomCategories(s.customCategories ?? []);
+    setCustomEmojiMap(s.customCategoryEmojis ?? {});
   }, []);
 
-  const saveSalary = async () => {
-    const v = parseFloat(salary.replace(',', '.'));
-    if (!salary.trim() || isNaN(v) || v < 0) {
-      setSalaryError('Please enter a valid positive amount');
-      return;
-    }
-    setSalaryError('');
+  useFocusEffect(load);
+
+  const saveAll = async () => {
     setSaving(true);
-    await saveSettings({ salary: v, currency: settings?.currency ?? 'EGP' });
+    const v = parseFloat(salary.replace(',', '.'));
+    await saveSettings({
+      salary: isNaN(v) ? 0 : v,
+      currency,
+      customCategories,
+      customCategoryEmojis: customEmojiMap,
+    });
     setSaving(false);
-    Alert.alert('Saved', 'Settings saved successfully ✓');
+    router.back();
   };
 
-  const addCategory = async () => {
-    const name = newCat.trim();
-    if (!name) {
-      Alert.alert('Error', 'Category name cannot be empty.');
+  const addCategory = () => {
+    const name = newCategory.trim();
+    if (!name) return;
+    if ([...DEFAULT_CATEGORIES, ...customCategories].includes(name)) {
+      Alert.alert('Duplicate', 'This category already exists.');
       return;
     }
-    const all = [...DEFAULT_CATEGORIES, ...(settings?.customCategories ?? [])];
-    if (all.some((c) => c.toLowerCase() === name.toLowerCase())) {
-      Alert.alert('Error', 'This category already exists.');
-      return;
-    }
-    const updated = [...(settings?.customCategories ?? []), name];
-    const updatedEmojis = { ...(settings?.customCategoryEmojis ?? {}), [name]: selectedEmoji };
-    await saveSettings({ customCategories: updated, customCategoryEmojis: updatedEmojis });
-    setSettings((s) => s ? { ...s, customCategories: updated, customCategoryEmojis: updatedEmojis } : s);
-    setNewCat('');
-    setSelectedEmoji(CUSTOM_EMOJI_OPTIONS[0]);
-    setShowEmojiPicker(false);
+    setCustomCategories(prev => [...prev, name]);
+    setCustomEmojiMap(prev => ({ ...prev, [name]: newCatEmoji }));
+    setNewCategory('');
+    setNewCatEmoji('📦');
   };
 
-  const deleteCategory = async (cat: string) => {
-    const updated = (settings?.customCategories ?? []).filter((c) => c !== cat);
-    const updatedEmojis = { ...(settings?.customCategoryEmojis ?? {}) };
-    delete updatedEmojis[cat];
-    await saveSettings({ customCategories: updated, customCategoryEmojis: updatedEmojis });
-    setSettings((s) => s ? { ...s, customCategories: updated, customCategoryEmojis: updatedEmojis } : s);
+  const removeCategory = (cat: string) => {
+    setCustomCategories(prev => prev.filter(c => c !== cat));
+    setCustomEmojiMap(prev => { const n = { ...prev }; delete n[cat]; return n; });
   };
 
   return (
     <View style={[styles.screen, { backgroundColor: colors.background }]}>
       <View style={[styles.header, { borderBottomColor: colors.border }]}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
+        <TouchableOpacity onPress={() => router.back()}>
           <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
         </TouchableOpacity>
-        <Text style={[styles.title, { color: colors.textPrimary }]}>⚙️ Settings</Text>
+        <Text style={[styles.title, { color: colors.textPrimary }]}>Settings</Text>
         <View style={{ width: 24 }} />
       </View>
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
 
-        {/* ── Appearance ───────────── */}
-        <Text style={[styles.section, { color: colors.textPrimary }]}>Appearance</Text>
-        <View style={[styles.row, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          <Ionicons name={isDark ? 'moon' : 'sunny'} size={20} color={colors.primary} />
-          <Text style={[styles.rowLabel, { color: colors.textPrimary }]}>Dark Mode</Text>
+        {/* Salary */}
+        <AppInput
+          label="Monthly Salary"
+          value={salary}
+          onChangeText={setSalary}
+          placeholder="Enter monthly salary"
+          keyboardType="decimal-pad"
+        />
+
+        {/* Currency */}
+        <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>Currency</Text>
+        <View style={styles.currencyRow}>
+          {CURRENCY_OPTIONS.map(c => (
+            <TouchableOpacity
+              key={c}
+              style={[
+                styles.currencyPill,
+                { backgroundColor: currency === c ? colors.primary : colors.inputFill,
+                  borderColor: currency === c ? colors.primary : colors.border },
+              ]}
+              onPress={() => setCurrency(c)}
+            >
+              <Text style={[styles.currencyText, { color: currency === c ? colors.background : colors.textPrimary }]}>
+                {c}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        {/* Dark mode */}
+        <View style={[styles.row, { backgroundColor: colors.card }]}>
+          <Text style={[styles.rowLabel, { color: colors.textPrimary }]}>🌙 Dark Mode</Text>
           <Switch
             value={isDark}
             onValueChange={toggleTheme}
             trackColor={{ false: colors.border, true: colors.primary }}
-            thumbColor={colors.highlight}
+            thumbColor={colors.background}
           />
         </View>
 
-        {/* ── Budget ───────────────── */}
-        <Text style={[styles.section, { color: colors.textPrimary }]}>Budget</Text>
-        <AppInput
-          label={`Monthly Salary (${settings?.currency ?? 'EGP'})`}
-          value={salary}
-          onChangeText={setSalary}
-          placeholder="e.g. 5000.00"
-          keyboardType="decimal-pad"
-          error={salaryError}
-        />
-        <AppButton label="Save Salary" onPress={saveSalary} loading={saving} style={styles.saveBtn} />
-
-        {/* ── Categories ───────────── */}
-        <Text style={[styles.section, { color: colors.textPrimary }]}>Expense Categories</Text>
-
-        {/* Default categories */}
-        <View style={styles.chips}>
-          {DEFAULT_CATEGORIES.map((cat) => (
-            <View key={cat} style={[styles.chip, { backgroundColor: colors.inputFill, borderColor: colors.border }]}>
-              <Text>{CATEGORY_EMOJIS[cat]}  {cat}</Text>
-            </View>
-          ))}
-        </View>
-
         {/* Custom categories */}
-        {(settings?.customCategories ?? []).length > 0 && (
-          <>
-            <Text style={[styles.subLabel, { color: colors.textSecondary }]}>Your Categories</Text>
-            <View style={styles.chips}>
-              {(settings?.customCategories ?? []).map((cat) => {
-                const emoji = settings?.customCategoryEmojis?.[cat] ?? '📦';
-                return (
-                  <View key={cat} style={[styles.chip, { backgroundColor: colors.surface, borderColor: colors.primary }]}>
-                    <Text style={{ color: colors.textPrimary }}>{emoji}  {cat}</Text>
-                    <TouchableOpacity onPress={() => deleteCategory(cat)} style={styles.deleteChip}>
-                      <Ionicons name="close" size={14} color={colors.danger} />
-                    </TouchableOpacity>
-                  </View>
-                );
-              })}
-            </View>
-          </>
-        )}
+        <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>Custom Categories</Text>
 
-        {/* Add new category */}
-        <View style={[styles.addRow, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          {/* Emoji selector button */}
+        {customCategories.map(cat => (
+          <View key={cat} style={[styles.catRow, { backgroundColor: colors.card }]}>
+            <TouchableOpacity
+              style={styles.catEmoji}
+              onPress={() => setEmojiPickTarget(cat)}
+            >
+              <Text style={{ fontSize: 22 }}>{customEmojiMap[cat] ?? '📦'}</Text>
+            </TouchableOpacity>
+            <Text style={[styles.catName, { color: colors.textPrimary }]}>{cat}</Text>
+            <TouchableOpacity onPress={() => removeCategory(cat)}>
+              <Ionicons name="trash-outline" size={20} color={colors.danger} />
+            </TouchableOpacity>
+          </View>
+        ))}
+
+        <View style={[styles.addRow, { backgroundColor: colors.card }]}>
           <TouchableOpacity
-            style={[styles.emojiBtn, { backgroundColor: colors.inputFill, borderColor: colors.border }]}
-            onPress={() => setShowEmojiPicker((p) => !p)}
+            style={styles.emojiBtn}
+            onPress={() => setEmojiPickTarget('__new__')}
           >
-            <Text style={styles.emojiPreview}>{selectedEmoji}</Text>
+            <Text style={{ fontSize: 22 }}>{newCatEmoji}</Text>
           </TouchableOpacity>
-
           <TextInput
-            style={[styles.catInput, { backgroundColor: colors.inputFill, color: colors.textPrimary, borderColor: colors.border }]}
-            placeholder="New category name…"
+            style={[styles.addInput, { color: colors.textPrimary, borderColor: colors.border }]}
+            placeholder="New category name"
             placeholderTextColor={colors.textSecondary}
-            value={newCat}
-            onChangeText={setNewCat}
+            value={newCategory}
+            onChangeText={setNewCategory}
           />
           <TouchableOpacity
             style={[styles.addBtn, { backgroundColor: colors.primary }]}
             onPress={addCategory}
           >
-            <Ionicons name="add" size={22} color={colors.background} />
+            <Ionicons name="add" size={20} color={colors.background} />
           </TouchableOpacity>
         </View>
 
-        {/* Emoji picker grid */}
-        {showEmojiPicker && (
-          <View style={[styles.emojiGrid, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            {CUSTOM_EMOJI_OPTIONS.map((e) => (
-              <TouchableOpacity
-                key={e}
-                style={[
-                  styles.emojiOption,
-                  selectedEmoji === e && { backgroundColor: colors.primary + '33' },
-                ]}
-                onPress={() => { setSelectedEmoji(e); setShowEmojiPicker(false); }}
-              >
-                <Text style={styles.emojiOptionText}>{e}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        )}
-
-        <View style={{ height: 40 }} />
+        <AppButton label="Save Settings" onPress={saveAll} loading={saving} />
+        <View style={{ height: 60 }} />
       </ScrollView>
+
+      {/* Emoji picker modal */}
+      <Modal visible={!!emojiPickTarget} transparent animationType="slide">
+        <View style={styles.overlay}>
+          <View style={[styles.emojiModal, { backgroundColor: colors.card }]}>
+            <Text style={[styles.emojiTitle, { color: colors.textPrimary }]}>Pick an emoji</Text>
+            <View style={styles.emojiGrid}>
+              {EMOJI_OPTIONS.map(em => (
+                <TouchableOpacity
+                  key={em}
+                  style={styles.emojiOpt}
+                  onPress={() => {
+                    if (emojiPickTarget === '__new__') {
+                      setNewCatEmoji(em);
+                    } else if (emojiPickTarget) {
+                      setCustomEmojiMap(prev => ({ ...prev, [emojiPickTarget]: em }));
+                    }
+                    setEmojiPickTarget(null);
+                  }}
+                >
+                  <Text style={{ fontSize: 28 }}>{em}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            <TouchableOpacity onPress={() => setEmojiPickTarget(null)}>
+              <Text style={[styles.cancel, { color: colors.textSecondary }]}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -200,45 +207,37 @@ const styles = StyleSheet.create({
   },
   title: { fontSize: 18, fontWeight: '700' },
   content: { padding: 20 },
-  section: { fontSize: 17, fontWeight: '700', marginBottom: 14, marginTop: 8 },
-  subLabel: { fontSize: 13, fontWeight: '600', marginBottom: 8, marginTop: 4 },
-  saveBtn: { marginBottom: 24 },
+  sectionLabel: { fontSize: 13, fontWeight: '600', marginBottom: 10, marginTop: 6 },
+  currencyRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 20 },
+  currencyPill: {
+    paddingHorizontal: 18, paddingVertical: 10,
+    borderRadius: 10, borderWidth: 1.5,
+  },
+  currencyText: { fontSize: 14, fontWeight: '600' },
   row: {
-    flexDirection: 'row', alignItems: 'center',
-    padding: 14, borderRadius: 12, borderWidth: 1, marginBottom: 20, gap: 12,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    padding: 16, borderRadius: 14, marginBottom: 20,
   },
-  rowLabel: { flex: 1, fontSize: 15, fontWeight: '600' },
-  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 },
-  chip: {
+  rowLabel: { fontSize: 15, fontWeight: '600' },
+  catRow: {
     flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: 12, paddingVertical: 8,
-    borderRadius: 10, borderWidth: 1, gap: 4,
+    padding: 14, borderRadius: 12, marginBottom: 8,
   },
-  deleteChip: { marginLeft: 6 },
+  catEmoji: { marginRight: 10 },
+  catName: { flex: 1, fontSize: 15, fontWeight: '600' },
   addRow: {
-    flexDirection: 'row', alignItems: 'center', gap: 8,
-    padding: 10, borderRadius: 12, borderWidth: 1, marginBottom: 8,
+    flexDirection: 'row', alignItems: 'center',
+    padding: 12, borderRadius: 12, marginBottom: 20,
   },
-  emojiBtn: {
-    width: 44, height: 44, borderRadius: 10, borderWidth: 1,
-    alignItems: 'center', justifyContent: 'center',
+  emojiBtn: { padding: 4, marginRight: 8 },
+  addInput: {
+    flex: 1, fontSize: 14, borderBottomWidth: 1, paddingVertical: 4, marginRight: 10,
   },
-  emojiPreview: { fontSize: 22 },
-  catInput: {
-    flex: 1, height: 44, borderRadius: 10, borderWidth: 1,
-    paddingHorizontal: 12, fontSize: 14,
-  },
-  addBtn: {
-    width: 44, height: 44, borderRadius: 10,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  emojiGrid: {
-    flexDirection: 'row', flexWrap: 'wrap', gap: 8,
-    padding: 12, borderRadius: 12, borderWidth: 1, marginBottom: 12,
-  },
-  emojiOption: {
-    width: 44, height: 44, borderRadius: 10,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  emojiOptionText: { fontSize: 24 },
+  addBtn: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
+  overlay: { flex: 1, backgroundColor: '#00000066', justifyContent: 'flex-end' },
+  emojiModal: { borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 24 },
+  emojiTitle: { fontSize: 16, fontWeight: '700', marginBottom: 16, textAlign: 'center' },
+  emojiGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 12 },
+  emojiOpt: { padding: 8 },
+  cancel: { textAlign: 'center', marginTop: 16, fontSize: 15 },
 });

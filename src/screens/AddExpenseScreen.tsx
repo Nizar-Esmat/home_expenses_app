@@ -1,41 +1,51 @@
 import React, { useEffect, useState } from 'react';
 import {
-  View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert,
+  View, Text, ScrollView, TouchableOpacity,
+  StyleSheet, Alert,
 } from 'react-native';
-import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/theme/ThemeContext';
-import { addExpense, updateExpense, getSettings } from '@/services/database';
-import {
-  DEFAULT_CATEGORIES, CATEGORY_EMOJIS, CUSTOM_EMOJI_OPTIONS, formatCurrency,
-} from '@/services/constants';
+import { addExpense, updateExpense, getSettings, getExpensesByMonth } from '@/services/database';
+import { DEFAULT_CATEGORIES, CATEGORY_EMOJIS, currentMonthKey } from '@/services/constants';
 import { Expense, Settings } from '@/types';
 import AppInput from '@/components/AppInput';
 import AppButton from '@/components/AppButton';
 
-type RouteParams = { expense?: Expense };
-
 export default function AddExpenseScreen() {
   const { colors } = useTheme();
-  const navigation = useNavigation<any>();
-  const route = useRoute<RouteProp<Record<string, RouteParams>, string>>();
-  const editExpense = route.params?.expense;
+  const router = useRouter();
+  const { expenseId } = useLocalSearchParams<{ expenseId?: string }>();
 
-  const [price, setPrice] = useState(editExpense ? String(editExpense.price) : '');
-  const [category, setCategory] = useState(editExpense?.category ?? DEFAULT_CATEGORIES[0]);
-  const [note, setNote] = useState(editExpense?.note ?? '');
+  const [editExpense, setEditExpense] = useState<Expense | null>(null);
+  const [price, setPrice] = useState('');
+  const [category, setCategory] = useState(DEFAULT_CATEGORIES[0]);
+  const [note, setNote] = useState('');
   const [priceError, setPriceError] = useState('');
   const [loading, setLoading] = useState(false);
   const [settings, setSettings] = useState<Settings | null>(null);
 
   useEffect(() => {
-    getSettings().then(setSettings);
-  }, []);
+    const init = async () => {
+      const sets = await getSettings();
+      setSettings(sets);
 
-  const allCategories = [
-    ...DEFAULT_CATEGORIES,
-    ...(settings?.customCategories ?? []),
-  ];
+      if (expenseId) {
+        const monthKey = currentMonthKey();
+        const expenses = await getExpensesByMonth(monthKey);
+        const found = expenses.find(e => String(e.id) === expenseId);
+        if (found) {
+          setEditExpense(found);
+          setPrice(String(found.price));
+          setCategory(found.category);
+          setNote(found.note ?? '');
+        }
+      }
+    };
+    init();
+  }, [expenseId]);
+
+  const allCategories = [...DEFAULT_CATEGORIES, ...(settings?.customCategories ?? [])];
 
   const getEmoji = (cat: string) =>
     CATEGORY_EMOJIS[cat] ?? settings?.customCategoryEmojis?.[cat] ?? '📦';
@@ -58,7 +68,7 @@ export default function AddExpenseScreen() {
       } else {
         await addExpense(v, category, note.trim() || null);
       }
-      navigation.goBack();
+      router.back();
     } catch {
       Alert.alert('Error', 'Failed to save expense. Please try again.');
     } finally {
@@ -69,7 +79,7 @@ export default function AddExpenseScreen() {
   return (
     <View style={[styles.screen, { backgroundColor: colors.background }]}>
       <View style={[styles.header, { borderBottomColor: colors.border }]}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
+        <TouchableOpacity onPress={() => router.back()}>
           <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
         </TouchableOpacity>
         <Text style={[styles.title, { color: colors.textPrimary }]}>

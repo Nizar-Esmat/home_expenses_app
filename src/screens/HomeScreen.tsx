@@ -3,22 +3,19 @@ import {
   View, Text, ScrollView, TouchableOpacity,
   StyleSheet, ActivityIndicator,
 } from 'react-native';
-import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { useFocusEffect } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/theme/ThemeContext';
-import {
-  getExpensesByMonth, deleteExpense, getSettings,
-} from '@/services/database';
-import {
-  currentMonthKey, monthKeyToLabel, formatCurrency, DEFAULT_CATEGORIES,
-} from '@/services/constants';
+import { getExpensesByMonth, deleteExpense, getSettings } from '@/services/database';
+import { currentMonthKey, monthKeyToLabel, formatCurrency } from '@/services/constants';
 import { Expense, Settings } from '@/types';
 import SummaryCard from '@/components/SummaryCard';
 import ExpenseTile from '@/components/ExpenseTile';
 
 export default function HomeScreen() {
   const { colors } = useTheme();
-  const navigation = useNavigation<any>();
+  const router = useRouter();
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [settings, setSettings] = useState<Settings | null>(null);
   const [loading, setLoading] = useState(true);
@@ -57,16 +54,17 @@ export default function HomeScreen() {
   return (
     <View style={[styles.screen, { backgroundColor: colors.background }]}>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+
         {/* Header */}
         <View style={styles.header}>
           <Text style={[styles.title, { color: colors.textPrimary }]}>
             💰 {monthKeyToLabel(monthKey)}
           </Text>
           <View style={styles.headerActions}>
-            <TouchableOpacity onPress={() => navigation.navigate('History')} style={styles.iconBtn}>
+            <TouchableOpacity onPress={() => router.push('/history')} style={styles.iconBtn}>
               <Ionicons name="time-outline" size={22} color={colors.textSecondary} />
             </TouchableOpacity>
-            <TouchableOpacity onPress={() => navigation.navigate('Settings')} style={styles.iconBtn}>
+            <TouchableOpacity onPress={() => router.push('/settings')} style={styles.iconBtn}>
               <Ionicons name="settings-outline" size={22} color={colors.textSecondary} />
             </TouchableOpacity>
           </View>
@@ -76,7 +74,7 @@ export default function HomeScreen() {
         {(!settings?.salary || settings.salary === 0) && (
           <TouchableOpacity
             style={[styles.banner, { backgroundColor: colors.warning + '22', borderColor: colors.warning }]}
-            onPress={() => navigation.navigate('Settings')}
+            onPress={() => router.push('/settings')}
           >
             <Ionicons name="warning-outline" size={16} color={colors.warning} />
             <Text style={[styles.bannerText, { color: colors.warning }]}>
@@ -87,46 +85,33 @@ export default function HomeScreen() {
 
         {/* Summary cards */}
         <View style={styles.cards}>
-          <SummaryCard
-            icon="💼" title="Salary"
-            value={formatCurrency(settings?.salary ?? 0, settings?.currency)}
-            flex
-          />
-          <SummaryCard
-            icon="📉" title="Spent"
+          <SummaryCard icon="💼" title="Salary"
+            value={formatCurrency(settings?.salary ?? 0, settings?.currency)} flex />
+          <SummaryCard icon="📉" title="Spent"
             value={formatCurrency(totalSpent, settings?.currency)}
-            valueColor={colors.danger}
-            flex
-          />
+            valueColor={colors.danger} flex />
         </View>
         <View style={[styles.cards, { marginTop: 0 }]}>
           <SummaryCard
             icon={remaining >= 0 ? '✅' : '🚨'} title="Remaining"
             value={formatCurrency(Math.abs(remaining), settings?.currency)}
-            valueColor={remaining >= 0 ? colors.success : colors.danger}
-            flex
-          />
+            valueColor={remaining >= 0 ? colors.success : colors.danger} flex />
         </View>
 
         {/* Progress bar */}
         {(settings?.salary ?? 0) > 0 && (
           <View style={[styles.progressTrack, { backgroundColor: colors.border }]}>
-            <View
-              style={[
-                styles.progressFill,
-                {
-                  width: `${progress * 100}%`,
-                  backgroundColor: progress >= 1 ? colors.danger : colors.primary,
-                },
-              ]}
-            />
+            <View style={[
+              styles.progressFill,
+              { width: `${progress * 100}%`, backgroundColor: progress >= 1 ? colors.danger : colors.primary },
+            ]} />
           </View>
         )}
 
         {/* Report button */}
         <TouchableOpacity
           style={[styles.reportBtn, { borderColor: colors.primary }]}
-          onPress={() => navigation.navigate('Report', { monthKey })}
+          onPress={() => router.push({ pathname: '/report', params: { monthKey } })}
         >
           <Ionicons name="bar-chart-outline" size={16} color={colors.primary} />
           <Text style={[styles.reportBtnText, { color: colors.primary }]}>  View Full Report</Text>
@@ -149,7 +134,7 @@ export default function HomeScreen() {
               expense={exp}
               currency={settings?.currency ?? 'EGP'}
               customEmojiMap={settings?.customCategoryEmojis ?? {}}
-              onEdit={() => navigation.navigate('AddExpense', { expense: exp })}
+              onEdit={() => router.push({ pathname: '/add-expense', params: { expenseId: String(exp.id) } })}
               onDelete={() => handleDelete(exp.id)}
             />
           ))
@@ -160,7 +145,7 @@ export default function HomeScreen() {
       {/* FAB */}
       <TouchableOpacity
         style={[styles.fab, { backgroundColor: colors.primary }]}
-        onPress={() => navigation.navigate('AddExpense', {})}
+        onPress={() => router.push('/add-expense')}
       >
         <Ionicons name="add" size={28} color={colors.background} />
       </TouchableOpacity>
@@ -182,9 +167,7 @@ const styles = StyleSheet.create({
   },
   bannerText: { fontSize: 13, fontWeight: '600' },
   cards: { flexDirection: 'row', marginBottom: 8 },
-  progressTrack: {
-    height: 8, borderRadius: 4, marginVertical: 12, overflow: 'hidden',
-  },
+  progressTrack: { height: 8, borderRadius: 4, marginVertical: 12, overflow: 'hidden' },
   progressFill: { height: 8, borderRadius: 4 },
   reportBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
