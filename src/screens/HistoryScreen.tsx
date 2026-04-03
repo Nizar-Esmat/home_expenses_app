@@ -54,8 +54,8 @@ export default function HistoryScreen() {
           </View>
         ) : (
           months.map((m) => {
-            const pct = settings?.salary ? Math.min(m.total / settings.salary, 1) : 0;
-            const over = settings?.salary ? m.total > settings.salary : false;
+            const pct = settings?.salary ? Math.min(m.totalSpent / settings.salary, 1) : 0;
+            const over = settings?.salary ? m.totalSpent > settings.salary : false;
             return (
               <TouchableOpacity
                 key={m.monthKey}
@@ -69,7 +69,7 @@ export default function HistoryScreen() {
                   <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
                 </View>
                 <Text style={[styles.amount, { color: over ? colors.danger : colors.primary }]}>
-                  {formatCurrency(m.total, settings?.currency)}
+                  {formatCurrency(m.totalSpent, settings?.currency)}
                 </Text>
                 <Text style={[styles.txCount, { color: colors.textSecondary }]}>
                   {m.count} transaction{m.count !== 1 ? 's' : ''}

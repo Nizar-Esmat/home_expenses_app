@@ -11,18 +11,6 @@ export const CATEGORY_EMOJIS: Record<string, string> = {
   Other: '📦',
 };
 
-export const CUSTOM_EMOJI_OPTIONS = [
-  '🎮','🏋️','💊','🐾','📚','✈️',
-  '🎁','🔧','🎓','👗','🍕','💈',
-  '🎵','🌿','🏖️','🚀','💻','🐶',
-];
-
-export const MONTH_EMOJIS: Record<string, string> = {
-  '01': '❄️', '02': '💘', '03': '🌸', '04': '🌧️',
-  '05': '🌻', '06': '☀️', '07': '🏖️', '08': '🌴',
-  '09': '🍂', '10': '🎃', '11': '🦃', '12': '🎄',
-};
-
 export function monthKeyToLabel(monthKey: string): string {
   const [year, month] = monthKey.split('-');
   const date = new Date(parseInt(year), parseInt(month) - 1, 1);
@@ -39,7 +27,10 @@ export function formatCurrency(amount: number, currency = 'EGP'): string {
 }
 
 export function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString('en-US', {
-    month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
-  });
+  const date = new Date(iso);
+  return (
+    date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) +
+    ' · ' +
+    date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+  );
 }

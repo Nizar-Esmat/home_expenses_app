@@ -6,7 +6,7 @@ import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/theme/ThemeContext';
 import { getExpensesByMonth, getSettings, deleteExpense } from '@/services/database';
-import { monthKeyToLabel, formatCurrency, CATEGORY_EMOJIS } from '@/services/constants';
+import { monthKeyToLabel, formatCurrency } from '@/services/constants';
 import { Expense, Settings } from '@/types';
 import ExpenseTile from '@/components/ExpenseTile';
 import CategoryBar from '@/components/CategoryBar';
@@ -47,10 +47,10 @@ export default function ReportScreen() {
   const categories = Object.entries(byCategory)
     .sort((a, b) => b[1] - a[1])
     .map(([cat, amount]) => ({
-      name: cat,
-      emoji: CATEGORY_EMOJIS[cat] ?? settings?.customCategoryEmojis?.[cat] ?? '📦',
-      amount,
-      pct: total > 0 ? amount / total : 0,
+      category: cat,
+      total: amount,
+      percentage: total > 0 ? amount / total : 0,
+      customEmojiMap: settings?.customCategoryEmojis ?? {},
     }));
 
   const handleDelete = async (id: number) => {
@@ -85,7 +85,7 @@ export default function ReportScreen() {
           <>
             <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>By Category</Text>
             {categories.map(c => (
-              <CategoryBar key={c.name} {...c} currency={settings?.currency ?? 'EGP'} />
+              <CategoryBar key={c.category} {...c} currency={settings?.currency ?? 'EGP'} />
             ))}
           </>
         )}

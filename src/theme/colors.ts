@@ -1,9 +1,10 @@
 // ── Dark Palette (primary) ───────────────────────────────────
 export const dark = {
-  background:    '#091413',   // deepest bg
-  surface:       '#285A48',   // cards / sheets
-  primary:       '#408A71',   // buttons, progress, accents
-  highlight:     '#B0E4CC',   // text on dark, active icons
+  background:    '#091413',
+  surface:       '#285A48',
+  card:          '#122820',   // elevated card background
+  primary:       '#408A71',
+  highlight:     '#B0E4CC',
   border:        '#1E3D30',
   inputFill:     '#0F2420',
   textPrimary:   '#B0E4CC',
@@ -19,6 +20,7 @@ export const dark = {
 export const light = {
   background:    '#F8FAFC',
   surface:       '#FFFFFF',
+  card:          '#EDF4F0',   // elevated card background
   primary:       '#2563EB',
   highlight:     '#1E293B',
   border:        '#E2E8F0',
