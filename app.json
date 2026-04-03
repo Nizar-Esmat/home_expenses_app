@@ -7,11 +7,14 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
     "splash": {
-      "backgroundColor": "#091413"
+      "backgroundColor": "#091413",
+      "image": "./assets/splash.png",
+      "resizeMode": "contain"
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#091413"
+        "backgroundColor": "#091413",
+        "foregroundImage": "./assets/adaptive-icon.png"
       },
       "package": "com.budgetbuddy.app"
     },
