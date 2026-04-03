@@ -16,7 +16,6 @@ export interface Income {
 }
 
 export interface Settings {
-  salary: number;          // kept as optional budget reference
   currency: string;
   themeMode: 'dark' | 'light' | 'system';
   customCategories: string[];

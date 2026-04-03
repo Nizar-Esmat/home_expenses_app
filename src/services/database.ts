@@ -171,7 +171,6 @@ export async function getSettings(): Promise<Settings> {
   const map: Record<string, string> = {};
   rows.forEach((r) => (map[r.key] = r.value));
   return {
-    salary: parseFloat(map['salary'] ?? '0'),
     currency: map['currency'] ?? 'EGP',
     themeMode: (map['themeMode'] as Settings['themeMode']) ?? 'dark',
     customCategories: map['customCategories'] ? JSON.parse(map['customCategories']) : [],
