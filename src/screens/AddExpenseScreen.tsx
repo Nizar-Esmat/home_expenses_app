@@ -6,9 +6,11 @@ import {
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/theme/ThemeContext';
-import { addExpense, updateExpense, getSettings, getExpensesByMonth } from '@/services/database';
-import { DEFAULT_CATEGORIES, CATEGORY_EMOJIS, currentMonthKey } from '@/services/constants';
-import { Expense, Settings } from '@/types';
+import {
+  addExpense, updateExpense, getCategories, getExpensesByMonth,
+} from '@/services/database';
+import { currentMonthKey } from '@/services/constants';
+import { Category, Expense } from '@/types';
 import AppInput from '@/components/AppInput';
 import AppButton from '@/components/AppButton';
 
@@ -19,36 +21,34 @@ export default function AddExpenseScreen() {
 
   const [editExpense, setEditExpense] = useState<Expense | null>(null);
   const [price, setPrice] = useState('');
-  const [category, setCategory] = useState(DEFAULT_CATEGORIES[0]);
+  const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
   const [note, setNote] = useState('');
   const [priceError, setPriceError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [settings, setSettings] = useState<Settings | null>(null);
+  const [categories, setCategories] = useState<Category[]>([]);
 
   useEffect(() => {
     const init = async () => {
-      const sets = await getSettings();
-      setSettings(sets);
+      const cats = await getCategories();
+      setCategories(cats);
 
       if (expenseId) {
-        const monthKey = currentMonthKey();
-        const expenses = await getExpensesByMonth(monthKey);
-        const found = expenses.find(e => String(e.id) === expenseId);
+        const expenses = await getExpensesByMonth(currentMonthKey());
+        const found = expenses.find((e) => String(e.id) === expenseId);
         if (found) {
           setEditExpense(found);
           setPrice(String(found.price));
-          setCategory(found.category);
           setNote(found.note ?? '');
+          const cat = cats.find((c) => c.name === found.category);
+          setSelectedCategory(cat ?? cats[0] ?? null);
+          return;
         }
       }
+
+      setSelectedCategory(cats[0] ?? null);
     };
     init();
   }, [expenseId]);
-
-  const allCategories = [...DEFAULT_CATEGORIES, ...(settings?.customCategories ?? [])];
-
-  const getEmoji = (cat: string) =>
-    CATEGORY_EMOJIS[cat] ?? settings?.customCategoryEmojis?.[cat] ?? '📦';
 
   const validate = () => {
     const v = parseFloat(price.replace(',', '.'));
@@ -63,10 +63,11 @@ export default function AddExpenseScreen() {
     setLoading(true);
     try {
       const v = parseFloat(price.replace(',', '.'));
+      const catName = selectedCategory?.name ?? 'Other';
       if (editExpense) {
-        await updateExpense(editExpense.id, v, category, note.trim() || null);
+        await updateExpense(editExpense.id, v, catName, note.trim() || null);
       } else {
-        await addExpense(v, category, note.trim() || null);
+        await addExpense(v, catName, note.trim() || null);
       }
       router.back();
     } catch {
@@ -98,25 +99,28 @@ export default function AddExpenseScreen() {
           error={priceError}
         />
 
-        <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>Category</Text>
+        <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>CATEGORY</Text>
         <View style={styles.categoryGrid}>
-          {allCategories.map((cat) => {
-            const selected = cat === category;
+          {categories.map((cat) => {
+            const selected = selectedCategory?.id === cat.id;
             return (
               <TouchableOpacity
-                key={cat}
+                key={cat.id}
                 style={[
                   styles.categoryPill,
                   {
-                    backgroundColor: selected ? colors.primary : colors.inputFill,
-                    borderColor: selected ? colors.primary : colors.border,
+                    backgroundColor: selected ? cat.color : colors.inputFill,
+                    borderColor: selected ? cat.color : colors.border,
                   },
                 ]}
-                onPress={() => setCategory(cat)}
+                onPress={() => setSelectedCategory(cat)}
               >
-                <Text style={styles.pillEmoji}>{getEmoji(cat)}</Text>
-                <Text style={[styles.pillLabel, { color: selected ? colors.background : colors.textPrimary }]}>
-                  {cat}
+                <Text style={styles.pillEmoji}>{cat.emoji}</Text>
+                <Text style={[
+                  styles.pillLabel,
+                  { color: selected ? '#fff' : colors.textPrimary },
+                ]}>
+                  {cat.name}
                 </Text>
               </TouchableOpacity>
             );
@@ -151,7 +155,7 @@ const styles = StyleSheet.create({
   },
   title: { fontSize: 18, fontWeight: '700' },
   content: { padding: 20 },
-  sectionLabel: { fontSize: 13, fontWeight: '600', marginBottom: 10 },
+  sectionLabel: { fontSize: 11, fontWeight: '700', letterSpacing: 1, marginBottom: 10 },
   categoryGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 20 },
   categoryPill: {
     flexDirection: 'row', alignItems: 'center',

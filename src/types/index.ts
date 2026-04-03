@@ -1,3 +1,13 @@
+export interface Category {
+  id: number;
+  name: string;
+  emoji: string;
+  color: string;
+  isDefault: number; // 1 = built-in (no rename/delete), 0 = custom
+  sortOrder: number;
+  createdAt: string;
+}
+
 export interface Expense {
   id: number;
   price: number;

@@ -5,9 +5,11 @@ import {
 import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/theme/ThemeContext';
-import { getExpensesByMonth, getIncomesByMonth, getSettings, deleteExpense } from '@/services/database';
+import {
+  getExpensesByMonth, getIncomesByMonth, getSettings, deleteExpense, getCategories,
+} from '@/services/database';
 import { monthKeyToLabel, formatCurrency } from '@/services/constants';
-import { Expense, Income, Settings } from '@/types';
+import { Category, Expense, Income, Settings } from '@/types';
 import ExpenseTile from '@/components/ExpenseTile';
 import IncomeTile from '@/components/IncomeTile';
 import CategoryBar from '@/components/CategoryBar';
@@ -20,6 +22,7 @@ export default function ReportScreen() {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [incomes, setIncomes] = useState<Income[]>([]);
   const [settings, setSettings] = useState<Settings | null>(null);
+  const [categoryMap, setCategoryMap] = useState<Record<string, Category>>({});
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(() => {
@@ -29,10 +32,14 @@ export default function ReportScreen() {
       getExpensesByMonth(monthKey),
       getIncomesByMonth(monthKey),
       getSettings(),
-    ]).then(([exps, incs, sets]) => {
+      getCategories(),
+    ]).then(([exps, incs, sets, cats]) => {
       setExpenses(exps);
       setIncomes(incs);
       setSettings(sets);
+      const map: Record<string, Category> = {};
+      cats.forEach((c) => (map[c.name] = c));
+      setCategoryMap(map);
       setLoading(false);
     });
   }, [monthKey]);
@@ -50,17 +57,19 @@ export default function ReportScreen() {
   const totalSpent = expenses.reduce((s, e) => s + e.price, 0);
   const totalIncome = incomes.reduce((s, i) => s + i.amount, 0);
   const available = totalIncome - totalSpent;
+  const currency = settings?.currency ?? 'EGP';
 
+  // Category breakdown sorted by total descending
   const byCategory: Record<string, number> = {};
   for (const e of expenses) byCategory[e.category] = (byCategory[e.category] ?? 0) + e.price;
-
-  const categories = Object.entries(byCategory)
+  const categoryBreakdown = Object.entries(byCategory)
     .sort((a, b) => b[1] - a[1])
     .map(([cat, amount]) => ({
       category: cat,
       total: amount,
       percentage: totalSpent > 0 ? amount / totalSpent : 0,
-      customEmojiMap: settings?.customCategoryEmojis ?? {},
+      categoryEmoji: categoryMap[cat]?.emoji ?? '📦',
+      categoryColor: categoryMap[cat]?.color ?? '#408A71',
     }));
 
   const handleDeleteExpense = (id: number) => {
@@ -81,18 +90,18 @@ export default function ReportScreen() {
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
 
-        {/* Top summary row */}
+        {/* Summary row */}
         <View style={styles.summaryRow}>
           <View style={[styles.summaryBox, { backgroundColor: colors.successBg }]}>
             <Text style={[styles.summaryLabel, { color: colors.textSecondary }]}>Income</Text>
             <Text style={[styles.summaryValue, { color: colors.success }]}>
-              {formatCurrency(totalIncome, settings?.currency)}
+              {formatCurrency(totalIncome, currency)}
             </Text>
           </View>
           <View style={[styles.summaryBox, { backgroundColor: colors.dangerBg }]}>
             <Text style={[styles.summaryLabel, { color: colors.textSecondary }]}>Spent</Text>
             <Text style={[styles.summaryValue, { color: colors.danger }]}>
-              {formatCurrency(totalSpent, settings?.currency)}
+              {formatCurrency(totalSpent, currency)}
             </Text>
           </View>
         </View>
@@ -103,16 +112,16 @@ export default function ReportScreen() {
         ]}>
           <Text style={[styles.balanceLabel, { color: colors.textSecondary }]}>Net Available</Text>
           <Text style={[styles.balanceValue, { color: available >= 0 ? colors.success : colors.danger }]}>
-            {available >= 0 ? '' : '-'}{formatCurrency(Math.abs(available), settings?.currency)}
+            {available >= 0 ? '' : '-'}{formatCurrency(Math.abs(available), currency)}
           </Text>
         </View>
 
-        {/* Expense breakdown */}
-        {categories.length > 0 && (
+        {/* Category breakdown */}
+        {categoryBreakdown.length > 0 && (
           <>
-            <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Expenses by Category</Text>
-            {categories.map(c => (
-              <CategoryBar key={c.category} {...c} currency={settings?.currency ?? 'EGP'} />
+            <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>By Category</Text>
+            {categoryBreakdown.map((c) => (
+              <CategoryBar key={c.category} {...c} currency={currency} />
             ))}
           </>
         )}
@@ -124,12 +133,13 @@ export default function ReportScreen() {
         {expenses.length === 0 ? (
           <EmptyRow text="No expenses" />
         ) : (
-          expenses.map(exp => (
+          expenses.map((exp) => (
             <ExpenseTile
               key={exp.id}
               expense={exp}
-              currency={settings?.currency ?? 'EGP'}
-              customEmojiMap={settings?.customCategoryEmojis ?? {}}
+              currency={currency}
+              categoryEmoji={categoryMap[exp.category]?.emoji ?? '📦'}
+              categoryColor={categoryMap[exp.category]?.color ?? '#408A71'}
               onEdit={() => router.push({ pathname: '/add-expense', params: { expenseId: String(exp.id) } })}
               onDelete={() => handleDeleteExpense(exp.id)}
             />
@@ -143,11 +153,11 @@ export default function ReportScreen() {
         {incomes.length === 0 ? (
           <EmptyRow text="No income recorded" />
         ) : (
-          incomes.map(inc => (
+          incomes.map((inc) => (
             <IncomeTile
               key={inc.id}
               income={inc}
-              currency={settings?.currency ?? 'EGP'}
+              currency={currency}
               onDelete={load}
             />
           ))

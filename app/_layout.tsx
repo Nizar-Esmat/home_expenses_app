@@ -19,6 +19,7 @@ function RootLayoutNav() {
         <Stack.Screen name="report" />
         <Stack.Screen name="history" />
         <Stack.Screen name="settings" />
+        <Stack.Screen name="categories" />
       </Stack>
     </>
   );
