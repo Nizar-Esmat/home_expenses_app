@@ -230,12 +230,13 @@ export async function addExpense(
   price: number,
   category: string,
   note: string | null,
+  createdAt?: string,
 ): Promise<void> {
   const db = await getDb();
-  const createdAt = nowIso();
+  const timestamp = createdAt ?? nowIso();
   await db.runAsync(
     'INSERT INTO expenses (price, category, note, createdAt, monthKey) VALUES (?, ?, ?, ?, ?)',
-    [price, category, note ?? null, createdAt, toMonthKey(createdAt)],
+    [price, category, note ?? null, timestamp, toMonthKey(timestamp)],
   );
 }
 
@@ -270,12 +271,13 @@ export async function getExpensesByMonth(monthKey: string): Promise<Expense[]> {
 export async function addIncome(
   amount: number,
   note: string | null,
+  createdAt?: string,
 ): Promise<void> {
   const db = await getDb();
-  const createdAt = nowIso();
+  const timestamp = createdAt ?? nowIso();
   await db.runAsync(
     'INSERT INTO incomes (amount, note, createdAt, monthKey) VALUES (?, ?, ?, ?)',
-    [amount, note ?? null, createdAt, toMonthKey(createdAt)],
+    [amount, note ?? null, timestamp, toMonthKey(timestamp)],
   );
 }
 

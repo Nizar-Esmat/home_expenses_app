@@ -8,6 +8,7 @@ import { useTheme } from '@/theme/ThemeContext';
 import { addIncome, getSettings } from '@/services/database';
 import AppInput from '@/components/AppInput';
 import AppButton from '@/components/AppButton';
+import DateTimeInput from '@/components/DateTimeInput';
 
 export default function AddIncomeScreen() {
   const { colors } = useTheme();
@@ -15,6 +16,8 @@ export default function AddIncomeScreen() {
 
   const [amount, setAmount] = useState('');
   const [note, setNote] = useState('');
+  const [date, setDate] = useState(new Date());
+  const [useCustomDate, setUseCustomDate] = useState(false);
   const [amountError, setAmountError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -31,7 +34,8 @@ export default function AddIncomeScreen() {
     setLoading(true);
     try {
       const v = parseFloat(amount.replace(',', '.'));
-      await addIncome(v, note.trim() || null);
+      const createdAt = useCustomDate ? date.toISOString() : new Date().toISOString();
+      await addIncome(v, note.trim() || null, createdAt);
       router.back();
     } catch {
       Alert.alert('Error', 'Failed to save income. Please try again.');
@@ -77,6 +81,8 @@ export default function AddIncomeScreen() {
           numberOfLines={3}
           style={{ height: 80, paddingTop: 12, textAlignVertical: 'top' }}
         />
+
+        <DateTimeInput date={date} onChange={setDate} useCustomDate={useCustomDate} onUseCustomDateChange={setUseCustomDate} />
 
         <AppButton label="Save Income" onPress={save} loading={loading} />
       </View>
