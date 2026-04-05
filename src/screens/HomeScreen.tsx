@@ -6,9 +6,9 @@ import {
 import { useFocusEffect, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/theme/ThemeContext';
-import { getExpensesByMonth, getIncomesByMonth, deleteExpense, deleteIncome, getSettings, getCategories } from '@/services/database';
+import { getExpensesByMonth, getIncomesByMonth, deleteExpense, deleteIncome, getSettings, getCategories, getIncomeCategories } from '@/services/database';
 import { currentMonthKey, monthKeyToLabel, formatCurrency } from '@/services/constants';
-import { Category, Expense, Income, Settings } from '@/types';
+import { Category, IncomeCategory, Expense, Income, Settings } from '@/types';
 import SummaryCard from '@/components/SummaryCard';
 import ExpenseTile from '@/components/ExpenseTile';
 import IncomeTile from '@/components/IncomeTile';
@@ -28,6 +28,7 @@ export default function HomeScreen() {
   const [incomes, setIncomes] = useState<Income[]>([]);
   const [settings, setSettings] = useState<Settings | null>(null);
   const [categoryMap, setCategoryMap] = useState<Record<string, Category>>({});
+  const [incomeCategoryMap, setIncomeCategoryMap] = useState<Record<string, IncomeCategory>>({});
   const [loading, setLoading] = useState(true);
   const [fabOpen, setFabOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<'expenses' | 'income'>('expenses');
@@ -39,13 +40,17 @@ export default function HomeScreen() {
       getIncomesByMonth(monthKey),
       getSettings(),
       getCategories(),
-    ]).then(([exps, incs, sets, cats]) => {
+      getIncomeCategories(),
+    ]).then(([exps, incs, sets, cats, incomeCats]) => {
       setExpenses(exps);
       setIncomes(incs);
       setSettings(sets);
       const map: Record<string, Category> = {};
       cats.forEach((c) => (map[c.name] = c));
       setCategoryMap(map);
+      const incomeMap: Record<string, IncomeCategory> = {};
+      incomeCats.forEach((c) => (incomeMap[c.name] = c));
+      setIncomeCategoryMap(incomeMap);
       setLoading(false);
     });
   }, [monthKey]);
@@ -189,6 +194,7 @@ export default function HomeScreen() {
                 key={inc.id}
                 income={inc}
                 currency={settings?.currency ?? 'EGP'}
+                category={incomeCategoryMap[inc.category]}
                 onDelete={() => handleDeleteIncome(inc.id)}
               />
             ))

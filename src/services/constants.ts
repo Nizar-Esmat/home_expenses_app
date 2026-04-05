@@ -35,6 +35,20 @@ export const DEFAULT_CATEGORY_COLORS: Record<string, string> = {
   Other:     '#7F8C8D',
 };
 
+/** 10-color accent palette for income categories */
+export const INCOME_CATEGORY_COLORS = [
+  '#10B981', // green (primary)
+  '#3B82F6', // blue
+  '#8B5CF6', // purple
+  '#F59E0B', // amber
+  '#EF4444', // red
+  '#06B6D4', // cyan
+  '#EC4899', // pink
+  '#6B7280', // grey
+  '#F97316', // orange
+  '#84CC16', // lime
+];
+
 /** Emoji groups for the picker */
 export const EMOJI_GROUPS: { label: string; icon: string; emojis: string[] }[] = [
   { label: 'Food',          icon: '🍔', emojis: ['🍔','🍕','🍣','🥗','🍜','🍰','☕','🍺','🥤','🍷','🧁','🥪','🌮','🥩','🍱'] },
