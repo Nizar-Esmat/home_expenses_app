@@ -200,6 +200,6 @@ const styles = StyleSheet.create({
   balanceHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 4 },
   balanceLabel: { fontSize: 13, fontWeight: '600', marginBottom: 4 },
   balanceEmoji: { fontSize: 14, marginLeft: 6 },
-  balanceValue: { fontSize: 28, fontWeight: '800', textAlign: 'center' },
+  balanceValue: { fontSize: 28, fontWeight: '900', textAlign: 'center' },
   sectionTitle: { fontSize: 16, fontWeight: '700', marginBottom: 12, marginTop: 4 },
 });
