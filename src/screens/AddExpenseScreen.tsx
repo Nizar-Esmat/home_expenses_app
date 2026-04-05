@@ -34,6 +34,7 @@ export default function AddExpenseScreen() {
   );
   const [note, setNote] = useState('');
   const [date, setDate] = useState(new Date());
+  const [useCustomDate, setUseCustomDate] = useState(false);
   const [priceError, setPriceError] = useState('');
   const [loading, setLoading] = useState(false);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -82,7 +83,7 @@ export default function AddExpenseScreen() {
     try {
       const v = parseFloat(price.replace(',', '.'));
       const catName = selectedCategory?.name ?? 'Other';
-      const createdAt = date.toISOString();
+      const createdAt = useCustomDate ? date.toISOString() : new Date().toISOString();
       if (editExpense) {
         await updateExpense(editExpense.id, v, catName, note.trim() || null);
       } else {
@@ -163,7 +164,7 @@ export default function AddExpenseScreen() {
           style={{ height: 80, paddingTop: 12, textAlignVertical: 'top' }}
         />
 
-        {editExpense ? null : <DateTimeInput date={date} onChange={setDate} />}
+        {editExpense ? null : <DateTimeInput date={date} onChange={setDate} useCustomDate={useCustomDate} onUseCustomDateChange={setUseCustomDate} />}
 
         <AppButton
           label={editExpense ? 'Update Expense' : 'Save Expense'}

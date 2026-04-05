@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, Switch, StyleSheet, Platform } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { useTheme } from '@/theme/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
@@ -35,15 +35,15 @@ export default function DateTimeInput({ date, onChange, useCustomDate, onUseCust
 
   return (
     <View>
-      <View style={styles.toggleRow}>
-        <Text style={[styles.toggleLabel, { color: colors.textPrimary }]}>Custom date & time</Text>
-        <Switch
-          value={useCustomDate}
-          onValueChange={onUseCustomDateChange}
-          trackColor={{ false: colors.border, true: colors.primary }}
-          thumbColor="#fff"
-        />
-      </View>
+      <TouchableOpacity
+        style={[styles.toggleRow, { backgroundColor: colors.inputFill, borderColor: colors.border }]}
+        onPress={() => onUseCustomDateChange(!useCustomDate)}
+      >
+        <View style={styles.toggleLeft}>
+          <Ionicons name={useCustomDate ? 'remove-circle-outline' : 'add-circle-outline'} size={20} color={colors.primary} />
+          <Text style={[styles.toggleLabel, { color: colors.textPrimary }]}>Custom date & time</Text>
+        </View>
+      </TouchableOpacity>
 
       {useCustomDate && (
         <>
@@ -87,8 +87,9 @@ export default function DateTimeInput({ date, onChange, useCustomDate, onUseCust
 }
 
 const styles = StyleSheet.create({
-  toggleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
-  toggleLabel: { fontSize: 14, fontWeight: '600' },
+  toggleRow: { flexDirection: 'row', alignItems: 'center', padding: 14, borderRadius: 12, borderWidth: 1.5, marginBottom: 16 },
+  toggleLeft: { flexDirection: 'row', alignItems: 'center' },
+  toggleLabel: { fontSize: 14, fontWeight: '600', marginLeft: 10 },
   row: { flexDirection: 'row', gap: 10, marginBottom: 16 },
   pill: { flex: 1, flexDirection: 'row', alignItems: 'center', padding: 12, borderRadius: 12, borderWidth: 1.5 },
   pillText: { fontSize: 14, marginLeft: 8 },
