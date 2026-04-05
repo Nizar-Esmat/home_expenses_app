@@ -115,14 +115,19 @@ export default function HomeScreen() {
         {/* Available balance */}
         <View style={[
           styles.balanceCard,
-          { backgroundColor: available >= 0 ? colors.successBg : colors.dangerBg },
+          { backgroundColor: colors.card },
         ]}>
-          <Text style={[styles.balanceLabel, { color: colors.textSecondary }]}>
-            Available Balance
-          </Text>
+          <View style={styles.balanceHeader}>
+            <Text style={[styles.balanceLabel, { color: colors.textSecondary }]}>
+              Available Balance
+            </Text>
+            <Text style={styles.balanceEmoji}>
+              {available >= 0 ? '💰' : '⚠️'}
+            </Text>
+          </View>
           <Text style={[
             styles.balanceValue,
-            { color: available >= 0 ? colors.success : colors.danger },
+            { color: colors.textPrimary },
           ]}>
             {available >= 0 ? '' : '-'}{formatCurrency(Math.abs(available), settings?.currency)}
           </Text>
@@ -261,9 +266,11 @@ const styles = StyleSheet.create({
   iconBtn: { padding: 6, marginLeft: 4 },
   cards: { flexDirection: 'row', marginBottom: 10 },
   balanceCard: {
-    borderRadius: 16, padding: 18, alignItems: 'center', marginBottom: 12,
+    borderRadius: 16, padding: 18, marginBottom: 12,
   },
+  balanceHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 4 },
   balanceLabel: { fontSize: 13, fontWeight: '600', marginBottom: 4 },
+  balanceEmoji: { fontSize: 14, marginLeft: 6 },
   balanceValue: { fontSize: 28, fontWeight: '800' },
   progressTrack: { height: 8, borderRadius: 4, marginBottom: 16, overflow: 'hidden' },
   progressFill: { height: 8, borderRadius: 4 },
