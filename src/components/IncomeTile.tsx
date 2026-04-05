@@ -1,18 +1,21 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Income } from '@/types';
+import { Income, IncomeCategory } from '@/types';
 import { formatCurrency, formatDate } from '@/services/constants';
 import { useTheme } from '@/theme/ThemeContext';
 
 interface Props {
   income: Income;
   currency: string;
+  category?: IncomeCategory;
   onDelete: () => void;
 }
 
-export default function IncomeTile({ income, currency, onDelete }: Props) {
+export default function IncomeTile({ income, currency, category, onDelete }: Props) {
   const { colors } = useTheme();
+  const isBuiltIn = category?.isDefault === 1;
+  const bgColor = isBuiltIn ? colors.success : (category?.color || colors.success);
 
   const confirmDelete = () =>
     Alert.alert('Delete Income', 'Remove this income entry?', [
@@ -21,13 +24,13 @@ export default function IncomeTile({ income, currency, onDelete }: Props) {
     ]);
 
   return (
-    <View style={[styles.card, { backgroundColor: colors.successBg, borderColor: colors.success + '44' }]}>
-      <View style={[styles.icon, { backgroundColor: colors.success + '22' }]}>
-        <Text style={styles.emoji}>💰</Text>
+    <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+      <View style={[styles.icon, { backgroundColor: bgColor }]}>
+        <Text style={styles.emoji}>{category?.emoji || '💰'}</Text>
       </View>
       <View style={styles.info}>
         <Text style={[styles.note, { color: colors.textPrimary }]} numberOfLines={1}>
-          {income.note || 'Income'}
+          {category?.name || income.category}
         </Text>
         <Text style={[styles.date, { color: colors.textSecondary }]}>
           {formatDate(income.createdAt)}

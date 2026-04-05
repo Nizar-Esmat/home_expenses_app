@@ -1,37 +1,37 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { useColorScheme } from 'react-native';
-import { dark, light, ColorScheme } from './colors';
+import { COLOR_PALETTES, ColorPaletteName, NEUTRAL_LIGHT, NEUTRAL_DARK, ColorScheme } from './colors';
 import { getSettings, saveSetting } from '@/services/database';
 
 interface ThemeContextType {
   colors: ColorScheme;
   isDark: boolean;
   toggleTheme: () => void;
+  colorPalette: ColorPaletteName;
+  changeColorPalette: (palette: ColorPaletteName) => void;
 }
 
 const ThemeContext = createContext<ThemeContextType>({
-  colors: dark,
+  colors: { ...NEUTRAL_DARK, primary: '#408A71' },
   isDark: true,
   toggleTheme: () => {},
+  colorPalette: 'green',
+  changeColorPalette: () => {},
 });
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const systemScheme = useColorScheme();
   const [isDark, setIsDark] = useState(true);
+  const [colorPalette, setPalette] = useState<ColorPaletteName>('green');
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
     getSettings()
       .then((s) => {
-        if (s.themeMode === 'system') {
-          setIsDark(systemScheme === 'dark');
-        } else {
-          setIsDark(s.themeMode !== 'light');
+        if (s.colorPalette) {
+          setPalette(s.colorPalette as ColorPaletteName);
         }
       })
       .catch(() => {
-        // DB failed — fall back to dark mode
-        setIsDark(true);
+        // Use defaults
       })
       .finally(() => {
         setReady(true);
@@ -44,11 +44,27 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     saveSetting('themeMode', next ? 'dark' : 'light').catch(() => {});
   };
 
-  // Don't render children until theme is loaded from DB
+  const changeColorPalette = (palette: ColorPaletteName) => {
+    setPalette(palette);
+    saveSetting('colorPalette', palette).catch(() => {});
+  };
+
+  const baseColors = isDark ? NEUTRAL_DARK : NEUTRAL_LIGHT;
+  const palette = COLOR_PALETTES[colorPalette];
+  const colors: ColorScheme = {
+    ...baseColors,
+    primary: isDark ? palette.primaryDark : palette.primary,
+    background: isDark ? palette.darkBg : palette.subtle,
+    card: isDark ? palette.darkBg : palette.subtle,
+    inputFill: isDark ? palette.inputFillDark : palette.inputFill,
+    successBg: isDark ? palette.subtleDark : palette.subtle,
+    dangerBg: isDark ? palette.subtleDark : palette.subtle,
+  };
+
   if (!ready) return null;
 
   return (
-    <ThemeContext.Provider value={{ colors: isDark ? dark : light, isDark, toggleTheme }}>
+    <ThemeContext.Provider value={{ colors, isDark, toggleTheme, colorPalette, changeColorPalette }}>
       {children}
     </ThemeContext.Provider>
   );

@@ -1,5 +1,5 @@
 import * as SQLite from 'expo-sqlite';
-import { Category, Expense, Income, Settings, MonthSummary } from '@/types';
+import { Category, IncomeCategory, Expense, Income, Settings, MonthSummary } from '@/types';
 import { DEFAULT_CATEGORIES, DEFAULT_CATEGORY_COLORS } from '@/services/constants';
 
 let _db: SQLite.SQLiteDatabase | null = null;
@@ -30,6 +30,7 @@ async function initDb(db: SQLite.SQLiteDatabase): Promise<void> {
     CREATE TABLE IF NOT EXISTS incomes (
       id        INTEGER PRIMARY KEY AUTOINCREMENT,
       amount    REAL    NOT NULL,
+      category  TEXT    NOT NULL,
       note      TEXT,
       createdAt TEXT    NOT NULL,
       monthKey  TEXT    NOT NULL
@@ -49,9 +50,20 @@ async function initDb(db: SQLite.SQLiteDatabase): Promise<void> {
       sortOrder INTEGER NOT NULL DEFAULT 0,
       createdAt TEXT    NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS income_categories (
+      id        INTEGER PRIMARY KEY AUTOINCREMENT,
+      name      TEXT    NOT NULL UNIQUE,
+      emoji     TEXT    NOT NULL DEFAULT '💰',
+      color     TEXT    NOT NULL DEFAULT '#10B981',
+      isDefault INTEGER NOT NULL DEFAULT 0,
+      sortOrder INTEGER NOT NULL DEFAULT 0,
+      createdAt TEXT    NOT NULL
+    );
   `);
 
   await seedCategories(db);
+  await seedIncomeCategories(db);
 }
 
 // ── Category seed & migration ─────────────────────────────────
@@ -99,6 +111,36 @@ async function seedCategories(db: SQLite.SQLiteDatabase): Promise<void> {
         [cat, emojis[cat] ?? '📦', '#408A71', sortOrder++, now],
       );
     }
+  }
+}
+
+const INCOME_BUILT_IN: { name: string; emoji: string; sortOrder: number }[] = [
+  { name: 'Salary',    emoji: '💼', sortOrder: 0 },
+  { name: 'Freelance', emoji: '💻', sortOrder: 1 },
+  { name: 'Gift',      emoji: '🎁', sortOrder: 2 },
+  { name: 'Investment', emoji: '📈', sortOrder: 3 },
+  { name: 'Other',     emoji: '💰', sortOrder: 4 },
+];
+
+const DEFAULT_INCOME_COLORS: Record<string, string> = {
+  Salary: '#10B981',
+  Freelance: '#3B82F6',
+  Gift: '#A855F7',
+  Investment: '#F59E0B',
+  Other: '#6B7280',
+};
+
+async function seedIncomeCategories(db: SQLite.SQLiteDatabase): Promise<void> {
+  const count = await db.getFirstAsync<{ n: number }>('SELECT COUNT(*) AS n FROM income_categories');
+  if (count && count.n > 0) return;
+
+  const now = new Date().toISOString();
+
+  for (const cat of INCOME_BUILT_IN) {
+    await db.runAsync(
+      'INSERT OR IGNORE INTO income_categories (name, emoji, color, isDefault, sortOrder, createdAt) VALUES (?,?,?,1,?,?)',
+      [cat.name, cat.emoji, DEFAULT_INCOME_COLORS[cat.name] ?? '#10B981', cat.sortOrder, now],
+    );
   }
 }
 
@@ -224,6 +266,103 @@ export async function getCategoryUsageCounts(): Promise<Record<string, number>> 
   return map;
 }
 
+// ── Income Categories CRUD ───────────────────────────────────────
+
+export async function getIncomeCategories(): Promise<IncomeCategory[]> {
+  const db = await getDb();
+  return db.getAllAsync<IncomeCategory>(
+    'SELECT * FROM income_categories ORDER BY sortOrder ASC, id ASC',
+  );
+}
+
+export async function addIncomeCategory(
+  name: string,
+  emoji: string,
+  color: string,
+): Promise<number> {
+  const db = await getDb();
+  const trimmed = name.trim();
+
+  const existing = await db.getFirstAsync<{ n: number }>(
+    'SELECT COUNT(*) AS n FROM income_categories WHERE LOWER(name)=LOWER(?)',
+    [trimmed],
+  );
+  if (existing && existing.n > 0) throw new Error('A category with this name already exists.');
+
+  const maxSort = await db.getFirstAsync<{ m: number }>(
+    'SELECT MAX(sortOrder) AS m FROM income_categories',
+  );
+  const sortOrder = (maxSort?.m ?? -1) + 1;
+  const now = new Date().toISOString();
+
+  const result = await db.runAsync(
+    'INSERT INTO income_categories (name, emoji, color, isDefault, sortOrder, createdAt) VALUES (?,?,?,0,?,?)',
+    [trimmed, emoji, color, sortOrder, now],
+  );
+  return result.lastInsertRowId;
+}
+
+export async function updateIncomeCategory(
+  id: number,
+  name: string,
+  emoji: string,
+  color: string,
+): Promise<void> {
+  const db = await getDb();
+  const trimmed = name.trim();
+
+  const cat = await db.getFirstAsync<IncomeCategory>(
+    'SELECT * FROM income_categories WHERE id=?',
+    [id],
+  );
+  if (!cat) throw new Error('Category not found.');
+
+  if (!cat.isDefault) {
+    const dup = await db.getFirstAsync<{ n: number }>(
+      'SELECT COUNT(*) AS n FROM income_categories WHERE LOWER(name)=LOWER(?) AND id!=?',
+      [trimmed, id],
+    );
+    if (dup && dup.n > 0) throw new Error('A category with this name already exists.');
+  }
+
+  await db.runAsync(
+    'UPDATE income_categories SET emoji=?, color=?, name=? WHERE id=?',
+    [emoji, color, cat.isDefault ? cat.name : trimmed, id],
+  );
+
+  if (!cat.isDefault && cat.name !== trimmed) {
+    await db.runAsync(
+      'UPDATE incomes SET category=? WHERE category=?',
+      [trimmed, cat.name],
+    );
+  }
+}
+
+export async function deleteIncomeCategory(id: number): Promise<{ ok: boolean; reason?: string }> {
+  const db = await getDb();
+
+  const cat = await db.getFirstAsync<IncomeCategory>(
+    'SELECT * FROM income_categories WHERE id=?',
+    [id],
+  );
+  if (!cat) return { ok: false, reason: 'Category not found.' };
+  if (cat.isDefault) return { ok: false, reason: 'Built-in categories cannot be deleted.' };
+
+  const used = await db.getFirstAsync<{ n: number }>(
+    'SELECT COUNT(*) AS n FROM incomes WHERE category=?',
+    [cat.name],
+  );
+  if (used && used.n > 0) {
+    return {
+      ok: false,
+      reason: `"${cat.name}" is used by ${used.n} income${used.n > 1 ? 's' : ''}. Delete those incomes first.`,
+    };
+  }
+
+  await db.runAsync('DELETE FROM income_categories WHERE id=?', [id]);
+  return { ok: true };
+}
+
 // ── Expenses ──────────────────────────────────────────────────
 
 export async function addExpense(
@@ -270,14 +409,28 @@ export async function getExpensesByMonth(monthKey: string): Promise<Expense[]> {
 
 export async function addIncome(
   amount: number,
+  category: string,
   note: string | null,
   createdAt?: string,
 ): Promise<void> {
   const db = await getDb();
   const timestamp = createdAt ?? nowIso();
   await db.runAsync(
-    'INSERT INTO incomes (amount, note, createdAt, monthKey) VALUES (?, ?, ?, ?)',
-    [amount, note ?? null, timestamp, toMonthKey(timestamp)],
+    'INSERT INTO incomes (amount, category, note, createdAt, monthKey) VALUES (?, ?, ?, ?, ?)',
+    [amount, category, note ?? null, timestamp, toMonthKey(timestamp)],
+  );
+}
+
+export async function updateIncome(
+  id: number,
+  amount: number,
+  category: string,
+  note: string | null,
+): Promise<void> {
+  const db = await getDb();
+  await db.runAsync(
+    'UPDATE incomes SET amount=?, category=?, note=? WHERE id=?',
+    [amount, category, note ?? null, id],
   );
 }
 

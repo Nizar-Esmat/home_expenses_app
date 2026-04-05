@@ -1,11 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/theme/ThemeContext';
-import { addIncome, getSettings } from '@/services/database';
+import { addIncome, getIncomeCategories } from '@/services/database';
+import { IncomeCategory } from '@/types';
 import AppInput from '@/components/AppInput';
 import AppButton from '@/components/AppButton';
 import DateTimeInput from '@/components/DateTimeInput';
@@ -16,10 +17,19 @@ export default function AddIncomeScreen() {
 
   const [amount, setAmount] = useState('');
   const [note, setNote] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState<IncomeCategory | null>(null);
+  const [categories, setCategories] = useState<IncomeCategory[]>([]);
   const [date, setDate] = useState(new Date());
   const [useCustomDate, setUseCustomDate] = useState(false);
   const [amountError, setAmountError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    getIncomeCategories().then((cats) => {
+      setCategories(cats);
+      setSelectedCategory(cats[0] ?? null);
+    });
+  }, []);
 
   const validate = (): boolean => {
     const v = parseFloat(amount.replace(',', '.'));
@@ -35,7 +45,8 @@ export default function AddIncomeScreen() {
     try {
       const v = parseFloat(amount.replace(',', '.'));
       const createdAt = useCustomDate ? date.toISOString() : new Date().toISOString();
-      await addIncome(v, note.trim() || null, createdAt);
+      const catName = selectedCategory?.name ?? 'Other';
+      await addIncome(v, catName, note.trim() || null, createdAt);
       router.back();
     } catch {
       Alert.alert('Error', 'Failed to save income. Please try again.');
@@ -55,7 +66,6 @@ export default function AddIncomeScreen() {
       </View>
 
       <View style={styles.content}>
-        {/* Icon banner */}
         <View style={[styles.banner, { backgroundColor: colors.successBg }]}>
           <Text style={styles.bannerEmoji}>💰</Text>
           <Text style={[styles.bannerText, { color: colors.success }]}>
@@ -71,6 +81,31 @@ export default function AddIncomeScreen() {
           keyboardType="decimal-pad"
           error={amountError}
         />
+
+        <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>CATEGORY</Text>
+        <View style={styles.categoryGrid}>
+          {categories.map((cat) => {
+            const selected = selectedCategory?.id === cat.id;
+            return (
+              <TouchableOpacity
+                key={cat.id}
+                style={[
+                  styles.categoryPill,
+                  {
+                    backgroundColor: selected ? cat.color : colors.inputFill,
+                    borderColor: selected ? cat.color : colors.border,
+                  },
+                ]}
+                onPress={() => setSelectedCategory(cat)}
+              >
+                <Text style={styles.pillEmoji}>{cat.emoji}</Text>
+                <Text style={[styles.pillLabel, { color: selected ? '#fff' : colors.textPrimary }]}>
+                  {cat.name}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
 
         <AppInput
           label="Source / Note (optional)"
@@ -104,4 +139,13 @@ const styles = StyleSheet.create({
   },
   bannerEmoji: { fontSize: 24, marginRight: 12 },
   bannerText: { fontSize: 14, fontWeight: '600', flex: 1 },
+  sectionLabel: { fontSize: 11, fontWeight: '700', letterSpacing: 1, marginBottom: 10 },
+  categoryGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 20 },
+  categoryPill: {
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: 14, paddingVertical: 10,
+    borderRadius: 12, borderWidth: 1.5,
+  },
+  pillEmoji: { fontSize: 16, marginRight: 6 },
+  pillLabel: { fontSize: 14, fontWeight: '600' },
 });
