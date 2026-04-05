@@ -271,7 +271,7 @@ const styles = StyleSheet.create({
   balanceHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 4 },
   balanceLabel: { fontSize: 13, fontWeight: '600', marginBottom: 4 },
   balanceEmoji: { fontSize: 14, marginLeft: 6 },
-  balanceValue: { fontSize: 28, fontWeight: '800' },
+  balanceValue: { fontSize: 28, fontWeight: '800', textAlign: 'center' },
   progressTrack: { height: 8, borderRadius: 4, marginBottom: 16, overflow: 'hidden' },
   progressFill: { height: 8, borderRadius: 4 },
   reportBtn: {
