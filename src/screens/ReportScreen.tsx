@@ -108,10 +108,15 @@ export default function ReportScreen() {
 
         <View style={[
           styles.balanceCard,
-          { backgroundColor: available >= 0 ? colors.successBg : colors.dangerBg },
+          { backgroundColor: colors.card },
         ]}>
-          <Text style={[styles.balanceLabel, { color: colors.textSecondary }]}>Net Available</Text>
-          <Text style={[styles.balanceValue, { color: available >= 0 ? colors.success : colors.danger }]}>
+          <View style={styles.balanceHeader}>
+            <Text style={[styles.balanceLabel, { color: colors.textSecondary }]}>Net Available</Text>
+            <Text style={styles.balanceEmoji}>
+              {available >= 0 ? '💰' : '⚠️'}
+            </Text>
+          </View>
+          <Text style={[styles.balanceValue, { color: colors.textPrimary }]}>
             {available >= 0 ? '' : '-'}{formatCurrency(Math.abs(available), currency)}
           </Text>
         </View>
@@ -191,8 +196,10 @@ const styles = StyleSheet.create({
   summaryBox: { flex: 1, borderRadius: 14, padding: 16, alignItems: 'center' },
   summaryLabel: { fontSize: 12, fontWeight: '600', marginBottom: 4 },
   summaryValue: { fontSize: 18, fontWeight: '800' },
-  balanceCard: { borderRadius: 16, padding: 18, alignItems: 'center', marginBottom: 20 },
+  balanceCard: { borderRadius: 16, padding: 18, marginBottom: 20 },
+  balanceHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 4 },
   balanceLabel: { fontSize: 13, fontWeight: '600', marginBottom: 4 },
+  balanceEmoji: { fontSize: 14, marginLeft: 6 },
   balanceValue: { fontSize: 28, fontWeight: '800' },
   sectionTitle: { fontSize: 16, fontWeight: '700', marginBottom: 12, marginTop: 4 },
 });
