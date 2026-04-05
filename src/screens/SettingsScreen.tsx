@@ -1,12 +1,11 @@
-import React, { useCallback, useState } from 'react';
+import React, { useState } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet, Switch,
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/theme/ThemeContext';
-import { getSettings, saveSettings } from '@/services/database';
-import { CURRENCY_OPTIONS } from '@/services/constants';
+import { saveSettings } from '@/services/database';
 import { Settings } from '@/types';
 import AppButton from '@/components/AppButton';
 
@@ -14,18 +13,11 @@ export default function SettingsScreen() {
   const { colors, isDark, toggleTheme } = useTheme();
   const router = useRouter();
 
-  const [currency, setCurrency] = useState('EGP');
   const [saving, setSaving] = useState(false);
-
-  const load = useCallback(() => {
-    getSettings().then((s: Settings) => setCurrency(s.currency ?? 'EGP'));
-  }, []);
-
-  useFocusEffect(load);
 
   const saveAll = async () => {
     setSaving(true);
-    await saveSettings({ currency });
+    await saveSettings({ currency: 'EGP' });
     setSaving(false);
     router.back();
   };
@@ -46,24 +38,14 @@ export default function SettingsScreen() {
 
         {/* Currency */}
         <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>CURRENCY</Text>
-        <View style={styles.currencyRow}>
-          {CURRENCY_OPTIONS.map((c) => (
-            <TouchableOpacity
-              key={c}
-              style={[
-                styles.currencyPill,
-                {
-                  backgroundColor: currency === c ? colors.primary : colors.inputFill,
-                  borderColor: currency === c ? colors.primary : colors.border,
-                },
-              ]}
-              onPress={() => setCurrency(c)}
-            >
-              <Text style={[styles.currencyText, { color: currency === c ? colors.background : colors.textPrimary }]}>
-                {c}
-              </Text>
-            </TouchableOpacity>
-          ))}
+        <View style={[styles.navRow, { backgroundColor: colors.card }]}>
+          <View style={styles.navRowLeft}>
+            <View style={[styles.navIcon, { backgroundColor: '#285A48' }]}>
+              <Ionicons name="cash-outline" size={16} color="#B0E4CC" />
+            </View>
+            <Text style={[styles.navText, { color: colors.textPrimary }]}>Egyptian Pound</Text>
+          </View>
+          <Text style={[styles.navValue, { color: colors.textSecondary }]}>EGP</Text>
         </View>
 
         {/* Appearance */}
@@ -120,15 +102,14 @@ const styles = StyleSheet.create({
   title: { fontSize: 18, fontWeight: '700' },
   content: { padding: 20 },
   sectionLabel: { fontSize: 11, fontWeight: '700', letterSpacing: 1, marginBottom: 10, marginTop: 6 },
-  currencyRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 24 },
-  currencyPill: { paddingHorizontal: 18, paddingVertical: 10, borderRadius: 10, borderWidth: 1.5 },
-  currencyText: { fontSize: 14, fontWeight: '600' },
   navRow: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     padding: 14, borderRadius: 14, marginBottom: 10,
   },
   navRowLeft: { flexDirection: 'row', alignItems: 'center', flex: 1 },
   navIcon: { width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center', marginRight: 12 },
+  navText: { fontSize: 15, fontWeight: '600' },
+  navValue: { fontSize: 14, fontWeight: '500' },
   navLabel: { fontSize: 15, fontWeight: '600' },
   navSub: { fontSize: 12, marginTop: 2 },
 });
