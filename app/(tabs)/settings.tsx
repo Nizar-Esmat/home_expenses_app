@@ -1,13 +1,13 @@
 import { StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import HistoryScreen from '@/screens/HistoryScreen';
+import SettingsScreen from '@/screens/SettingsScreen';
 import { useTheme } from '@/theme/ThemeContext';
 
-export default function HistoryPage() {
+export default function SettingsTab() {
   const { colors } = useTheme();
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.background }]}>
-      <HistoryScreen />
+      <SettingsScreen />
     </SafeAreaView>
   );
 }

@@ -3,7 +3,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import HomeScreen from '@/screens/HomeScreen';
 import { useTheme } from '@/theme/ThemeContext';
 
-export default function Index() {
+export default function HomeTab() {
   const { colors } = useTheme();
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.background }]}>
