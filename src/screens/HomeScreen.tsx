@@ -92,14 +92,6 @@ export default function HomeScreen() {
               📅 {todayLabel()}
             </Text>
           </View>
-          <View style={styles.headerActions}>
-            <TouchableOpacity onPress={() => router.push('/history')} style={styles.iconBtn}>
-              <Ionicons name="time-outline" size={22} color={colors.textSecondary} />
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => router.push('/settings')} style={styles.iconBtn}>
-              <Ionicons name="settings-outline" size={22} color={colors.textSecondary} />
-            </TouchableOpacity>
-          </View>
         </View>
 
         {/* Summary cards */}
@@ -206,7 +198,7 @@ export default function HomeScreen() {
           )
         )}
 
-        <View style={{ height: 120 }} />
+        <View style={{ height: 160 }} />
       </ScrollView>
 
       {/* FAB overlay to close */}
@@ -262,8 +254,7 @@ const styles = StyleSheet.create({
   headerRow: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 16 },
   monthTitle: { fontSize: 20, fontWeight: '700' },
   dateSubtitle: { fontSize: 12, marginTop: 3 },
-  headerActions: { flexDirection: 'row', marginLeft: 'auto' },
-  iconBtn: { padding: 6, marginLeft: 4 },
+
   cards: { flexDirection: 'row', marginBottom: 10 },
   balanceCard: {
     borderRadius: 16, padding: 18, marginBottom: 12,
@@ -271,7 +262,7 @@ const styles = StyleSheet.create({
   balanceHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 4 },
   balanceLabel: { fontSize: 13, fontWeight: '600', marginBottom: 4 },
   balanceEmoji: { fontSize: 14, marginLeft: 6 },
-  balanceValue: { fontSize: 28, fontWeight: '800' },
+  balanceValue: { fontSize: 28, fontWeight: '900', textAlign: 'center' },
   progressTrack: { height: 8, borderRadius: 4, marginBottom: 16, overflow: 'hidden' },
   progressFill: { height: 8, borderRadius: 4 },
   reportBtn: {
@@ -291,7 +282,7 @@ const styles = StyleSheet.create({
   emptyText: { fontSize: 14 },
   overlay: { ...StyleSheet.absoluteFillObject, zIndex: 1 },
   fabGroup: {
-    position: 'absolute', bottom: 28, right: 24,
+    position: 'absolute', bottom: 110, right: 24,
     alignItems: 'flex-end', zIndex: 2,
   },
   fab: {

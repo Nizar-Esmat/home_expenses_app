@@ -1,4 +1,3 @@
-import { useEffect } from 'react';
 import { View, ActivityIndicator } from 'react-native';
 import { Stack } from 'expo-router';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -13,13 +12,12 @@ function RootLayoutNav() {
     <>
       <StatusBar style={isDark ? 'light' : 'dark'} />
       <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.background } }}>
-        <Stack.Screen name="index" />
+        <Stack.Screen name="(tabs)" />
         <Stack.Screen name="add-expense" options={{ presentation: 'modal' }} />
-        <Stack.Screen name="add-income"  options={{ presentation: 'modal' }} />
+        <Stack.Screen name="add-income" options={{ presentation: 'modal' }} />
         <Stack.Screen name="report" />
-        <Stack.Screen name="history" />
-        <Stack.Screen name="settings" />
         <Stack.Screen name="categories" />
+        <Stack.Screen name="income-categories" />
       </Stack>
     </>
   );

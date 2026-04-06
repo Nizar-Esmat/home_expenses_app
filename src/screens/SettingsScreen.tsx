@@ -23,7 +23,6 @@ export default function SettingsScreen() {
     setSaving(true);
     await saveSettings({ currency: 'EGP' });
     setSaving(false);
-    router.back();
   };
 
   return (
@@ -31,11 +30,7 @@ export default function SettingsScreen() {
 
       {/* Header */}
       <View style={[styles.header, { borderBottomColor: colors.border }]}>
-        <TouchableOpacity onPress={() => router.back()}>
-          <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
-        </TouchableOpacity>
         <Text style={[styles.title, { color: colors.textPrimary }]}>Settings</Text>
-        <View style={{ width: 24 }} />
       </View>
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>

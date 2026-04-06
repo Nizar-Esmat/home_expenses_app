@@ -11,16 +11,16 @@ interface ThemeContextType {
 }
 
 const ThemeContext = createContext<ThemeContextType>({
-  colors: { ...NEUTRAL_DARK, primary: '#408A71' },
+  colors: { ...NEUTRAL_DARK, primary: '#9CA3AF' },
   isDark: true,
   toggleTheme: () => {},
-  colorPalette: 'green',
+  colorPalette: 'grey',
   changeColorPalette: () => {},
 });
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [isDark, setIsDark] = useState(true);
-  const [colorPalette, setPalette] = useState<ColorPaletteName>('green');
+  const [colorPalette, setPalette] = useState<ColorPaletteName>('grey');
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
