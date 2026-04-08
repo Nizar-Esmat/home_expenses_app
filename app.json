@@ -16,7 +16,8 @@
         "backgroundColor": "#091413",
         "foregroundImage": "./assets/adaptive-icon.png"
       },
-      "package": "com.budgetbuddy.app"
+      "package": "com.budgetbuddy.app",
+      "versionCode": 1
     },
     "ios": {
       "bundleIdentifier": "com.budgetbuddy.app"
