@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
 import {
-  View, Text, ScrollView, TouchableOpacity, StyleSheet, Switch,
+  View, Text, ScrollView, TouchableOpacity, StyleSheet, Switch, Alert, ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/theme/ThemeContext';
 import { COLOR_PALETTES, ColorPaletteName, PALETTE_COLORS, PALETTE_COLORS_DARK } from '@/theme/colors';
 import { saveSettings } from '@/services/database';
+import { exportBackupAndShare, pickAndImportBackupMerge } from '@/services/sync';
 import AppButton from '@/components/AppButton';
 
 const PALETTES = Object.keys(COLOR_PALETTES) as ColorPaletteName[];
@@ -18,11 +19,65 @@ export default function SettingsScreen() {
   const ringColor = isDark ? '#FFFFFF' : '#374151';
 
   const [saving, setSaving] = useState(false);
+  const [syncingAction, setSyncingAction] = useState<'export' | 'import' | null>(null);
 
   const saveAll = async () => {
     setSaving(true);
     await saveSettings({ currency: 'EGP' });
     setSaving(false);
+  };
+
+  const handleExport = async () => {
+    if (syncingAction) return;
+    try {
+      setSyncingAction('export');
+      const { fileName } = await exportBackupAndShare();
+      Alert.alert('Backup Exported', `Your backup file "${fileName}" is ready to share.`);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Export failed.';
+      Alert.alert('Export Failed', msg);
+    } finally {
+      setSyncingAction(null);
+    }
+  };
+
+  const startImport = async () => {
+    if (syncingAction) return;
+    try {
+      setSyncingAction('import');
+      const result = await pickAndImportBackupMerge();
+      Alert.alert(
+        'Import Complete',
+        [
+          `Categories added: ${result.categoriesAdded}`,
+          `Income categories added: ${result.incomeCategoriesAdded}`,
+          `Expenses added: ${result.expensesAdded}`,
+          `Expenses skipped: ${result.expensesSkipped}`,
+          `Income added: ${result.incomesAdded}`,
+          `Income skipped: ${result.incomesSkipped}`,
+          `Settings merged: ${result.settingsMerged}`,
+          '',
+          'Imported settings overwrite local settings. Reopen the app if theme/palette does not update instantly.',
+        ].join('\n'),
+      );
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Import failed.';
+      if (msg === 'Import cancelled.') return;
+      Alert.alert('Import Failed', msg);
+    } finally {
+      setSyncingAction(null);
+    }
+  };
+
+  const handleImport = () => {
+    Alert.alert(
+      'Import Backup',
+      'This will merge data from the backup into your current device. Existing matching records are skipped; imported settings overwrite local settings.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Import', style: 'default', onPress: () => { startImport(); } },
+      ],
+    );
   };
 
   return (
@@ -120,6 +175,53 @@ export default function SettingsScreen() {
           <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
         </TouchableOpacity>
 
+        {/* Data Sync */}
+        <Text style={[styles.sectionLabel, { color: colors.textSecondary, marginTop: 20 }]}>DATA SYNC</Text>
+
+        <TouchableOpacity
+          style={[styles.navRow, { backgroundColor: colors.card }]}
+          onPress={handleExport}
+          activeOpacity={0.75}
+          disabled={syncingAction !== null}
+        >
+          <View style={styles.navRowLeft}>
+            <View style={[styles.navIcon, { backgroundColor: colors.primary + '33' }]}> 
+              <Ionicons name="download-outline" size={16} color={colors.primary} />
+            </View>
+            <View>
+              <Text style={[styles.navLabel, { color: colors.textPrimary }]}>Export Data</Text>
+              <Text style={[styles.navSub, { color: colors.textSecondary }]}> 
+                Create a backup file to move to another device
+              </Text>
+            </View>
+          </View>
+          {syncingAction === 'export'
+            ? <ActivityIndicator color={colors.primary} size="small" />
+            : <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />}
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.navRow, { backgroundColor: colors.card }]}
+          onPress={handleImport}
+          activeOpacity={0.75}
+          disabled={syncingAction !== null}
+        >
+          <View style={styles.navRowLeft}>
+            <View style={[styles.navIcon, { backgroundColor: colors.primary + '33' }]}> 
+              <Ionicons name="cloud-upload-outline" size={16} color={colors.primary} />
+            </View>
+            <View>
+              <Text style={[styles.navLabel, { color: colors.textPrimary }]}>Import Data</Text>
+              <Text style={[styles.navSub, { color: colors.textSecondary }]}> 
+                Merge backup from old device into this one
+              </Text>
+            </View>
+          </View>
+          {syncingAction === 'import'
+            ? <ActivityIndicator color={colors.primary} size="small" />
+            : <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />}
+        </TouchableOpacity>
+
         <AppButton label="Save Settings" onPress={saveAll} loading={saving} />
         <View style={{ height: 60 }} />
       </ScrollView>
@@ -133,7 +235,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: 1,
   },
-  title: { fontSize: 18, fontWeight: '700' },
+  title: { fontSize: 20, fontWeight: '700' },
   content: { padding: 20 },
   sectionLabel: { fontSize: 11, fontWeight: '700', letterSpacing: 1, marginBottom: 14, marginTop: 6 },
   paletteGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 16, marginBottom: 20 },

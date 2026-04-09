@@ -2,6 +2,29 @@ import * as SQLite from 'expo-sqlite';
 import { Category, IncomeCategory, Expense, Income, Settings, MonthSummary } from '@/types';
 import { DEFAULT_CATEGORIES, DEFAULT_CATEGORY_COLORS } from '@/services/constants';
 
+export interface SettingsRow {
+  key: string;
+  value: string;
+}
+
+export interface DatabaseBackupData {
+  expenses: Expense[];
+  incomes: Income[];
+  categories: Category[];
+  incomeCategories: IncomeCategory[];
+  settings: SettingsRow[];
+}
+
+export interface MergeBackupSummary {
+  categoriesAdded: number;
+  incomeCategoriesAdded: number;
+  expensesAdded: number;
+  expensesSkipped: number;
+  incomesAdded: number;
+  incomesSkipped: number;
+  settingsMerged: number;
+}
+
 let _db: SQLite.SQLiteDatabase | null = null;
 
 async function getDb(): Promise<SQLite.SQLiteDatabase> {
@@ -534,4 +557,126 @@ export async function saveSettings(settings: Partial<Settings>): Promise<void> {
     const str = typeof value === 'object' ? JSON.stringify(value) : String(value);
     await saveSetting(key, str);
   }
+}
+
+export async function getRawSettingsRows(): Promise<SettingsRow[]> {
+  const db = await getDb();
+  return db.getAllAsync<SettingsRow>('SELECT key, value FROM settings');
+}
+
+export async function exportDatabaseBackupData(): Promise<DatabaseBackupData> {
+  const db = await getDb();
+  const [expenses, incomes, categories, incomeCategories, settings] = await Promise.all([
+    db.getAllAsync<Expense>('SELECT * FROM expenses ORDER BY createdAt DESC'),
+    db.getAllAsync<Income>('SELECT * FROM incomes ORDER BY createdAt DESC'),
+    db.getAllAsync<Category>('SELECT * FROM categories ORDER BY sortOrder ASC, id ASC'),
+    db.getAllAsync<IncomeCategory>('SELECT * FROM income_categories ORDER BY sortOrder ASC, id ASC'),
+    db.getAllAsync<SettingsRow>('SELECT key, value FROM settings'),
+  ]);
+
+  return {
+    expenses,
+    incomes,
+    categories,
+    incomeCategories,
+    settings,
+  };
+}
+
+export async function mergeBackupIntoDatabase(data: DatabaseBackupData): Promise<MergeBackupSummary> {
+  const db = await getDb();
+  const summary: MergeBackupSummary = {
+    categoriesAdded: 0,
+    incomeCategoriesAdded: 0,
+    expensesAdded: 0,
+    expensesSkipped: 0,
+    incomesAdded: 0,
+    incomesSkipped: 0,
+    settingsMerged: 0,
+  };
+
+  const normalize = (v: string) => v.trim().toLowerCase();
+
+  await db.withExclusiveTransactionAsync(async () => {
+    const existingCategories = await db.getAllAsync<{ name: string }>('SELECT name FROM categories');
+    const existingCategorySet = new Set(existingCategories.map((c) => normalize(c.name)));
+
+    for (const cat of data.categories) {
+      if (!cat?.name) continue;
+      const key = normalize(cat.name);
+      if (existingCategorySet.has(key)) continue;
+      await db.runAsync(
+        'INSERT INTO categories (name, emoji, color, isDefault, sortOrder, createdAt) VALUES (?,?,?,?,?,?)',
+        [cat.name, cat.emoji ?? '📦', cat.color ?? '#408A71', 0, cat.sortOrder ?? 0, cat.createdAt ?? nowIso()],
+      );
+      existingCategorySet.add(key);
+      summary.categoriesAdded += 1;
+    }
+
+    const existingIncomeCategories = await db.getAllAsync<{ name: string }>('SELECT name FROM income_categories');
+    const existingIncomeCategorySet = new Set(existingIncomeCategories.map((c) => normalize(c.name)));
+
+    for (const cat of data.incomeCategories) {
+      if (!cat?.name) continue;
+      const key = normalize(cat.name);
+      if (existingIncomeCategorySet.has(key)) continue;
+      await db.runAsync(
+        'INSERT INTO income_categories (name, emoji, color, isDefault, sortOrder, createdAt) VALUES (?,?,?,?,?,?)',
+        [cat.name, cat.emoji ?? '💰', cat.color ?? '#10B981', 0, cat.sortOrder ?? 0, cat.createdAt ?? nowIso()],
+      );
+      existingIncomeCategorySet.add(key);
+      summary.incomeCategoriesAdded += 1;
+    }
+
+    const existingExpenses = await db.getAllAsync<Expense>('SELECT * FROM expenses');
+    const expenseFingerprints = new Set(
+      existingExpenses.map((e) => `${e.createdAt}|${e.price}|${normalize(e.category)}|${(e.note ?? '').trim()}`),
+    );
+
+    for (const exp of data.expenses) {
+      if (!exp?.createdAt || typeof exp.price !== 'number' || !exp.category) continue;
+      const fp = `${exp.createdAt}|${exp.price}|${normalize(exp.category)}|${(exp.note ?? '').trim()}`;
+      if (expenseFingerprints.has(fp)) {
+        summary.expensesSkipped += 1;
+        continue;
+      }
+      await db.runAsync(
+        'INSERT INTO expenses (price, category, note, createdAt, monthKey) VALUES (?, ?, ?, ?, ?)',
+        [exp.price, exp.category, exp.note ?? null, exp.createdAt, exp.monthKey || toMonthKey(exp.createdAt)],
+      );
+      expenseFingerprints.add(fp);
+      summary.expensesAdded += 1;
+    }
+
+    const existingIncomes = await db.getAllAsync<Income>('SELECT * FROM incomes');
+    const incomeFingerprints = new Set(
+      existingIncomes.map((i) => `${i.createdAt}|${i.amount}|${normalize(i.category)}|${(i.note ?? '').trim()}`),
+    );
+
+    for (const inc of data.incomes) {
+      if (!inc?.createdAt || typeof inc.amount !== 'number' || !inc.category) continue;
+      const fp = `${inc.createdAt}|${inc.amount}|${normalize(inc.category)}|${(inc.note ?? '').trim()}`;
+      if (incomeFingerprints.has(fp)) {
+        summary.incomesSkipped += 1;
+        continue;
+      }
+      await db.runAsync(
+        'INSERT INTO incomes (amount, category, note, createdAt, monthKey) VALUES (?, ?, ?, ?, ?)',
+        [inc.amount, inc.category, inc.note ?? null, inc.createdAt, inc.monthKey || toMonthKey(inc.createdAt)],
+      );
+      incomeFingerprints.add(fp);
+      summary.incomesAdded += 1;
+    }
+
+    for (const row of data.settings) {
+      if (!row?.key) continue;
+      await db.runAsync(
+        'INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value',
+        [row.key, row.value ?? ''],
+      );
+      summary.settingsMerged += 1;
+    }
+  });
+
+  return summary;
 }
