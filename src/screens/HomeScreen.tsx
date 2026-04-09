@@ -6,45 +6,65 @@ import {
 import { useFocusEffect, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/theme/ThemeContext';
-import { getExpensesByMonth, getIncomesByMonth, deleteExpense, deleteIncome, getSettings, getCategories, getIncomeCategories } from '@/services/database';
+import {
+  getExpensesByMonth,
+  getIncomesByMonth,
+  deleteExpense,
+  deleteIncome,
+  getSettings,
+  getCategories,
+  getIncomeCategories,
+  getAllExpenses,
+  getAllIncomes,
+  getAvailableMonthKeys,
+} from '@/services/database';
 import { currentMonthKey, monthKeyToLabel, formatCurrency } from '@/services/constants';
 import { Category, IncomeCategory, Expense, Income, Settings } from '@/types';
 import SummaryCard from '@/components/SummaryCard';
 import ExpenseTile from '@/components/ExpenseTile';
 import IncomeTile from '@/components/IncomeTile';
 
-function todayLabel(): string {
-  return new Date().toLocaleDateString('en-US', {
-    weekday: 'short', day: 'numeric', month: 'short', year: 'numeric',
-  });
-}
+const ALL_MONTHS_KEY = 'all';
 
 export default function HomeScreen() {
   const { colors } = useTheme();
   const router = useRouter();
-  const monthKey = currentMonthKey();
+  const currentMonth = currentMonthKey();
 
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [incomes, setIncomes] = useState<Income[]>([]);
   const [settings, setSettings] = useState<Settings | null>(null);
   const [categoryMap, setCategoryMap] = useState<Record<string, Category>>({});
   const [incomeCategoryMap, setIncomeCategoryMap] = useState<Record<string, IncomeCategory>>({});
+  const [availableMonthKeys, setAvailableMonthKeys] = useState<string[]>([currentMonth]);
+  const [selectedMonthKey, setSelectedMonthKey] = useState<string>(currentMonth);
+  const [monthMenuOpen, setMonthMenuOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [fabOpen, setFabOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<'expenses' | 'income'>('expenses');
 
-  const load = useCallback(() => {
+  const load = useCallback((monthKey: string = selectedMonthKey) => {
     setLoading(true);
+    const expensePromise = monthKey === ALL_MONTHS_KEY ? getAllExpenses() : getExpensesByMonth(monthKey);
+    const incomePromise = monthKey === ALL_MONTHS_KEY ? getAllIncomes() : getIncomesByMonth(monthKey);
+
     Promise.all([
-      getExpensesByMonth(monthKey),
-      getIncomesByMonth(monthKey),
+      expensePromise,
+      incomePromise,
       getSettings(),
       getCategories(),
       getIncomeCategories(),
-    ]).then(([exps, incs, sets, cats, incomeCats]) => {
+      getAvailableMonthKeys(),
+    ]).then(([exps, incs, sets, cats, incomeCats, monthKeys]) => {
       setExpenses(exps);
       setIncomes(incs);
       setSettings(sets);
+      const mergedMonths = Array.from(new Set([
+        currentMonth,
+        ...(selectedMonthKey !== ALL_MONTHS_KEY ? [selectedMonthKey] : []),
+        ...monthKeys,
+      ])).sort((a, b) => b.localeCompare(a));
+      setAvailableMonthKeys(mergedMonths);
       const map: Record<string, Category> = {};
       cats.forEach((c) => (map[c.name] = c));
       setCategoryMap(map);
@@ -53,9 +73,11 @@ export default function HomeScreen() {
       setIncomeCategoryMap(incomeMap);
       setLoading(false);
     });
-  }, [monthKey]);
+  }, [currentMonth, selectedMonthKey]);
 
-  useFocusEffect(load);
+  useFocusEffect(useCallback(() => {
+    load(selectedMonthKey);
+  }, [load, selectedMonthKey]));
 
   const totalIncome = incomes.reduce((s, i) => s + i.amount, 0);
   const totalSpent = expenses.reduce((s, e) => s + e.price, 0);
@@ -63,12 +85,16 @@ export default function HomeScreen() {
   const progress = totalIncome > 0 ? Math.min(totalSpent / totalIncome, 1) : 0;
 
   const handleDeleteExpense = (id: number) => {
-    deleteExpense(id).then(load);
+    deleteExpense(id).then(() => load(selectedMonthKey));
   };
 
   const handleDeleteIncome = (id: number) => {
-    deleteIncome(id).then(load);
+    deleteIncome(id).then(() => load(selectedMonthKey));
   };
+
+  const selectedMonthLabel = selectedMonthKey === ALL_MONTHS_KEY
+    ? 'All months'
+    : monthKeyToLabel(selectedMonthKey);
 
   if (loading) {
     return (
@@ -84,13 +110,92 @@ export default function HomeScreen() {
 
         {/* Header */}
         <View style={styles.headerRow}>
-          <View>
+          <View style={{ flex: 1 }}>
             <Text style={[styles.monthTitle, { color: colors.textPrimary }]}>
-              {monthKeyToLabel(monthKey)}
+              Overview
             </Text>
-            <Text style={[styles.dateSubtitle, { color: colors.textSecondary }]}>
-              📅 {todayLabel()}
-            </Text>
+          </View>
+
+          <View style={styles.monthFilterWrap}>
+            <TouchableOpacity
+              style={[
+                styles.monthFilterBtn,
+                { backgroundColor: colors.card, borderColor: colors.border },
+              ]}
+              onPress={() => setMonthMenuOpen((open) => !open)}
+            >
+              <Text style={[styles.monthFilterText, { color: colors.textPrimary }]} numberOfLines={1}>
+                {selectedMonthLabel}
+              </Text>
+              <Ionicons
+                name={monthMenuOpen ? 'chevron-up' : 'chevron-down'}
+                size={16}
+                color={colors.textSecondary}
+              />
+            </TouchableOpacity>
+
+            {monthMenuOpen && (
+              <>
+                <TouchableOpacity
+                  style={styles.monthMenuBackdrop}
+                  activeOpacity={1}
+                  onPress={() => setMonthMenuOpen(false)}
+                />
+                <View
+                  style={[
+                    styles.monthMenu,
+                    { backgroundColor: colors.card, borderColor: colors.border },
+                  ]}
+                >
+                  <ScrollView nestedScrollEnabled style={styles.monthMenuList}>
+                    <TouchableOpacity
+                      style={[
+                        styles.monthMenuItem,
+                        selectedMonthKey === ALL_MONTHS_KEY && { backgroundColor: colors.primary + '20' },
+                      ]}
+                      onPress={() => {
+                        setMonthMenuOpen(false);
+                        setSelectedMonthKey(ALL_MONTHS_KEY);
+                        load(ALL_MONTHS_KEY);
+                      }}
+                    >
+                      <View style={styles.monthMenuItemContent}>
+                        <Ionicons name="calendar-outline" size={18} color={colors.textPrimary} />
+                        <Text style={[styles.monthMenuItemText, { color: colors.textPrimary }]}>All months</Text>
+                        {selectedMonthKey === ALL_MONTHS_KEY && (
+                          <Ionicons name="checkmark" size={18} color={colors.primary} />
+                        )}
+                      </View>
+                    </TouchableOpacity>
+
+                    {availableMonthKeys.map((key) => (
+                      <TouchableOpacity
+                        key={key}
+                        style={[
+                          styles.monthMenuItem,
+                          selectedMonthKey === key && { backgroundColor: colors.primary + '20' },
+                        ]}
+                        onPress={() => {
+                          setMonthMenuOpen(false);
+                          setSelectedMonthKey(key);
+                          load(key);
+                        }}
+                      >
+                        <View style={styles.monthMenuItemContent}>
+                          <Ionicons name="calendar-outline" size={18} color={colors.textPrimary} />
+                          <Text style={[styles.monthMenuItemText, { color: colors.textPrimary }]}>
+                            {monthKeyToLabel(key)}
+                          </Text>
+                          {selectedMonthKey === key && (
+                            <Ionicons name="checkmark" size={18} color={colors.primary} />
+                          )}
+                        </View>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </View>
+              </>
+            )}
           </View>
         </View>
 
@@ -138,7 +243,7 @@ export default function HomeScreen() {
         {/* Report button */}
         <TouchableOpacity
           style={[styles.reportBtn, { borderColor: colors.primary }]}
-          onPress={() => router.push({ pathname: '/report', params: { monthKey } })}
+          onPress={() => router.push({ pathname: '/report', params: { monthKey: selectedMonthKey } })}
         >
           <Ionicons name="bar-chart-outline" size={16} color={colors.primary} />
           <Text style={[styles.reportBtnText, { color: colors.primary }]}>  View Full Report</Text>
@@ -168,7 +273,10 @@ export default function HomeScreen() {
         {/* List */}
         {activeTab === 'expenses' ? (
           expenses.length === 0 ? (
-            <EmptyState emoji="🧾" text="No expenses this month" />
+            <EmptyState
+              emoji="🧾"
+              text={selectedMonthKey === ALL_MONTHS_KEY ? 'No expenses in this period' : 'No expenses this month'}
+            />
           ) : (
             expenses.map((exp) => (
               <ExpenseTile
@@ -184,7 +292,10 @@ export default function HomeScreen() {
           )
         ) : (
           incomes.length === 0 ? (
-            <EmptyState emoji="💸" text="No income recorded this month" />
+            <EmptyState
+              emoji="💸"
+              text={selectedMonthKey === ALL_MONTHS_KEY ? 'No income recorded in this period' : 'No income recorded this month'}
+            />
           ) : (
             incomes.map((inc) => (
               <IncomeTile
@@ -251,9 +362,53 @@ const styles = StyleSheet.create({
   screen: { flex: 1 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   content: { padding: 20 },
-  headerRow: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 16 },
+  headerRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, marginBottom: 16 },
   monthTitle: { fontSize: 20, fontWeight: '700' },
-  dateSubtitle: { fontSize: 12, marginTop: 3 },
+  monthFilterWrap: { minWidth: 150, position: 'relative', zIndex: 6 },
+  monthFilterBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    gap: 8,
+    zIndex: 3,
+  },
+  monthFilterText: { fontSize: 13, fontWeight: '600', flex: 1 },
+  monthMenuBackdrop: {
+    position: 'absolute',
+    top: -2400,
+    left: -2400,
+    width: 4800,
+    height: 4800,
+    zIndex: 1,
+  },
+  monthMenu: {
+    position: 'absolute',
+    top: 42,
+    right: 0,
+    width: 200,
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingVertical: 6,
+    zIndex: 2,
+    elevation: 6,
+  },
+  monthMenuList: { maxHeight: 240 },
+  monthMenuItem: {
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginHorizontal: 6,
+    borderRadius: 8,
+  },
+  monthMenuItemContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  monthMenuItemText: { fontSize: 14, fontWeight: '600', flex: 1 },
 
   cards: { flexDirection: 'row', marginBottom: 10 },
   balanceCard: {

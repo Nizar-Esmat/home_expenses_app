@@ -405,6 +405,13 @@ export async function getExpensesByMonth(monthKey: string): Promise<Expense[]> {
   );
 }
 
+export async function getAllExpenses(): Promise<Expense[]> {
+  const db = await getDb();
+  return db.getAllAsync<Expense>(
+    'SELECT * FROM expenses ORDER BY createdAt DESC',
+  );
+}
+
 // ── Incomes ───────────────────────────────────────────────────
 
 export async function addIncome(
@@ -445,6 +452,24 @@ export async function getIncomesByMonth(monthKey: string): Promise<Income[]> {
     'SELECT * FROM incomes WHERE monthKey=? ORDER BY createdAt DESC',
     [monthKey],
   );
+}
+
+export async function getAllIncomes(): Promise<Income[]> {
+  const db = await getDb();
+  return db.getAllAsync<Income>(
+    'SELECT * FROM incomes ORDER BY createdAt DESC',
+  );
+}
+
+export async function getAvailableMonthKeys(): Promise<string[]> {
+  const db = await getDb();
+  const rows = await db.getAllAsync<{ monthKey: string }>(
+    `SELECT DISTINCT monthKey FROM expenses
+     UNION
+     SELECT DISTINCT monthKey FROM incomes
+     ORDER BY monthKey DESC`,
+  );
+  return rows.map((r) => r.monthKey);
 }
 
 // ── History (expenses + income combined) ─────────────────────

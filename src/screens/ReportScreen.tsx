@@ -6,13 +6,21 @@ import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/theme/ThemeContext';
 import {
-  getExpensesByMonth, getIncomesByMonth, getSettings, deleteExpense, getCategories,
+  getExpensesByMonth,
+  getIncomesByMonth,
+  getSettings,
+  deleteExpense,
+  getCategories,
+  getAllExpenses,
+  getAllIncomes,
 } from '@/services/database';
 import { monthKeyToLabel, formatCurrency } from '@/services/constants';
 import { Category, Expense, Income, Settings } from '@/types';
 import ExpenseTile from '@/components/ExpenseTile';
 import IncomeTile from '@/components/IncomeTile';
 import CategoryBar from '@/components/CategoryBar';
+
+const ALL_MONTHS_KEY = 'all';
 
 export default function ReportScreen() {
   const { colors } = useTheme();
@@ -24,13 +32,18 @@ export default function ReportScreen() {
   const [settings, setSettings] = useState<Settings | null>(null);
   const [categoryMap, setCategoryMap] = useState<Record<string, Category>>({});
   const [loading, setLoading] = useState(true);
+  const isAllTime = monthKey === ALL_MONTHS_KEY;
 
   const load = useCallback(() => {
     if (!monthKey) return;
     setLoading(true);
+
+    const expensePromise = isAllTime ? getAllExpenses() : getExpensesByMonth(monthKey);
+    const incomePromise = isAllTime ? getAllIncomes() : getIncomesByMonth(monthKey);
+
     Promise.all([
-      getExpensesByMonth(monthKey),
-      getIncomesByMonth(monthKey),
+      expensePromise,
+      incomePromise,
       getSettings(),
       getCategories(),
     ]).then(([exps, incs, sets, cats]) => {
@@ -42,7 +55,7 @@ export default function ReportScreen() {
       setCategoryMap(map);
       setLoading(false);
     });
-  }, [monthKey]);
+  }, [isAllTime, monthKey]);
 
   useFocusEffect(load);
 
@@ -83,7 +96,7 @@ export default function ReportScreen() {
           <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
         </TouchableOpacity>
         <Text style={[styles.title, { color: colors.textPrimary }]}>
-          {monthKeyToLabel(monthKey ?? '')}
+          {isAllTime ? 'All Time Report' : monthKeyToLabel(monthKey ?? '')}
         </Text>
         <View style={{ width: 24 }} />
       </View>
