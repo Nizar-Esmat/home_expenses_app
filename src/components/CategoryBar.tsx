@@ -10,10 +10,12 @@ interface Props {
   percentage: number; // 0–1
   categoryEmoji: string;
   categoryColor: string;
+  typeLabel?: string;
+  typeTotal?: number;
 }
 
 export default function CategoryBar({
-  category, total, currency, percentage, categoryEmoji, categoryColor,
+  category, total, currency, percentage, categoryEmoji, categoryColor, typeLabel, typeTotal,
 }: Props) {
   const { colors } = useTheme();
 
@@ -23,7 +25,14 @@ export default function CategoryBar({
         <View style={[styles.badge, { backgroundColor: categoryColor }]}>
           <Text style={styles.emoji}>{categoryEmoji}</Text>
         </View>
-        <Text style={[styles.name, { color: colors.textPrimary }]}>{category}</Text>
+        <View style={styles.nameWrap}>
+          <Text style={[styles.name, { color: colors.textPrimary }]}>{category}</Text>
+          {typeLabel && typeof typeTotal === 'number' && (
+            <Text style={[styles.meta, { color: colors.textSecondary }]}>
+              {typeLabel} total: {formatCurrency(typeTotal, currency)}
+            </Text>
+          )}
+        </View>
         <View style={styles.right}>
           <Text style={[styles.total, { color: colors.textPrimary }]}>
             {formatCurrency(total, currency)}
@@ -50,7 +59,9 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', marginBottom: 10 },
   badge: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', marginRight: 12 },
   emoji: { fontSize: 20 },
-  name: { flex: 1, fontSize: 15, fontWeight: '600' },
+  nameWrap: { flex: 1 },
+  name: { fontSize: 15, fontWeight: '600' },
+  meta: { fontSize: 11, marginTop: 2 },
   right: { alignItems: 'flex-end' },
   total: { fontSize: 15, fontWeight: '700' },
   pct: { fontSize: 12 },

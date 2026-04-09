@@ -16,6 +16,7 @@ function RootLayoutNav() {
         <Stack.Screen name="add-expense" options={{ presentation: 'modal' }} />
         <Stack.Screen name="add-income" options={{ presentation: 'modal' }} />
         <Stack.Screen name="report" />
+        <Stack.Screen name="all-transactions" />
         <Stack.Screen name="categories" />
         <Stack.Screen name="income-categories" />
       </Stack>
