@@ -61,14 +61,13 @@ export default function ReportScreen() {
   const [categoryMap, setCategoryMap] = useState<Record<string, Category>>({});
   const [incomeCategoryMap, setIncomeCategoryMap] = useState<Record<string, IncomeCategory>>({});
   const [loading, setLoading] = useState(true);
+  const isAllTime = monthKey === ALL_MONTHS_KEY;
 
   const [typeFilter, setTypeFilter] = useState<'all' | 'expense' | 'income'>('all');
   const [search, setSearch] = useState('');
   const [sortBy, setSortBy] = useState<TransactionSort>('date_desc');
   const [showSortMenu, setShowSortMenu] = useState(false);
   const [page, setPage] = useState(1);
-
-  const isAllTime = monthKey === ALL_MONTHS_KEY;
 
   const load = useCallback(() => {
     if (!monthKey) return;

@@ -461,6 +461,17 @@ export async function getAllIncomes(): Promise<Income[]> {
   );
 }
 
+export async function getAvailableMonthKeys(): Promise<string[]> {
+  const db = await getDb();
+  const rows = await db.getAllAsync<{ monthKey: string }>(
+    `SELECT DISTINCT monthKey FROM expenses
+     UNION
+     SELECT DISTINCT monthKey FROM incomes
+     ORDER BY monthKey DESC`,
+  );
+  return rows.map((r) => r.monthKey);
+}
+
 // ── History (expenses + income combined) ─────────────────────
 
 export async function getMonthHistory(): Promise<MonthSummary[]> {
