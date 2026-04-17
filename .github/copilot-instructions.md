@@ -27,20 +27,34 @@ npm run lint
 
 ```
 app/
-  _layout.tsx          ← Root: wraps everything in ThemeProvider + SafeAreaProvider
+  _layout.tsx              ← Root: ThemeProvider + SafeAreaProvider + Stack navigator
+  index.tsx                ← Redirects to /(tabs)/home
   (tabs)/
-    _layout.tsx        ← Custom floating tab bar (Home / Statistics / Settings)
+    _layout.tsx            ← Custom floating tab bar (Home / Statistics / Settings)
     home.tsx
     statistics.tsx
     settings.tsx
-  add-expense.tsx      ← Modal screen
-  add-income.tsx       ← Modal screen
+  add-expense.tsx          ← Modal screen
+  add-income.tsx           ← Modal screen
+  all-transactions.tsx     ← Full transaction list with search/filter/sort/pagination
   report.tsx
   categories.tsx
   income-categories.tsx
 ```
 
-Each route file is a thin shell that renders its corresponding screen component from `src/screens/`.
+Each route file is a thin shell that renders its corresponding screen component from `src/screens/`:
+
+| Route | Screen component |
+|---|---|
+| `(tabs)/home` | `HomeScreen` |
+| `(tabs)/statistics` | `HistoryScreen` (month history list) |
+| `(tabs)/settings` | `SettingsScreen` |
+| `add-expense` | `AddExpenseScreen` |
+| `add-income` | `AddIncomeScreen` |
+| `all-transactions` | `AllTransactionsScreen` |
+| `report` | `ReportScreen` |
+| `categories` | `CategoryManagerScreen` |
+| `income-categories` | `IncomeCategoryManagerScreen` |
 
 ### Data layer
 
@@ -54,9 +68,19 @@ All database logic lives in `src/services/database.ts`. It uses a lazy-initializ
 
 ### Theme system
 
-`src/theme/ThemeContext.tsx` provides a `useTheme()` hook returning a `colors` object (type `ColorScheme`). There are 9 color palettes (`grey`, `green`, `blue`, `purple`, `orange`, `red`, `teal`, `pink`, `yellow`) defined in `src/theme/colors.ts`. The palette and dark/light mode are persisted in the `settings` SQLite table.
+`src/theme/ThemeContext.tsx` provides a `useTheme()` hook with the following shape:
 
-**Always use `colors.*` from `useTheme()` for any color value — never hardcode hex values in components.**
+```ts
+const { colors, isDark, toggleTheme, colorPalette, changeColorPalette } = useTheme();
+```
+
+- `colors` — `ColorScheme` object; **always use `colors.*` for any color value — never hardcode hex values in components**
+- `isDark` — boolean for conditional non-color styling
+- `toggleTheme()` — cycles through `'light' | 'dark' | 'system'`
+- `colorPalette` — active `ColorPaletteName`
+- `changeColorPalette(name)` — switches palette and persists to SQLite
+
+There are 9 palettes (`grey`, `green`, `blue`, `purple`, `orange`, `red`, `teal`, `pink`, `yellow`) defined in `src/theme/colors.ts`. The active palette and mode are persisted in the `settings` SQLite table.
 
 ## Key Conventions
 
@@ -86,6 +110,18 @@ All shared types are in `src/types/index.ts`. The `Category.isDefault` field is 
 - `CATEGORY_COLORS` / `INCOME_CATEGORY_COLORS` — 10-color palettes for pickers
 - `EMOJI_GROUPS` — categorized emoji picker data
 
+`src/services/reportUtils.ts` contains pure functions for working with transaction data:
+- `mergeTransactions(expenses, incomes)` — merges into a unified `TxItem[]` sorted by date desc
+- `buildCategoryBreakdown(...)` — computes per-category totals and percentages for both expense and income
+- `buildDailyExpenses(expenses)` — groups expenses by calendar day
+- `filterAndSortTransactions(txs, typeFilter, search, sortBy)` — client-side filter + sort
+- `paginate(items, page, pageSize)` — returns `{ data, totalPages }` for pagination
+- `TxItem` — unified type for a transaction (expense or income); uses `amount` regardless of underlying field
+
+`src/services/sync.ts` handles JSON backup/restore:
+- `exportBackupAndShare()` — dumps all SQLite data to a JSON file and opens the OS share sheet
+- `pickAndImportBackupMerge()` — prompts the user to pick a `.json` backup and merges it into the DB (skips duplicate transactions by ID)
+
 ### Components
 
 Shared UI primitives in `src/components/`:
@@ -96,6 +132,14 @@ Shared UI primitives in `src/components/`:
 - `ExpenseTile` / `IncomeTile` — transaction list items
 - `SummaryCard` — month summary display
 - `CategoryBar` — horizontal category filter bar
+
+### Data loading pattern
+
+Screens use `useFocusEffect` (from `expo-router`) with `useCallback` to reload data whenever the screen comes into focus. This ensures fresh data after navigating back from add/edit screens:
+
+```ts
+useFocusEffect(useCallback(() => { loadData(); }, []));
+```
 
 ### Babel assumption
 
