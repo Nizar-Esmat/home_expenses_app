@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -17,6 +17,7 @@ import {
   getExpensesByMonth,
 } from '@/services/database';
 import { currentMonthKey } from '@/services/constants';
+import { parseExpression } from '@/services/mathParser';
 import { Category, Expense } from '@/types';
 import AppInput from '@/components/AppInput';
 import AppButton from '@/components/AppButton';
@@ -63,25 +64,36 @@ export default function AddExpenseScreen() {
     init();
   }, [expenseId]);
 
-  const validate = () => {
-    const v = parseFloat(price.replace(',', '.'));
+  // Whether the user typed an arithmetic expression (not a plain number)
+  const isExpression = /[+\-*/]/.test(price);
+
+  // Live parse result — recomputed on every keystroke
+  const calcResult = useMemo(
+    () => (price.trim() ? parseExpression(price) : null),
+    [price],
+  );
+
+  const validate = (): number | null => {
     if (!price.trim()) {
       setPriceError('Please enter an amount');
-      return false;
+      return null;
     }
-    if (isNaN(v) || v <= 0) {
-      setPriceError('Enter a valid amount greater than 0');
-      return false;
+    const result = parseExpression(price);
+    if (!result.ok) {
+      // Expression errors are already shown in the live preview;
+      // only surface them in the field error for plain-number mistakes.
+      if (!isExpression) setPriceError(result.error || 'Enter a valid amount greater than 0');
+      return null;
     }
     setPriceError('');
-    return true;
+    return result.value;
   };
 
   const save = async () => {
-    if (!validate()) return;
+    const v = validate();
+    if (v === null) return;
     setLoading(true);
     try {
-      const v = parseFloat(price.replace(',', '.'));
       const catName = selectedCategory?.name ?? 'Other';
       const createdAt = useCustomDate ? date.toISOString() : new Date().toISOString();
       if (editExpense) {
@@ -116,11 +128,30 @@ export default function AddExpenseScreen() {
         <AppInput
           label='Amount'
           value={price}
-          onChangeText={setPrice}
+          onChangeText={(text) => {
+            setPrice(text);
+            if (priceError) setPriceError('');
+          }}
           placeholder='0.00'
-          keyboardType='decimal-pad'
+          keyboardType='default'
           error={priceError}
+          autoCorrect={false}
+          autoCapitalize='none'
         />
+
+        {isExpression && calcResult && (
+          <View style={styles.calcRow}>
+            {calcResult.ok ? (
+              <Text style={[styles.calcValue, { color: colors.primary }]}>
+                = {calcResult.value.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
+              </Text>
+            ) : calcResult.error ? (
+              <Text style={[styles.calcError, { color: colors.danger }]}>
+                ⚠ {calcResult.error}
+              </Text>
+            ) : null}
+          </View>
+        )}
 
         <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>
           CATEGORY
@@ -170,6 +201,7 @@ export default function AddExpenseScreen() {
           label={editExpense ? 'Update Expense' : 'Save Expense'}
           onPress={save}
           loading={loading}
+          disabled={isExpression && calcResult !== null && !calcResult.ok}
         />
       </ScrollView>
     </View>
@@ -188,6 +220,13 @@ const styles = StyleSheet.create({
   },
   title: { fontSize: 18, fontWeight: '700' },
   content: { padding: 20 },
+  calcRow: {
+    marginTop: -10,
+    marginBottom: 14,
+    paddingHorizontal: 4,
+  },
+  calcValue: { fontSize: 15, fontWeight: '700' },
+  calcError: { fontSize: 13, fontWeight: '500' },
   sectionLabel: {
     fontSize: 11,
     fontWeight: '700',
