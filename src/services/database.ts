@@ -1,5 +1,5 @@
 import * as SQLite from 'expo-sqlite';
-import { Category, IncomeCategory, Expense, Income, Settings, MonthSummary } from '@/types';
+import { Category, IncomeCategory, Expense, Income, Settings, MonthSummary, SubExpense, SubExpenseInput } from '@/types';
 import { DEFAULT_CATEGORIES, DEFAULT_CATEGORY_COLORS } from '@/services/constants';
 
 export interface SettingsRow {
@@ -13,6 +13,7 @@ export interface DatabaseBackupData {
   categories: Category[];
   incomeCategories: IncomeCategory[];
   settings: SettingsRow[];
+  subExpenses?: SubExpense[];
 }
 
 export interface MergeBackupSummary {
@@ -82,6 +83,14 @@ async function initDb(db: SQLite.SQLiteDatabase): Promise<void> {
       isDefault INTEGER NOT NULL DEFAULT 0,
       sortOrder INTEGER NOT NULL DEFAULT 0,
       createdAt TEXT    NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS sub_expenses (
+      id        INTEGER PRIMARY KEY AUTOINCREMENT,
+      expenseId INTEGER NOT NULL,
+      title     TEXT    NOT NULL,
+      amount    REAL    NOT NULL,
+      sortOrder INTEGER NOT NULL DEFAULT 0
     );
   `);
 
@@ -176,6 +185,38 @@ function nowIso(): string {
 function toMonthKey(iso: string): string {
   const d = new Date(iso);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
+// ── Sub-expenses helpers ──────────────────────────────────────
+
+async function attachSubExpenses(
+  db: SQLite.SQLiteDatabase,
+  expenses: Expense[],
+): Promise<void> {
+  if (expenses.length === 0) return;
+  const ids = expenses.map((e) => e.id);
+  const placeholders = ids.map(() => '?').join(',');
+  const rows = await db.getAllAsync<SubExpense>(
+    `SELECT * FROM sub_expenses WHERE expenseId IN (${placeholders}) ORDER BY expenseId ASC, sortOrder ASC`,
+    ids,
+  );
+  const byId = new Map<number, SubExpense[]>();
+  for (const row of rows) {
+    const arr = byId.get(row.expenseId) ?? [];
+    arr.push(row);
+    byId.set(row.expenseId, arr);
+  }
+  for (const exp of expenses) {
+    exp.subExpenses = byId.get(exp.id) ?? [];
+  }
+}
+
+export async function getSubExpenses(expenseId: number): Promise<SubExpense[]> {
+  const db = await getDb();
+  return db.getAllAsync<SubExpense>(
+    'SELECT * FROM sub_expenses WHERE expenseId=? ORDER BY sortOrder ASC',
+    [expenseId],
+  );
 }
 
 // ── Categories CRUD ───────────────────────────────────────────
@@ -393,13 +434,33 @@ export async function addExpense(
   category: string,
   note: string | null,
   createdAt?: string,
-): Promise<void> {
+  subExpenses?: SubExpenseInput[],
+): Promise<number> {
   const db = await getDb();
   const timestamp = createdAt ?? nowIso();
-  await db.runAsync(
-    'INSERT INTO expenses (price, category, note, createdAt, monthKey) VALUES (?, ?, ?, ?, ?)',
-    [price, category, note ?? null, timestamp, toMonthKey(timestamp)],
-  );
+  if (!subExpenses || subExpenses.length === 0) {
+    const result = await db.runAsync(
+      'INSERT INTO expenses (price, category, note, createdAt, monthKey) VALUES (?, ?, ?, ?, ?)',
+      [price, category, note ?? null, timestamp, toMonthKey(timestamp)],
+    );
+    return result.lastInsertRowId;
+  }
+  let newId = 0;
+  await db.withExclusiveTransactionAsync(async () => {
+    const result = await db.runAsync(
+      'INSERT INTO expenses (price, category, note, createdAt, monthKey) VALUES (?, ?, ?, ?, ?)',
+      [price, category, note ?? null, timestamp, toMonthKey(timestamp)],
+    );
+    newId = result.lastInsertRowId;
+    for (let i = 0; i < subExpenses.length; i++) {
+      const sub = subExpenses[i]!;
+      await db.runAsync(
+        'INSERT INTO sub_expenses (expenseId, title, amount, sortOrder) VALUES (?, ?, ?, ?)',
+        [newId, sub.title, sub.amount, i],
+      );
+    }
+  });
+  return newId;
 }
 
 export async function updateExpense(
@@ -407,32 +468,50 @@ export async function updateExpense(
   price: number,
   category: string,
   note: string | null,
+  subExpenses?: SubExpenseInput[],
 ): Promise<void> {
   const db = await getDb();
-  await db.runAsync(
-    'UPDATE expenses SET price=?, category=?, note=? WHERE id=?',
-    [price, category, note ?? null, id],
-  );
+  await db.withExclusiveTransactionAsync(async () => {
+    await db.runAsync(
+      'UPDATE expenses SET price=?, category=?, note=? WHERE id=?',
+      [price, category, note ?? null, id],
+    );
+    await db.runAsync('DELETE FROM sub_expenses WHERE expenseId=?', [id]);
+    if (subExpenses && subExpenses.length > 0) {
+      for (let i = 0; i < subExpenses.length; i++) {
+        const sub = subExpenses[i]!;
+        await db.runAsync(
+          'INSERT INTO sub_expenses (expenseId, title, amount, sortOrder) VALUES (?, ?, ?, ?)',
+          [id, sub.title, sub.amount, i],
+        );
+      }
+    }
+  });
 }
 
 export async function deleteExpense(id: number): Promise<void> {
   const db = await getDb();
+  await db.runAsync('DELETE FROM sub_expenses WHERE expenseId=?', [id]);
   await db.runAsync('DELETE FROM expenses WHERE id=?', [id]);
 }
 
 export async function getExpensesByMonth(monthKey: string): Promise<Expense[]> {
   const db = await getDb();
-  return db.getAllAsync<Expense>(
+  const expenses = await db.getAllAsync<Expense>(
     'SELECT * FROM expenses WHERE monthKey=? ORDER BY createdAt DESC',
     [monthKey],
   );
+  await attachSubExpenses(db, expenses);
+  return expenses;
 }
 
 export async function getAllExpenses(): Promise<Expense[]> {
   const db = await getDb();
-  return db.getAllAsync<Expense>(
+  const expenses = await db.getAllAsync<Expense>(
     'SELECT * FROM expenses ORDER BY createdAt DESC',
   );
+  await attachSubExpenses(db, expenses);
+  return expenses;
 }
 
 // ── Incomes ───────────────────────────────────────────────────
@@ -566,21 +645,16 @@ export async function getRawSettingsRows(): Promise<SettingsRow[]> {
 
 export async function exportDatabaseBackupData(): Promise<DatabaseBackupData> {
   const db = await getDb();
-  const [expenses, incomes, categories, incomeCategories, settings] = await Promise.all([
+  const [expenses, incomes, categories, incomeCategories, settings, subExpenses] = await Promise.all([
     db.getAllAsync<Expense>('SELECT * FROM expenses ORDER BY createdAt DESC'),
     db.getAllAsync<Income>('SELECT * FROM incomes ORDER BY createdAt DESC'),
     db.getAllAsync<Category>('SELECT * FROM categories ORDER BY sortOrder ASC, id ASC'),
     db.getAllAsync<IncomeCategory>('SELECT * FROM income_categories ORDER BY sortOrder ASC, id ASC'),
     db.getAllAsync<SettingsRow>('SELECT key, value FROM settings'),
+    db.getAllAsync<SubExpense>('SELECT * FROM sub_expenses ORDER BY expenseId ASC, sortOrder ASC'),
   ]);
 
-  return {
-    expenses,
-    incomes,
-    categories,
-    incomeCategories,
-    settings,
-  };
+  return { expenses, incomes, categories, incomeCategories, settings, subExpenses };
 }
 
 export async function mergeBackupIntoDatabase(data: DatabaseBackupData): Promise<MergeBackupSummary> {
@@ -596,6 +670,14 @@ export async function mergeBackupIntoDatabase(data: DatabaseBackupData): Promise
   };
 
   const normalize = (v: string) => v.trim().toLowerCase();
+
+  const subExpensesMap = new Map<number, SubExpense[]>();
+  for (const sub of (data.subExpenses ?? [])) {
+    if (!sub?.expenseId || typeof sub.amount !== 'number' || !sub.title) continue;
+    const arr = subExpensesMap.get(sub.expenseId) ?? [];
+    arr.push(sub);
+    subExpensesMap.set(sub.expenseId, arr);
+  }
 
   await db.withExclusiveTransactionAsync(async () => {
     const existingCategories = await db.getAllAsync<{ name: string }>('SELECT name FROM categories');
@@ -640,10 +722,21 @@ export async function mergeBackupIntoDatabase(data: DatabaseBackupData): Promise
         summary.expensesSkipped += 1;
         continue;
       }
-      await db.runAsync(
+      const expResult = await db.runAsync(
         'INSERT INTO expenses (price, category, note, createdAt, monthKey) VALUES (?, ?, ?, ?, ?)',
         [exp.price, exp.category, exp.note ?? null, exp.createdAt, exp.monthKey || toMonthKey(exp.createdAt)],
       );
+      const newExpenseId = expResult.lastInsertRowId;
+      const subsToInsert = subExpensesMap.get(exp.id);
+      if (subsToInsert && subsToInsert.length > 0) {
+        for (let i = 0; i < subsToInsert.length; i++) {
+          const sub = subsToInsert[i]!;
+          await db.runAsync(
+            'INSERT INTO sub_expenses (expenseId, title, amount, sortOrder) VALUES (?, ?, ?, ?)',
+            [newExpenseId, sub.title, sub.amount, sub.sortOrder ?? i],
+          );
+        }
+      }
       expenseFingerprints.add(fp);
       summary.expensesAdded += 1;
     }
