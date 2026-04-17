@@ -18,6 +18,19 @@ export interface IncomeCategory {
   createdAt: string;
 }
 
+export interface SubExpense {
+  id: number;
+  expenseId: number;
+  title: string;
+  amount: number;
+  sortOrder: number;
+}
+
+export interface SubExpenseInput {
+  title: string;
+  amount: number;
+}
+
 export interface Expense {
   id: number;
   price: number;
@@ -25,6 +38,7 @@ export interface Expense {
   note: string | null;
   createdAt: string;
   monthKey: string;
+  subExpenses?: SubExpense[];
 }
 
 export interface Income {

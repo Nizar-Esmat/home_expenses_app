@@ -53,6 +53,9 @@ function validatePayload(raw: unknown): BackupPayload {
   if (!Array.isArray(data.settings)) {
     throw new Error('Invalid settings in backup.');
   }
+  if (data.subExpenses !== undefined && !Array.isArray(data.subExpenses)) {
+    throw new Error('Invalid sub-expenses in backup.');
+  }
 
   return payload as BackupPayload;
 }
