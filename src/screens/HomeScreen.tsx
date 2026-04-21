@@ -92,7 +92,8 @@ export default function HomeScreen() {
 
   const totalIncome = incomes.reduce((s, i) => s + i.amount, 0);
   const totalSpent = expenses.reduce((s, e) => s + e.price, 0);
-  const available = totalIncome - totalSpent;
+  // Real available balance = sum of all account currentBalances (not month income − expenses)
+  const available = Object.values(accountMap).reduce((sum, acc) => sum + acc.currentBalance, 0);
   const progress = totalIncome > 0 ? Math.min(totalSpent / totalIncome, 1) : 0;
 
   const handleDeleteExpense = (id: number) => {
