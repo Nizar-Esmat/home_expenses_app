@@ -63,6 +63,7 @@ export interface Account {
   icon: string | null;
   color: string | null;
   isDefault: number; // 1 = cannot be deleted, only archived
+  isPrimary: number; // 1 = favorite bank account shown on home screen
   isArchived: number; // 1 = archived (hidden from selectors)
   createdAt: string;
   updatedAt: string;

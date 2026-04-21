@@ -1,7 +1,7 @@
 import React, { useCallback, useState } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  Modal, TextInput, Alert, KeyboardAvoidingView, Platform,
+  Modal, TextInput, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -12,6 +12,7 @@ import {
 import { EMOJI_GROUPS, INCOME_CATEGORY_COLORS } from '@/services/constants';
 import { IncomeCategory } from '@/types';
 import IncomeCategoryCard from '@/components/IncomeCategoryCard';
+import { useAppDialog } from '@/components/AppDialog';
 
 interface FormState {
   mode: 'add' | 'edit';
@@ -38,6 +39,7 @@ const INITIAL_FORM: FormState = {
 export default function IncomeCategoryManagerScreen() {
   const { colors } = useTheme();
   const router = useRouter();
+  const { showDialog } = useAppDialog();
 
   const [categories, setCategories] = useState<IncomeCategory[]>([]);
   const [usageCounts, setUsageCounts] = useState<Record<string, number>>({});
@@ -100,10 +102,12 @@ export default function IncomeCategoryManagerScreen() {
   };
 
   const handleDelete = (cat: IncomeCategory) => {
-    Alert.alert(
-      'Delete Category',
-      `Are you sure you want to delete "${cat.name}"?`,
-      [
+    showDialog({
+      title: 'Delete Category',
+      message: `Are you sure you want to delete "${cat.name}"?`,
+      icon: '🗑️',
+      type: 'danger',
+      buttons: [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Delete',
@@ -111,14 +115,20 @@ export default function IncomeCategoryManagerScreen() {
           onPress: async () => {
             const result = await deleteIncomeCategory(cat.id);
             if (!result.ok) {
-              Alert.alert('Cannot Delete', result.reason ?? 'Unknown error.');
+              showDialog({
+                title: 'Cannot Delete',
+                message: result.reason ?? 'Unknown error.',
+                icon: '⚠️',
+                type: 'warning',
+                buttons: [{ text: 'OK', style: 'default' }],
+              });
             } else {
               load();
             }
           },
         },
       ],
-    );
+    });
   };
 
   const builtIn = categories.filter((c) => c.isDefault === 1);

@@ -1,6 +1,7 @@
 import { Income, MonthSummary } from '@/types';
 import { getDb } from './client';
 import { nowIso, toMonthKey } from './helpers';
+import { recalculateBalance } from './accounts';
 
 export async function addIncome(
   amount: number,
@@ -17,14 +18,9 @@ export async function addIncome(
       'INSERT INTO incomes (amount, category, note, createdAt, monthKey, accountId) VALUES (?, ?, ?, ?, ?, ?)',
       [amount, category, note ?? null, timestamp, toMonthKey(timestamp), accountId ?? null],
     );
-
-    if (accountId != null) {
-      await db.runAsync(
-        'UPDATE accounts SET currentBalance = currentBalance + ?, updatedAt = ? WHERE id = ?',
-        [amount, nowIso(), accountId],
-      );
-    }
   });
+
+  if (accountId != null) await recalculateBalance(accountId);
 }
 
 export async function updateIncome(
@@ -46,22 +42,12 @@ export async function updateIncome(
       'UPDATE incomes SET amount=?, category=?, note=?, accountId=? WHERE id=?',
       [amount, category, note ?? null, accountId ?? null, id],
     );
-
-    // Reverse old balance effect
-    if (old?.accountId != null) {
-      await db.runAsync(
-        'UPDATE accounts SET currentBalance = currentBalance - ?, updatedAt = ? WHERE id = ?',
-        [old.amount, nowIso(), old.accountId],
-      );
-    }
-    // Apply new balance effect
-    if (accountId != null) {
-      await db.runAsync(
-        'UPDATE accounts SET currentBalance = currentBalance + ?, updatedAt = ? WHERE id = ?',
-        [amount, nowIso(), accountId],
-      );
-    }
   });
+
+  const affected = new Set<number>();
+  if (old?.accountId != null) affected.add(old.accountId);
+  if (accountId != null) affected.add(accountId);
+  for (const accId of affected) await recalculateBalance(accId);
 }
 
 export async function deleteIncome(id: number): Promise<void> {
@@ -74,14 +60,9 @@ export async function deleteIncome(id: number): Promise<void> {
 
   await db.withExclusiveTransactionAsync(async () => {
     await db.runAsync('DELETE FROM incomes WHERE id=?', [id]);
-
-    if (inc?.accountId != null) {
-      await db.runAsync(
-        'UPDATE accounts SET currentBalance = currentBalance - ?, updatedAt = ? WHERE id = ?',
-        [inc.amount, nowIso(), inc.accountId],
-      );
-    }
   });
+
+  if (inc?.accountId != null) await recalculateBalance(inc.accountId);
 }
 
 export async function getIncomesByMonth(monthKey: string): Promise<Income[]> {

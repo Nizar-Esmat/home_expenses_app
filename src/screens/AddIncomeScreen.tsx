@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
-  View, Text, StyleSheet, TouchableOpacity, Alert, ScrollView,
+  View, Text, StyleSheet, TouchableOpacity, ScrollView,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -11,10 +11,12 @@ import AppInput from '@/components/AppInput';
 import AppButton from '@/components/AppButton';
 import DateTimeInput from '@/components/DateTimeInput';
 import AccountPicker from '@/components/AccountPicker';
+import { useAppDialog } from '@/components/AppDialog';
 
 export default function AddIncomeScreen() {
   const { colors } = useTheme();
   const router = useRouter();
+  const { showDialog } = useAppDialog();
 
   const [amount, setAmount] = useState('');
   const [note, setNote] = useState('');
@@ -54,7 +56,13 @@ export default function AddIncomeScreen() {
       await addIncome(v, catName, note.trim() || null, createdAt, selectedAccount?.id ?? null);
       router.back();
     } catch {
-      Alert.alert('Error', 'Failed to save income. Please try again.');
+      showDialog({
+        title: 'Error',
+        message: 'Failed to save income. Please try again.',
+        icon: '❌',
+        type: 'danger',
+        buttons: [{ text: 'OK', style: 'default' }],
+      });
     } finally {
       setLoading(false);
     }

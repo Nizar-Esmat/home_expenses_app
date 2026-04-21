@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Expense } from '@/types';
 import { formatCurrency, formatDate } from '@/services/constants';
 import { useTheme } from '@/theme/ThemeContext';
+import { useAppDialog } from '@/components/AppDialog';
 
 interface Props {
   expense: Expense;
@@ -12,20 +13,30 @@ interface Props {
   categoryColor: string;
   onEdit: () => void;
   onDelete: () => void;
+  accountName?: string;
+  accountIcon?: string;
 }
 
 export default function ExpenseTile({
   expense, currency, categoryEmoji, categoryColor, onEdit, onDelete,
+  accountName, accountIcon,
 }: Props) {
   const { colors } = useTheme();
+  const { showDialog } = useAppDialog();
   const [expanded, setExpanded] = useState(false);
   const subs = expense.subExpenses ?? [];
 
   const confirmDelete = () =>
-    Alert.alert('Delete Expense', 'Are you sure you want to delete this expense?', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: onDelete },
-    ]);
+    showDialog({
+      title: 'Delete Expense',
+      message: 'Are you sure you want to delete this expense?',
+      icon: '🗑️',
+      type: 'danger',
+      buttons: [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Delete', style: 'destructive', onPress: onDelete },
+      ],
+    });
 
   return (
     <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -44,6 +55,12 @@ export default function ExpenseTile({
             </Text>
           ) : null}
           <Text style={[styles.date, { color: colors.textSecondary }]}>{formatDate(expense.createdAt)}</Text>
+          {accountName ? (
+            <View style={styles.accountChip}>
+              <Text style={styles.accountChipIcon}>{accountIcon ?? '💳'}</Text>
+              <Text style={[styles.accountChipText, { color: colors.textSecondary }]}>{accountName}</Text>
+            </View>
+          ) : null}
         </View>
 
         <Text style={[styles.price, { color: colors.danger }]}>
@@ -113,6 +130,9 @@ const styles = StyleSheet.create({
   category: { fontSize: 15, fontWeight: '600' },
   note: { fontSize: 13, marginTop: 2 },
   date: { fontSize: 12, marginTop: 2 },
+  accountChip: { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 3 },
+  accountChipIcon: { fontSize: 11 },
+  accountChipText: { fontSize: 11 },
   price: { fontSize: 15, fontWeight: '700', marginRight: 8 },
   actions: { flexDirection: 'row' },
   action: { padding: 4, marginLeft: 4 },

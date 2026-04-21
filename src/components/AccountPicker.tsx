@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/theme/ThemeContext';
 import { Account, AccountType } from '@/types';
@@ -28,39 +28,46 @@ export default function AccountPicker({ accounts, selectedAccount, onSelect }: P
   return (
     <View style={styles.wrapper}>
       <Text style={[styles.label, { color: colors.textSecondary }]}>ACCOUNT</Text>
-      <View style={styles.list}>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.scrollContent}
+      >
         {accounts.map((acc) => {
           const selected = selectedAccount?.id === acc.id;
-          const accentColor = acc.color ?? colors.primary;
+          const accent = acc.color ?? colors.primary;
           return (
             <TouchableOpacity
               key={acc.id}
               style={[
-                styles.pill,
+                styles.card,
                 {
-                  backgroundColor: selected ? accentColor + '22' : colors.inputFill,
-                  borderColor: selected ? accentColor : colors.border,
+                  backgroundColor: selected ? accent + '22' : colors.inputFill,
+                  borderColor: selected ? accent : colors.border,
                 },
               ]}
               onPress={() => onSelect(acc)}
-              activeOpacity={0.7}
+              activeOpacity={0.75}
             >
-              <Text style={styles.icon}>{acc.icon ?? '💳'}</Text>
-              <View style={styles.textBlock}>
-                <Text style={[styles.name, { color: selected ? accentColor : colors.textPrimary }]}>
-                  {acc.name}
-                </Text>
-                <Text style={[styles.type, { color: colors.textSecondary }]}>
-                  {ACCOUNT_TYPE_LABELS[acc.type]}
-                </Text>
+              <View style={styles.cardTop}>
+                <Text style={styles.cardIcon}>{acc.icon ?? '💳'}</Text>
+                {selected && (
+                  <Ionicons name="checkmark-circle" size={16} color={accent} />
+                )}
               </View>
-              {selected && (
-                <Ionicons name="checkmark-circle" size={18} color={accentColor} style={styles.check} />
-              )}
+              <Text
+                style={[styles.cardName, { color: selected ? accent : colors.textPrimary }]}
+                numberOfLines={1}
+              >
+                {acc.name}
+              </Text>
+              <Text style={[styles.cardType, { color: colors.textSecondary }]}>
+                {ACCOUNT_TYPE_LABELS[acc.type]}
+              </Text>
             </TouchableOpacity>
           );
         })}
-      </View>
+      </ScrollView>
     </View>
   );
 }
@@ -68,19 +75,22 @@ export default function AccountPicker({ accounts, selectedAccount, onSelect }: P
 const styles = StyleSheet.create({
   wrapper: { marginBottom: 20 },
   label: { fontSize: 11, fontWeight: '700', letterSpacing: 1, marginBottom: 10 },
-  list: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  pill: {
+  scrollContent: { paddingHorizontal: 2, gap: 10 },
+  card: {
+    width: 100,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 14,
+    borderWidth: 1.5,
+  },
+  cardTop: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 12,
-    borderWidth: 1.5,
-    gap: 8,
+    justifyContent: 'space-between',
+    marginBottom: 8,
   },
-  icon: { fontSize: 18 },
-  textBlock: { flex: 1 },
-  name: { fontSize: 14, fontWeight: '600' },
-  type: { fontSize: 11, marginTop: 1 },
-  check: { marginLeft: 4 },
+  cardIcon: { fontSize: 22 },
+  cardName: { fontSize: 13, fontWeight: '700', marginBottom: 2 },
+  cardType: { fontSize: 11 },
 });
+

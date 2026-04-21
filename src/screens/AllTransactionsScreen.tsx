@@ -21,9 +21,10 @@ import {
   getIncomeCategories,
   deleteExpense,
   deleteIncome,
+  getActiveAccounts,
 } from '@/services/database';
 import { monthKeyToLabel } from '@/services/constants';
-import { Category, Expense, Income, IncomeCategory, Settings } from '@/types';
+import { Account, Category, Expense, Income, IncomeCategory, Settings } from '@/types';
 import ExpenseTile from '@/components/ExpenseTile';
 import IncomeTile from '@/components/IncomeTile';
 import {
@@ -46,6 +47,7 @@ export default function AllTransactionsScreen() {
   const [settings, setSettings] = useState<Settings | null>(null);
   const [categoryMap, setCategoryMap] = useState<Record<string, Category>>({});
   const [incomeCategoryMap, setIncomeCategoryMap] = useState<Record<string, IncomeCategory>>({});
+  const [accountMap, setAccountMap] = useState<Record<number, Account>>({});
   const [loading, setLoading] = useState(true);
 
   const [typeFilter, setTypeFilter] = useState<'all' | 'expense' | 'income'>('all');
@@ -69,7 +71,8 @@ export default function AllTransactionsScreen() {
       getSettings(),
       getCategories(),
       getIncomeCategories(),
-    ]).then(([exps, incs, sets, cats, incomeCats]) => {
+      getActiveAccounts(),
+    ]).then(([exps, incs, sets, cats, incomeCats, accs]) => {
       setExpenses(exps);
       setIncomes(incs);
       setSettings(sets);
@@ -79,6 +82,9 @@ export default function AllTransactionsScreen() {
       const incMap: Record<string, IncomeCategory> = {};
       incomeCats.forEach((c) => (incMap[c.name] = c));
       setIncomeCategoryMap(incMap);
+      const aMap: Record<number, Account> = {};
+      accs.forEach((a) => (aMap[a.id] = a));
+      setAccountMap(aMap);
       setVisibleCount(BATCH_SIZE);
       setLoading(false);
     });
@@ -114,6 +120,8 @@ export default function AllTransactionsScreen() {
           categoryColor={categoryMap[tx.category]?.color ?? '#408A71'}
           onEdit={() => router.push({ pathname: '/add-expense', params: { expenseId: String(tx.id) } })}
           onDelete={() => handleDeleteExpense(tx.id)}
+          accountName={tx.expense.accountId != null ? accountMap[tx.expense.accountId]?.name : undefined}
+          accountIcon={tx.expense.accountId != null ? (accountMap[tx.expense.accountId]?.icon ?? undefined) : undefined}
         />
       );
     }
@@ -126,6 +134,8 @@ export default function AllTransactionsScreen() {
           currency={settings?.currency ?? 'EGP'}
           category={incomeCategoryMap[tx.category]}
           onDelete={() => handleDeleteIncome(tx.id)}
+          accountName={tx.income.accountId != null ? accountMap[tx.income.accountId]?.name : undefined}
+          accountIcon={tx.income.accountId != null ? (accountMap[tx.income.accountId]?.icon ?? undefined) : undefined}
         />
       );
     }

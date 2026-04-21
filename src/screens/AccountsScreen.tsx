@@ -1,13 +1,14 @@
 import React, { useCallback, useState } from 'react';
 import {
-  View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert, Platform,
+  View, Text, ScrollView, TouchableOpacity, StyleSheet, Platform,
 } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/theme/ThemeContext';
-import { getAccounts, archiveAccount, unarchiveAccount, canDeleteAccount, recalculateAccountBalances } from '@/services/database';
+import { getAccounts, archiveAccount, unarchiveAccount, canDeleteAccount, recalculateAccountBalances, setFavoriteBankAccount } from '@/services/database';
 import { Account, AccountType } from '@/types';
 import { ACCOUNT_TYPE_LABELS, ACCOUNT_TYPE_ICONS } from '@/components/AccountPicker';
+import { useAppDialog } from '@/components/AppDialog';
 
 function TypeBadge({ type }: { type: AccountType }) {
   const badgeColors: Record<AccountType, string> = {
@@ -27,6 +28,7 @@ function TypeBadge({ type }: { type: AccountType }) {
 export default function AccountsScreen() {
   const { colors } = useTheme();
   const router = useRouter();
+  const { showDialog } = useAppDialog();
   const [accounts, setAccounts] = useState<Account[]>([]);
 
   const load = useCallback(async () => {
@@ -38,19 +40,22 @@ export default function AccountsScreen() {
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
   const handleArchive = (acc: Account) => {
-    const action = acc.isArchived === 1 ? 'Unarchive' : 'Archive';
-    Alert.alert(
-      `${action} Account`,
-      acc.isArchived === 1
+    const isArchived = acc.isArchived === 1;
+    const action = isArchived ? 'Unarchive' : 'Archive';
+    showDialog({
+      title: `${action} Account`,
+      message: isArchived
         ? `"${acc.name}" will be visible again in account selectors.`
         : `"${acc.name}" will be hidden from account selectors. Existing transactions are kept.`,
-      [
+      icon: isArchived ? '📂' : '🗄️',
+      type: isArchived ? 'info' : 'warning',
+      buttons: [
         { text: 'Cancel', style: 'cancel' },
         {
           text: action,
-          style: acc.isArchived === 1 ? 'default' : 'destructive',
+          style: isArchived ? 'default' : 'destructive',
           onPress: async () => {
-            if (acc.isArchived === 1) {
+            if (isArchived) {
               await unarchiveAccount(acc.id);
             } else {
               await archiveAccount(acc.id);
@@ -59,34 +64,45 @@ export default function AccountsScreen() {
           },
         },
       ],
-    );
+    });
   };
 
   const handleDelete = async (acc: Account) => {
-    const ok = await canDeleteAccount(acc.id);
-    if (!ok) {
-      Alert.alert(
-        'Cannot Delete',
-        acc.isDefault === 1
-          ? 'The default account cannot be deleted. Archive it instead.'
-          : 'This account has transactions. Archive it to hide it, or remove all linked transactions first.',
-      );
+    const result = await canDeleteAccount(acc.id);
+    if (!result.ok) {
+      const message = result.reason === 'default'
+        ? 'The default account cannot be deleted. Archive it instead.'
+        : result.reason === 'has_transfers'
+          ? 'This account has linked transfers. Remove all transfers involving it first, or archive it instead.'
+          : 'This account has transactions. Archive it to hide it, or remove all linked transactions first.';
+      showDialog({
+        title: 'Cannot Delete',
+        message,
+        icon: '⚠️',
+        type: 'warning',
+        buttons: [{ text: 'Got it', style: 'default' }],
+      });
       return;
     }
-    Alert.alert('Delete Account', `Permanently delete "${acc.name}"?`, [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: async () => {
-          // Only canDeleteAccount=true accounts reach here — safe to delete
-          const { getDb } = await import('@/services/database/client');
-          const db = await getDb();
-          await db.runAsync('DELETE FROM accounts WHERE id = ?', [acc.id]);
-          load();
+    showDialog({
+      title: 'Delete Account',
+      message: `Permanently delete "${acc.name}"?`,
+      icon: '🗑️',
+      type: 'danger',
+      buttons: [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            const { getDb } = await import('@/services/database/client');
+            const db = await getDb();
+            await db.runAsync('DELETE FROM accounts WHERE id = ?', [acc.id]);
+            load();
+          },
         },
-      },
-    ]);
+      ],
+    });
   };
 
   const totalBalance = accounts
@@ -112,6 +128,12 @@ export default function AccountsScreen() {
               {acc.isDefault === 1 && (
                 <View style={[styles.defaultTag, { backgroundColor: colors.primary + '22' }]}>
                   <Text style={[styles.defaultTagText, { color: colors.primary }]}>Default</Text>
+                </View>
+              )}
+              {acc.isPrimary === 1 && (
+                <View style={[styles.defaultTag, { backgroundColor: '#F59E0B22' }]}>
+                  <Ionicons name="star" size={10} color="#F59E0B" />
+                  <Text style={[styles.defaultTagText, { color: '#F59E0B' }]}>Favorite</Text>
                 </View>
               )}
             </View>
@@ -154,6 +176,24 @@ export default function AccountsScreen() {
             >
               <Ionicons name="trash-outline" size={16} color={colors.danger} />
               <Text style={[styles.actionLabel, { color: colors.danger }]}>Delete</Text>
+            </TouchableOpacity>
+          )}
+          {acc.type === 'bank_account' && acc.isArchived === 0 && (
+            <TouchableOpacity
+              style={styles.actionBtn}
+              onPress={async () => {
+                await setFavoriteBankAccount(acc.isPrimary === 1 ? null : acc.id);
+                load();
+              }}
+            >
+              <Ionicons
+                name={acc.isPrimary === 1 ? 'star' : 'star-outline'}
+                size={16}
+                color="#F59E0B"
+              />
+              <Text style={[styles.actionLabel, { color: '#F59E0B' }]}>
+                {acc.isPrimary === 1 ? 'Unstar' : 'Favorite'}
+              </Text>
             </TouchableOpacity>
           )}
         </View>

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import {
-  View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert,
+  View, Text, ScrollView, TouchableOpacity, StyleSheet,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -11,10 +11,12 @@ import { ACCOUNT_TYPE_LABELS } from '@/components/AccountPicker';
 import AppInput from '@/components/AppInput';
 import AppButton from '@/components/AppButton';
 import DateTimeInput from '@/components/DateTimeInput';
+import { useAppDialog } from '@/components/AppDialog';
 
 export default function TransferScreen() {
   const { colors } = useTheme();
   const router = useRouter();
+  const { showDialog } = useAppDialog();
 
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [fromAccount, setFromAccount] = useState<Account | null>(null);
@@ -38,11 +40,23 @@ export default function TransferScreen() {
 
   const validate = (): number | null => {
     if (!fromAccount || !toAccount) {
-      Alert.alert('Error', 'Please select both accounts.');
+      showDialog({
+        title: 'Error',
+        message: 'Please select both accounts.',
+        icon: '⚠️',
+        type: 'warning',
+        buttons: [{ text: 'OK', style: 'default' }],
+      });
       return null;
     }
     if (fromAccount.id === toAccount.id) {
-      Alert.alert('Invalid Transfer', 'Source and destination accounts must be different.');
+      showDialog({
+        title: 'Invalid Transfer',
+        message: 'Source and destination accounts must be different.',
+        icon: '⚠️',
+        type: 'warning',
+        buttons: [{ text: 'OK', style: 'default' }],
+      });
       return null;
     }
     const v = parseFloat(amount.replace(',', '.'));
@@ -67,7 +81,13 @@ export default function TransferScreen() {
       await addTransfer(fromAccount!.id, toAccount!.id, v, note.trim() || null, createdAt);
       router.back();
     } catch {
-      Alert.alert('Error', 'Failed to save transfer. Please try again.');
+      showDialog({
+        title: 'Error',
+        message: 'Failed to save transfer. Please try again.',
+        icon: '❌',
+        type: 'danger',
+        buttons: [{ text: 'OK', style: 'default' }],
+      });
     } finally {
       setLoading(false);
     }

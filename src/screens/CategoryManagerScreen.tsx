@@ -1,7 +1,7 @@
 import React, { useCallback, useState } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  Modal, TextInput, Alert, KeyboardAvoidingView, Platform,
+  Modal, TextInput, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -13,6 +13,7 @@ import {
 import { EMOJI_GROUPS, CATEGORY_COLORS } from '@/services/constants';
 import { Category } from '@/types';
 import CategoryCard from '@/components/CategoryCard';
+import { useAppDialog } from '@/components/AppDialog';
 
 // ── Modal state type ──────────────────────────────────────────
 
@@ -43,6 +44,7 @@ const INITIAL_FORM: FormState = {
 export default function CategoryManagerScreen() {
   const { colors } = useTheme();
   const router = useRouter();
+  const { showDialog } = useAppDialog();
 
   const [categories, setCategories] = useState<Category[]>([]);
   const [usageCounts, setUsageCounts] = useState<Record<string, number>>({});
@@ -114,10 +116,12 @@ export default function CategoryManagerScreen() {
   // ── Delete ──────────────────────────────────────────────────
 
   const handleDelete = (cat: Category) => {
-    Alert.alert(
-      'Delete Category',
-      `Are you sure you want to delete "${cat.name}"?`,
-      [
+    showDialog({
+      title: 'Delete Category',
+      message: `Are you sure you want to delete "${cat.name}"?`,
+      icon: '🗑️',
+      type: 'danger',
+      buttons: [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Delete',
@@ -125,14 +129,20 @@ export default function CategoryManagerScreen() {
           onPress: async () => {
             const result = await deleteCategory(cat.id);
             if (!result.ok) {
-              Alert.alert('Cannot Delete', result.reason ?? 'Unknown error.');
+              showDialog({
+                title: 'Cannot Delete',
+                message: result.reason ?? 'Unknown error.',
+                icon: '⚠️',
+                type: 'warning',
+                buttons: [{ text: 'OK', style: 'default' }],
+              });
             } else {
               load();
             }
           },
         },
       ],
-    );
+    });
   };
 
   // ── Sections ────────────────────────────────────────────────

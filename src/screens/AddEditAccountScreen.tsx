@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import {
-  View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert,
+  View, Text, ScrollView, TouchableOpacity, StyleSheet,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -10,6 +10,7 @@ import { Account, AccountType } from '@/types';
 import { ACCOUNT_TYPE_LABELS, ACCOUNT_TYPE_ICONS } from '@/components/AccountPicker';
 import AppInput from '@/components/AppInput';
 import AppButton from '@/components/AppButton';
+import { useAppDialog } from '@/components/AppDialog';
 
 const PRESET_COLORS = [
   '#10B981', '#3B82F6', '#8B5CF6', '#F59E0B',
@@ -28,6 +29,7 @@ const ACCOUNT_TYPES: AccountType[] = ['cash', 'bank_account', 'e_wallet'];
 export default function AddEditAccountScreen() {
   const { colors } = useTheme();
   const router = useRouter();
+  const { showDialog } = useAppDialog();
   const { accountId } = useLocalSearchParams<{ accountId?: string }>();
   const isEdit = !!accountId;
 
@@ -49,7 +51,7 @@ export default function AddEditAccountScreen() {
       setEditAccount(acc);
       setName(acc.name);
       setType(acc.type);
-      setOpeningBalance(String(acc.openingBalance));
+      setOpeningBalance(String(acc.currentBalance));
       setIcon(acc.icon ?? '💵');
       setColor(acc.color ?? PRESET_COLORS[0]!);
     });
@@ -72,7 +74,7 @@ export default function AddEditAccountScreen() {
     }
     const bal = parseFloat(openingBalance.replace(',', '.'));
     if (isNaN(bal) || bal < 0) {
-      setBalanceError('Opening balance must be 0 or more');
+      setBalanceError(isEdit ? 'Current balance must be 0 or more' : 'Opening balance must be 0 or more');
       ok = false;
     } else {
       setBalanceError('');
@@ -89,7 +91,7 @@ export default function AddEditAccountScreen() {
         await updateAccount(editAccount.id, {
           name: name.trim(),
           type,
-          openingBalance: bal,
+          currentBalance: bal,
           icon,
           color,
         });
@@ -109,7 +111,13 @@ export default function AddEditAccountScreen() {
       if (msg.toLowerCase().includes('unique')) {
         setNameError('An account with this name already exists');
       } else {
-        Alert.alert('Error', 'Failed to save account. Please try again.');
+        showDialog({
+          title: 'Error',
+          message: 'Failed to save account. Please try again.',
+          icon: '❌',
+          type: 'danger',
+          buttons: [{ text: 'OK', style: 'default' }],
+        });
       }
     } finally {
       setLoading(false);
@@ -188,9 +196,9 @@ export default function AddEditAccountScreen() {
           })}
         </View>
 
-        {/* Opening balance */}
+        {/* Opening/Current balance */}
         <AppInput
-          label="Opening Balance"
+          label={isEdit ? 'Current Balance' : 'Opening Balance'}
           value={openingBalance}
           onChangeText={(v) => { setOpeningBalance(v); if (balanceError) setBalanceError(''); }}
           placeholder="0.00"
@@ -199,7 +207,7 @@ export default function AddEditAccountScreen() {
         />
         {isEdit && (
           <Text style={[styles.editNote, { color: colors.textSecondary }]}>
-            Changing the opening balance will recalculate the current balance.
+            Set your current balance directly — transactions are preserved and the opening balance is adjusted automatically.
           </Text>
         )}
 

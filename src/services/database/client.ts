@@ -79,6 +79,7 @@ async function initDb(db: SQLite.SQLiteDatabase): Promise<void> {
       icon           TEXT,
       color          TEXT,
       isDefault      INTEGER NOT NULL DEFAULT 0,
+      isPrimary      INTEGER NOT NULL DEFAULT 0,
       isArchived     INTEGER NOT NULL DEFAULT 0,
       createdAt      TEXT    NOT NULL,
       updatedAt      TEXT    NOT NULL
@@ -108,6 +109,9 @@ async function runMigrations(db: SQLite.SQLiteDatabase): Promise<void> {
 
   if (version < 1) {
     await migrateV1(db);
+  }
+  if (version < 2) {
+    await migrateV2(db);
   }
 }
 
@@ -164,6 +168,14 @@ async function migrateV1(db: SQLite.SQLiteDatabase): Promise<void> {
   });
 
   await db.runAsync('PRAGMA user_version = 1');
+}
+
+async function migrateV2(db: SQLite.SQLiteDatabase): Promise<void> {
+  const cols = await db.getAllAsync<{ name: string }>('PRAGMA table_info(accounts)');
+  if (!cols.some((c) => c.name === 'isPrimary')) {
+    await db.runAsync('ALTER TABLE accounts ADD COLUMN isPrimary INTEGER NOT NULL DEFAULT 0');
+  }
+  await db.runAsync('PRAGMA user_version = 2');
 }
 
 // ── Category seed & migration ─────────────────────────────────

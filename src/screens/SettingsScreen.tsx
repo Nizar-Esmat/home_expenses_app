@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import {
-  View, Text, ScrollView, TouchableOpacity, StyleSheet, Switch, Alert, ActivityIndicator,
+  View, Text, ScrollView, TouchableOpacity, StyleSheet, Switch, ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -9,12 +9,14 @@ import { COLOR_PALETTES, ColorPaletteName, PALETTE_COLORS, PALETTE_COLORS_DARK }
 import { saveSettings } from '@/services/database';
 import { exportBackupAndShare, pickAndImportBackupMerge } from '@/services/sync';
 import AppButton from '@/components/AppButton';
+import { useAppDialog } from '@/components/AppDialog';
 
 const PALETTES = Object.keys(COLOR_PALETTES) as ColorPaletteName[];
 
 export default function SettingsScreen() {
   const { colors, isDark, toggleTheme, colorPalette, changeColorPalette } = useTheme();
   const router = useRouter();
+  const { showDialog } = useAppDialog();
 
   const ringColor = isDark ? '#FFFFFF' : '#374151';
 
@@ -32,10 +34,22 @@ export default function SettingsScreen() {
     try {
       setSyncingAction('export');
       const { fileName } = await exportBackupAndShare();
-      Alert.alert('Backup Exported', `Your backup file "${fileName}" is ready to share.`);
+      showDialog({
+        title: 'Backup Exported',
+        message: `Your backup file "${fileName}" is ready to share.`,
+        icon: '📤',
+        type: 'success',
+        buttons: [{ text: 'OK', style: 'default' }],
+      });
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Export failed.';
-      Alert.alert('Export Failed', msg);
+      showDialog({
+        title: 'Export Failed',
+        message: msg,
+        icon: '❌',
+        type: 'danger',
+        buttons: [{ text: 'OK', style: 'default' }],
+      });
     } finally {
       setSyncingAction(null);
     }
@@ -46,9 +60,9 @@ export default function SettingsScreen() {
     try {
       setSyncingAction('import');
       const result = await pickAndImportBackupMerge();
-      Alert.alert(
-        'Import Complete',
-        [
+      showDialog({
+        title: 'Import Complete',
+        message: [
           `Categories added: ${result.categoriesAdded}`,
           `Income categories added: ${result.incomeCategoriesAdded}`,
           `Expenses added: ${result.expensesAdded}`,
@@ -61,25 +75,36 @@ export default function SettingsScreen() {
           '',
           'Imported settings overwrite local settings. Reopen the app if theme/palette does not update instantly.',
         ].join('\n'),
-      );
+        icon: '✅',
+        type: 'success',
+        buttons: [{ text: 'OK', style: 'default' }],
+      });
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Import failed.';
       if (msg === 'Import cancelled.') return;
-      Alert.alert('Import Failed', msg);
+      showDialog({
+        title: 'Import Failed',
+        message: msg,
+        icon: '❌',
+        type: 'danger',
+        buttons: [{ text: 'OK', style: 'default' }],
+      });
     } finally {
       setSyncingAction(null);
     }
   };
 
   const handleImport = () => {
-    Alert.alert(
-      'Import Backup',
-      'This will merge data from the backup into your current device. Existing matching records are skipped; imported settings overwrite local settings.',
-      [
+    showDialog({
+      title: 'Import Backup',
+      message: 'This will merge data from the backup into your current device. Existing matching records are skipped; imported settings overwrite local settings.',
+      icon: '📥',
+      type: 'info',
+      buttons: [
         { text: 'Cancel', style: 'cancel' },
         { text: 'Import', style: 'default', onPress: () => { startImport(); } },
       ],
-    );
+    });
   };
 
   return (

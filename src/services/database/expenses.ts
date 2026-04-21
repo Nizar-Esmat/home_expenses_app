@@ -1,6 +1,7 @@
 import { Expense, SubExpense, SubExpenseInput } from '@/types';
 import { getDb } from './client';
 import { nowIso, toMonthKey } from './helpers';
+import { recalculateBalance } from './accounts';
 
 // ── Private helpers ───────────────────────────────────────────
 
@@ -64,16 +65,9 @@ export async function addExpense(
         );
       }
     }
-
-    // Subtract from account balance
-    if (accountId != null) {
-      await db.runAsync(
-        'UPDATE accounts SET currentBalance = currentBalance - ?, updatedAt = ? WHERE id = ?',
-        [price, nowIso(), accountId],
-      );
-    }
   });
 
+  if (accountId != null) await recalculateBalance(accountId);
   return newId;
 }
 
@@ -87,7 +81,6 @@ export async function updateExpense(
 ): Promise<void> {
   const db = await getDb();
 
-  // Fetch the old expense to reverse its balance effect
   const old = await db.getFirstAsync<{ price: number; accountId: number | null }>(
     'SELECT price, accountId FROM expenses WHERE id = ?',
     [id],
@@ -109,22 +102,13 @@ export async function updateExpense(
         );
       }
     }
-
-    // Reverse old balance effect
-    if (old?.accountId != null) {
-      await db.runAsync(
-        'UPDATE accounts SET currentBalance = currentBalance + ?, updatedAt = ? WHERE id = ?',
-        [old.price, nowIso(), old.accountId],
-      );
-    }
-    // Apply new balance effect
-    if (accountId != null) {
-      await db.runAsync(
-        'UPDATE accounts SET currentBalance = currentBalance - ?, updatedAt = ? WHERE id = ?',
-        [price, nowIso(), accountId],
-      );
-    }
   });
+
+  // Recalculate both old and new accounts (handles account-change case correctly)
+  const affected = new Set<number>();
+  if (old?.accountId != null) affected.add(old.accountId);
+  if (accountId != null) affected.add(accountId);
+  for (const accId of affected) await recalculateBalance(accId);
 }
 
 export async function deleteExpense(id: number): Promise<void> {
@@ -138,15 +122,9 @@ export async function deleteExpense(id: number): Promise<void> {
   await db.withExclusiveTransactionAsync(async () => {
     await db.runAsync('DELETE FROM sub_expenses WHERE expenseId=?', [id]);
     await db.runAsync('DELETE FROM expenses WHERE id=?', [id]);
-
-    // Reverse the balance deduction
-    if (exp?.accountId != null) {
-      await db.runAsync(
-        'UPDATE accounts SET currentBalance = currentBalance + ?, updatedAt = ? WHERE id = ?',
-        [exp.price, nowIso(), exp.accountId],
-      );
-    }
   });
+
+  if (exp?.accountId != null) await recalculateBalance(exp.accountId);
 }
 
 export async function getExpensesByMonth(monthKey: string): Promise<Expense[]> {

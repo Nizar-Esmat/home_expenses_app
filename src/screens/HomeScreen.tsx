@@ -17,9 +17,11 @@ import {
   getAllExpenses,
   getAllIncomes,
   getAvailableMonthKeys,
+  getActiveAccounts,
+  recalculateAccountBalances,
 } from '@/services/database';
 import { currentMonthKey, monthKeyToLabel, formatCurrency } from '@/services/constants';
-import { Category, IncomeCategory, Expense, Income, Settings } from '@/types';
+import { Account, Category, IncomeCategory, Expense, Income, Settings } from '@/types';
 import SummaryCard from '@/components/SummaryCard';
 import ExpenseTile from '@/components/ExpenseTile';
 import IncomeTile from '@/components/IncomeTile';
@@ -42,6 +44,9 @@ export default function HomeScreen() {
   const [loading, setLoading] = useState(true);
   const [fabOpen, setFabOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<'expenses' | 'income'>('expenses');
+  const [accountMap, setAccountMap] = useState<Record<number, Account>>({});
+  const [cashAccount, setCashAccount] = useState<Account | null>(null);
+  const [favBankAccount, setFavBankAccount] = useState<Account | null>(null);
 
   const load = useCallback((monthKey: string = selectedMonthKey) => {
     setLoading(true);
@@ -55,7 +60,8 @@ export default function HomeScreen() {
       getCategories(),
       getIncomeCategories(),
       getAvailableMonthKeys(),
-    ]).then(([exps, incs, sets, cats, incomeCats, monthKeys]) => {
+      recalculateAccountBalances().then(() => getActiveAccounts()),
+    ]).then(([exps, incs, sets, cats, incomeCats, monthKeys, accs]) => {
       setExpenses(exps);
       setIncomes(incs);
       setSettings(sets);
@@ -71,6 +77,11 @@ export default function HomeScreen() {
       const incomeMap: Record<string, IncomeCategory> = {};
       incomeCats.forEach((c) => (incomeMap[c.name] = c));
       setIncomeCategoryMap(incomeMap);
+      const aMap: Record<number, Account> = {};
+      accs.forEach((a) => (aMap[a.id] = a));
+      setAccountMap(aMap);
+      setCashAccount(accs.find((a) => a.type === 'cash') ?? null);
+      setFavBankAccount(accs.find((a) => a.isPrimary === 1) ?? null);
       setLoading(false);
     });
   }, [currentMonth, selectedMonthKey]);
@@ -199,6 +210,42 @@ export default function HomeScreen() {
           </View>
         </View>
 
+        {/* Account snapshot */}
+        {(cashAccount || favBankAccount) && (
+          <View style={styles.accountRow}>
+            {cashAccount && (
+              <AccountSnapshotCard
+                label="Cash"
+                icon={cashAccount.icon ?? '💵'}
+                name={cashAccount.name}
+                balance={cashAccount.currentBalance}
+                color="#10B981"
+                currency={settings?.currency}
+              />
+            )}
+            {favBankAccount ? (
+              <AccountSnapshotCard
+                label="Bank"
+                icon={favBankAccount.icon ?? '🏦'}
+                name={favBankAccount.name}
+                balance={favBankAccount.currentBalance}
+                color={favBankAccount.color ?? colors.primary}
+                currency={settings?.currency}
+              />
+            ) : (
+              <TouchableOpacity
+                style={[styles.accountSnapshotPlaceholder, { backgroundColor: colors.card, borderColor: colors.border }]}
+                onPress={() => router.push('/accounts')}
+              >
+                <Ionicons name="star-outline" size={22} color={colors.textSecondary} />
+                <Text style={[styles.accountPlaceholderText, { color: colors.textSecondary }]}>
+                  {'Set favorite\nbank account'}
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
+
         {/* Summary cards */}
         <View style={styles.cards}>
           <SummaryCard icon="💰" title="Income"
@@ -287,6 +334,8 @@ export default function HomeScreen() {
                 categoryColor={categoryMap[exp.category]?.color ?? '#408A71'}
                 onEdit={() => router.push({ pathname: '/add-expense', params: { expenseId: String(exp.id) } })}
                 onDelete={() => handleDeleteExpense(exp.id)}
+                accountName={exp.accountId != null ? accountMap[exp.accountId]?.name : undefined}
+                accountIcon={exp.accountId != null ? (accountMap[exp.accountId]?.icon ?? undefined) : undefined}
               />
             ))
           )
@@ -304,6 +353,8 @@ export default function HomeScreen() {
                 currency={settings?.currency ?? 'EGP'}
                 category={incomeCategoryMap[inc.category]}
                 onDelete={() => handleDeleteIncome(inc.id)}
+                accountName={inc.accountId != null ? accountMap[inc.accountId]?.name : undefined}
+                accountIcon={inc.accountId != null ? (accountMap[inc.accountId]?.icon ?? undefined) : undefined}
               />
             ))
           )
@@ -354,6 +405,28 @@ function EmptyState({ emoji, text }: { emoji: string; text: string }) {
     <View style={styles.empty}>
       <Text style={styles.emptyEmoji}>{emoji}</Text>
       <Text style={[styles.emptyText, { color: colors.textSecondary }]}>{text}</Text>
+    </View>
+  );
+}
+
+function AccountSnapshotCard({
+  label, icon, name, balance, color, currency,
+}: {
+  label: string; icon: string; name: string;
+  balance: number; color: string; currency?: string;
+}) {
+  const { colors } = useTheme();
+  const balColor = balance >= 0 ? colors.textPrimary : colors.danger;
+  return (
+    <View style={[styles.accountSnapshotCard, { backgroundColor: colors.card }]}>
+      <View style={styles.accountSnapshotTop}>
+        <Text style={[styles.accountSnapshotLabel, { color: colors.textSecondary }]}>{label.toUpperCase()}</Text>
+        <Text style={styles.accountSnapshotIcon}>{icon}</Text>
+      </View>
+      <Text style={[styles.accountSnapshotBalance, { color: balColor }]} numberOfLines={1} adjustsFontSizeToFit>
+        {balance < 0 ? '-' : ''}{formatCurrency(Math.abs(balance), currency)}
+      </Text>
+      <Text style={[styles.accountSnapshotName, { color: colors.textSecondary }]} numberOfLines={1}>{name}</Text>
     </View>
   );
 }
@@ -411,6 +484,23 @@ const styles = StyleSheet.create({
   monthMenuItemText: { fontSize: 14, fontWeight: '600', flex: 1 },
 
   cards: { flexDirection: 'row', marginBottom: 10 },
+  accountRow: { flexDirection: 'row', gap: 12, marginBottom: 14 },
+  accountSnapshotCard: {
+    flex: 1, borderRadius: 16, padding: 14, minHeight: 90,
+  },
+  accountSnapshotTop: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6,
+  },
+  accountSnapshotLabel: { fontSize: 10, fontWeight: '700', letterSpacing: 0.8 },
+  accountSnapshotIcon: { fontSize: 20 },
+  accountSnapshotBalance: { fontSize: 18, fontWeight: '800', marginBottom: 2 },
+  accountSnapshotName: { fontSize: 11 },
+  accountSnapshotPlaceholder: {
+    flex: 1, borderRadius: 16, padding: 14, minHeight: 90,
+    alignItems: 'center', justifyContent: 'center', gap: 6,
+    borderWidth: 1.5, borderStyle: 'dashed',
+  },
+  accountPlaceholderText: { fontSize: 12, textAlign: 'center', lineHeight: 17 },
   balanceCard: {
     borderRadius: 16, padding: 18, marginBottom: 12,
   },

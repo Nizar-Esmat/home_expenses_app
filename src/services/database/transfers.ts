@@ -1,6 +1,7 @@
 import { Transfer } from '@/types';
 import { getDb } from './client';
 import { nowIso, toMonthKey } from './helpers';
+import { recalculateBalance } from './accounts';
 
 // ── Transfers CRUD ────────────────────────────────────────────
 
@@ -21,19 +22,10 @@ export async function addTransfer(
       [fromAccountId, toAccountId, amount, note ?? null, timestamp, toMonthKey(timestamp)],
     );
     newId = result.lastInsertRowId;
-
-    // Subtract from source account
-    await db.runAsync(
-      'UPDATE accounts SET currentBalance = currentBalance - ?, updatedAt = ? WHERE id = ?',
-      [amount, nowIso(), fromAccountId],
-    );
-    // Add to destination account
-    await db.runAsync(
-      'UPDATE accounts SET currentBalance = currentBalance + ?, updatedAt = ? WHERE id = ?',
-      [amount, nowIso(), toAccountId],
-    );
   });
 
+  await recalculateBalance(fromAccountId);
+  await recalculateBalance(toAccountId);
   return newId;
 }
 
@@ -48,17 +40,10 @@ export async function deleteTransfer(id: number): Promise<void> {
 
   await db.withExclusiveTransactionAsync(async () => {
     await db.runAsync('DELETE FROM transfers WHERE id = ?', [id]);
-
-    // Reverse the balance changes
-    await db.runAsync(
-      'UPDATE accounts SET currentBalance = currentBalance + ?, updatedAt = ? WHERE id = ?',
-      [transfer.amount, nowIso(), transfer.fromAccountId],
-    );
-    await db.runAsync(
-      'UPDATE accounts SET currentBalance = currentBalance - ?, updatedAt = ? WHERE id = ?',
-      [transfer.amount, nowIso(), transfer.toAccountId],
-    );
   });
+
+  await recalculateBalance(transfer.fromAccountId);
+  await recalculateBalance(transfer.toAccountId);
 }
 
 export async function getTransfersByMonth(monthKey: string): Promise<Transfer[]> {
