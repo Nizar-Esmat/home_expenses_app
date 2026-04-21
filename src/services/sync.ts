@@ -8,7 +8,8 @@ import {
   MergeBackupSummary,
 } from '@/services/database';
 
-const BACKUP_VERSION = 1;
+const BACKUP_VERSION = 2;
+const SUPPORTED_VERSIONS = [1, 2];
 
 interface BackupPayload {
   schemaVersion: number;
@@ -36,7 +37,7 @@ function validatePayload(raw: unknown): BackupPayload {
   }
 
   const payload = raw as Partial<BackupPayload>;
-  if (payload.schemaVersion !== BACKUP_VERSION) {
+  if (!payload.schemaVersion || !SUPPORTED_VERSIONS.includes(payload.schemaVersion)) {
     throw new Error('Unsupported backup version.');
   }
   if (!payload.data || typeof payload.data !== 'object') {

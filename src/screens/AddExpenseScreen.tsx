@@ -6,7 +6,6 @@ import {
   ScrollView,
   TouchableOpacity,
   StyleSheet,
-  Alert,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -17,13 +16,16 @@ import {
   getCategories,
   getExpensesByMonth,
   getSubExpenses,
+  getActiveAccounts,
+  getAccountById,
 } from '@/services/database';
 import { currentMonthKey } from '@/services/constants';
-import { parseExpression } from '@/services/mathParser';
-import { Category, Expense, SubExpenseInput } from '@/types';
+import { Account, Category, Expense, SubExpenseInput } from '@/types';
 import AppInput from '@/components/AppInput';
 import AppButton from '@/components/AppButton';
 import DateTimeInput from '@/components/DateTimeInput';
+import AccountPicker from '@/components/AccountPicker';
+import { useAppDialog } from '@/components/AppDialog';
 
 interface SubItem {
   localId: string;
@@ -34,6 +36,7 @@ interface SubItem {
 export default function AddExpenseScreen() {
   const { colors } = useTheme();
   const router = useRouter();
+  const { showDialog } = useAppDialog();
   const { expenseId } = useLocalSearchParams<{ expenseId?: string }>();
 
   const [editExpense, setEditExpense] = useState<Expense | null>(null);
@@ -47,14 +50,20 @@ export default function AddExpenseScreen() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [subItems, setSubItems] = useState<SubItem[]>([]);
   const [subItemErrors, setSubItemErrors] = useState<Record<string, { title?: string; amount?: string }>>({});
+  const [accounts, setAccounts] = useState<Account[]>([]);
+  const [selectedAccount, setSelectedAccount] = useState<Account | null>(null);
 
   const subItemCounter = useRef(0);
   const makeLocalId = () => String(++subItemCounter.current);
 
   useEffect(() => {
     const init = async () => {
-      const cats = await getCategories();
+      const [cats, accts] = await Promise.all([
+        getCategories(),
+        getActiveAccounts(),
+      ]);
       setCategories(cats);
+      setAccounts(accts);
 
       if (expenseId) {
         const [expenses, existingSubs] = await Promise.all([
@@ -69,6 +78,8 @@ export default function AddExpenseScreen() {
           setDate(new Date(found.createdAt));
           const cat = cats.find((c) => c.name === found.category);
           setSelectedCategory(cat ?? cats[0] ?? null);
+          const acct = accts.find((a) => a.id === found.accountId);
+          setSelectedAccount(acct ?? accts[0] ?? null);
           if (existingSubs.length > 0) {
             setSubItems(
               existingSubs.map((s) => ({
@@ -83,16 +94,11 @@ export default function AddExpenseScreen() {
       }
 
       setSelectedCategory(cats[0] ?? null);
+      const defaultAcct = accts.find((a) => a.isDefault === 1) ?? accts[0] ?? null;
+      setSelectedAccount(defaultAcct);
     };
     init();
   }, [expenseId]);
-
-  // ── Calculator (plain amount field) ──────────────────────────
-  const isExpression = /[+\-*/]/.test(price);
-  const calcResult = useMemo(
-    () => (price.trim() ? parseExpression(price) : null),
-    [price],
-  );
 
   // ── Sub-items ────────────────────────────────────────────────
   const hasSubItems = subItems.length > 0;
@@ -100,15 +106,14 @@ export default function AddExpenseScreen() {
     if (!hasSubItems) return null;
     let total = 0;
     for (const item of subItems) {
-      const r = parseExpression(item.amount);
-      if (!r.ok) return null;
-      total += r.value;
+      const v = parseFloat(item.amount.replace(',', '.'));
+      if (isNaN(v) || v <= 0) return null;
+      total += v;
     }
     return Math.round(total * 1e10) / 1e10;
   }, [subItems, hasSubItems]);
 
   const addSubItem = () => {
-    // On first item: seed its amount with whatever was typed in the amount field
     const initialAmount = subItems.length === 0 ? price : '';
     setSubItems((prev) => [...prev, { localId: makeLocalId(), title: '', amount: initialAmount }]);
     setSubItemErrors({});
@@ -144,9 +149,9 @@ export default function AddExpenseScreen() {
         err.title = 'Required';
         hasErrors = true;
       }
-      const parsed = parseExpression(item.amount);
-      if (!parsed.ok) {
-        err.amount = parsed.error || 'Invalid amount';
+      const v = parseFloat(item.amount.replace(',', '.'));
+      if (isNaN(v) || v <= 0) {
+        err.amount = 'Enter a valid amount greater than 0';
         hasErrors = true;
       }
       if (Object.keys(err).length > 0) errors[item.localId] = err;
@@ -157,23 +162,23 @@ export default function AddExpenseScreen() {
     }
     return subItems.map((item) => ({
       title: item.title.trim(),
-      amount: (parseExpression(item.amount) as { ok: true; value: number }).value,
+      amount: parseFloat(item.amount.replace(',', '.')),
     }));
   };
 
-  // ── Plain-amount validate ────────────────────────────────────
+  // ── Validate amount field ────────────────────────────────────
   const validate = (): number | null => {
     if (!price.trim()) {
       setPriceError('Please enter an amount');
       return null;
     }
-    const result = parseExpression(price);
-    if (!result.ok) {
-      if (!isExpression) setPriceError(result.error || 'Enter a valid amount greater than 0');
+    const v = parseFloat(price.replace(',', '.'));
+    if (isNaN(v) || v <= 0) {
+      setPriceError('Enter a valid amount greater than 0');
       return null;
     }
     setPriceError('');
-    return result.value;
+    return v;
   };
 
   // ── Save ────────────────────────────────────────────────────
@@ -192,26 +197,52 @@ export default function AddExpenseScreen() {
       finalPrice = v;
     }
 
+    // Balance check — fetch fresh balance from DB
+    if (selectedAccount != null) {
+      const freshAcc = await getAccountById(selectedAccount.id);
+      if (freshAcc) {
+        // For edits on the same account, the old expense amount is already deducted,
+        // so the effective available balance is currentBalance + oldAmount.
+        const isEditSameAccount = editExpense != null && editExpense.accountId === freshAcc.id;
+        const available = isEditSameAccount
+          ? freshAcc.currentBalance + editExpense!.price
+          : freshAcc.currentBalance;
+
+        if (finalPrice > available) {
+          showDialog({
+            title: 'Insufficient Balance',
+            message: `"${freshAcc.name}" only has ${available.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} available. The expense of ${finalPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} exceeds it.`,
+            icon: '💸',
+            type: 'warning',
+            buttons: [{ text: 'OK', style: 'default' }],
+          });
+          return;
+        }
+      }
+    }
+
     setLoading(true);
     try {
       const catName = selectedCategory?.name ?? 'Other';
       const createdAt = useCustomDate ? date.toISOString() : new Date().toISOString();
       if (editExpense) {
-        await updateExpense(editExpense.id, finalPrice, catName, note.trim() || null, subExpensesInput);
+        await updateExpense(editExpense.id, finalPrice, catName, note.trim() || null, subExpensesInput, selectedAccount?.id ?? null);
       } else {
-        await addExpense(finalPrice, catName, note.trim() || null, createdAt, subExpensesInput);
+        await addExpense(finalPrice, catName, note.trim() || null, createdAt, subExpensesInput, selectedAccount?.id ?? null);
       }
       router.back();
     } catch {
-      Alert.alert('Error', 'Failed to save expense. Please try again.');
+      showDialog({
+        title: 'Error',
+        message: 'Failed to save expense. Please try again.',
+        icon: '❌',
+        type: 'danger',
+        buttons: [{ text: 'OK', style: 'default' }],
+      });
     } finally {
       setLoading(false);
     }
   };
-
-  const saveDisabled =
-    (hasSubItems && subTotal === null) ||
-    (!hasSubItems && isExpression && calcResult !== null && !calcResult.ok);
 
   return (
     <View style={[styles.screen, { backgroundColor: colors.background }]}>
@@ -248,34 +279,19 @@ export default function AddExpenseScreen() {
             </Text>
           </View>
         ) : (
-          <>
-            <AppInput
-              label='Amount'
-              value={price}
-              onChangeText={(text) => {
-                setPrice(text);
-                if (priceError) setPriceError('');
-              }}
-              placeholder='0.00'
-              keyboardType='default'
-              error={priceError}
-              autoCorrect={false}
-              autoCapitalize='none'
-            />
-            {isExpression && calcResult && (
-              <View style={styles.calcRow}>
-                {calcResult.ok ? (
-                  <Text style={[styles.calcValue, { color: colors.primary }]}>
-                    = {calcResult.value.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
-                  </Text>
-                ) : calcResult.error ? (
-                  <Text style={[styles.calcError, { color: colors.danger }]}>
-                    ⚠ {calcResult.error}
-                  </Text>
-                ) : null}
-              </View>
-            )}
-          </>
+          <AppInput
+            label='Amount'
+            value={price}
+            onChangeText={(text) => {
+              setPrice(text);
+              if (priceError) setPriceError('');
+            }}
+            placeholder='0.00'
+            keyboardType='decimal-pad'
+            error={priceError}
+            autoCorrect={false}
+            autoCapitalize='none'
+          />
         )}
 
         {/* ── Sub-items ───────────────────────────────────────── */}
@@ -285,8 +301,6 @@ export default function AddExpenseScreen() {
 
         {subItems.map((item) => {
           const errs = subItemErrors[item.localId];
-          const itemIsExpr = /[+\-*/]/.test(item.amount);
-          const itemCalcResult = itemIsExpr && item.amount.trim() ? parseExpression(item.amount) : null;
           return (
             <View key={item.localId} style={styles.subItemBlock}>
               <View style={styles.subItemRow}>
@@ -312,9 +326,8 @@ export default function AddExpenseScreen() {
                   onChangeText={(t) => updateSubItemField(item.localId, 'amount', t)}
                   placeholder='0.00'
                   placeholderTextColor={colors.textSecondary}
-                  keyboardType='default'
+                  keyboardType='decimal-pad'
                   autoCorrect={false}
-                  autoCapitalize='none'
                 />
                 <TouchableOpacity
                   onPress={() => removeSubItem(item.localId)}
@@ -323,19 +336,6 @@ export default function AddExpenseScreen() {
                   <Ionicons name='close-circle' size={22} color={colors.danger} />
                 </TouchableOpacity>
               </View>
-              {itemCalcResult && (
-                <View style={styles.subCalcRow}>
-                  {itemCalcResult.ok ? (
-                    <Text style={[styles.subCalcValue, { color: colors.primary }]}>
-                      = {itemCalcResult.value.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
-                    </Text>
-                  ) : (
-                    <Text style={[styles.subCalcError, { color: colors.danger }]}>
-                      ⚠ {itemCalcResult.error}
-                    </Text>
-                  )}
-                </View>
-              )}
               {(errs?.title || errs?.amount) && (
                 <View style={styles.subItemErrorRow}>
                   {errs?.title && (
@@ -395,6 +395,15 @@ export default function AddExpenseScreen() {
           })}
         </View>
 
+        {/* ── Account ─────────────────────────────────────────── */}
+        {accounts.length > 0 && (
+          <AccountPicker
+            accounts={accounts}
+            selectedAccount={selectedAccount}
+            onSelect={setSelectedAccount}
+          />
+        )}
+
         <AppInput
           label='Note (optional)'
           value={note}
@@ -418,7 +427,6 @@ export default function AddExpenseScreen() {
           label={editExpense ? 'Update Expense' : 'Save Expense'}
           onPress={save}
           loading={loading}
-          disabled={saveDisabled}
         />
       </ScrollView>
     </View>
@@ -437,9 +445,6 @@ const styles = StyleSheet.create({
   },
   title: { fontSize: 18, fontWeight: '700' },
   content: { padding: 20 },
-  calcRow: { marginTop: -10, marginBottom: 14, paddingHorizontal: 4 },
-  calcValue: { fontSize: 15, fontWeight: '700' },
-  calcError: { fontSize: 13, fontWeight: '500' },
   totalSection: { marginBottom: 20 },
   totalBox: {
     borderWidth: 1.5,
@@ -477,9 +482,6 @@ const styles = StyleSheet.create({
   },
   subItemErrorRow: { flexDirection: 'row', gap: 12, marginTop: 4, paddingHorizontal: 4 },
   subItemError: { fontSize: 12 },
-  subCalcRow: { marginTop: 2, marginBottom: 2, paddingHorizontal: 4 },
-  subCalcValue: { fontSize: 13, fontWeight: '700' },
-  subCalcError: { fontSize: 12, fontWeight: '500' },
   addItemBtn: {
     flexDirection: 'row',
     alignItems: 'center',

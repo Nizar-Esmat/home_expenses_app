@@ -1,27 +1,37 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Income, IncomeCategory } from '@/types';
 import { formatCurrency, formatDate } from '@/services/constants';
 import { useTheme } from '@/theme/ThemeContext';
+import { useAppDialog } from '@/components/AppDialog';
 
 interface Props {
   income: Income;
   currency: string;
   category?: IncomeCategory;
   onDelete: () => void;
+  accountName?: string;
+  accountIcon?: string;
 }
 
-export default function IncomeTile({ income, currency, category, onDelete }: Props) {
+export default function IncomeTile({ income, currency, category, onDelete, accountName, accountIcon }: Props) {
   const { colors } = useTheme();
+  const { showDialog } = useAppDialog();
   const isBuiltIn = category?.isDefault === 1;
   const bgColor = isBuiltIn ? colors.success : (category?.color || colors.success);
 
   const confirmDelete = () =>
-    Alert.alert('Delete Income', 'Remove this income entry?', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: onDelete },
-    ]);
+    showDialog({
+      title: 'Delete Income',
+      message: 'Remove this income entry?',
+      icon: '🗑️',
+      type: 'danger',
+      buttons: [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Delete', style: 'destructive', onPress: onDelete },
+      ],
+    });
 
   return (
     <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -35,6 +45,12 @@ export default function IncomeTile({ income, currency, category, onDelete }: Pro
         <Text style={[styles.date, { color: colors.textSecondary }]}>
           {formatDate(income.createdAt)}
         </Text>
+        {accountName ? (
+          <View style={styles.accountChip}>
+            <Text style={styles.accountChipIcon}>{accountIcon ?? '💳'}</Text>
+            <Text style={[styles.accountChipText, { color: colors.textSecondary }]}>{accountName}</Text>
+          </View>
+        ) : null}
       </View>
       <Text style={[styles.amount, { color: colors.success }]}>
         +{formatCurrency(income.amount, currency)}
@@ -59,6 +75,9 @@ const styles = StyleSheet.create({
   info: { flex: 1 },
   note: { fontSize: 15, fontWeight: '600' },
   date: { fontSize: 12, marginTop: 2 },
+  accountChip: { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 3 },
+  accountChipIcon: { fontSize: 11 },
+  accountChipText: { fontSize: 11 },
   amount: { fontSize: 15, fontWeight: '700', marginRight: 8 },
   deleteBtn: { padding: 4 },
 });

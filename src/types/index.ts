@@ -38,6 +38,7 @@ export interface Expense {
   note: string | null;
   createdAt: string;
   monthKey: string;
+  accountId: number | null;
   subExpenses?: SubExpense[];
 }
 
@@ -45,6 +46,34 @@ export interface Income {
   id: number;
   amount: number;
   category: string;
+  note: string | null;
+  createdAt: string;
+  monthKey: string;
+  accountId: number | null;
+}
+
+export type AccountType = 'cash' | 'bank_account' | 'e_wallet';
+
+export interface Account {
+  id: number;
+  name: string;
+  type: AccountType;
+  openingBalance: number;
+  currentBalance: number;
+  icon: string | null;
+  color: string | null;
+  isDefault: number; // 1 = cannot be deleted, only archived
+  isPrimary: number; // 1 = favorite bank account shown on home screen
+  isArchived: number; // 1 = archived (hidden from selectors)
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Transfer {
+  id: number;
+  fromAccountId: number;
+  toAccountId: number;
+  amount: number;
   note: string | null;
   createdAt: string;
   monthKey: string;
