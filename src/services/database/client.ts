@@ -23,7 +23,8 @@ async function initDb(db: SQLite.SQLiteDatabase): Promise<void> {
       category  TEXT    NOT NULL,
       note      TEXT,
       createdAt TEXT    NOT NULL,
-      monthKey  TEXT    NOT NULL
+      monthKey  TEXT    NOT NULL,
+      accountId INTEGER
     );
 
     CREATE TABLE IF NOT EXISTS incomes (
@@ -32,7 +33,8 @@ async function initDb(db: SQLite.SQLiteDatabase): Promise<void> {
       category  TEXT    NOT NULL,
       note      TEXT,
       createdAt TEXT    NOT NULL,
-      monthKey  TEXT    NOT NULL
+      monthKey  TEXT    NOT NULL,
+      accountId INTEGER
     );
 
     CREATE TABLE IF NOT EXISTS settings (
@@ -67,10 +69,101 @@ async function initDb(db: SQLite.SQLiteDatabase): Promise<void> {
       amount    REAL    NOT NULL,
       sortOrder INTEGER NOT NULL DEFAULT 0
     );
+
+    CREATE TABLE IF NOT EXISTS accounts (
+      id             INTEGER PRIMARY KEY AUTOINCREMENT,
+      name           TEXT    NOT NULL UNIQUE,
+      type           TEXT    NOT NULL DEFAULT 'cash',
+      openingBalance REAL    NOT NULL DEFAULT 0,
+      currentBalance REAL    NOT NULL DEFAULT 0,
+      icon           TEXT,
+      color          TEXT,
+      isDefault      INTEGER NOT NULL DEFAULT 0,
+      isArchived     INTEGER NOT NULL DEFAULT 0,
+      createdAt      TEXT    NOT NULL,
+      updatedAt      TEXT    NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS transfers (
+      id            INTEGER PRIMARY KEY AUTOINCREMENT,
+      fromAccountId INTEGER NOT NULL,
+      toAccountId   INTEGER NOT NULL,
+      amount        REAL    NOT NULL,
+      note          TEXT,
+      createdAt     TEXT    NOT NULL,
+      monthKey      TEXT    NOT NULL
+    );
   `);
 
   await seedCategories(db);
   await seedIncomeCategories(db);
+  await runMigrations(db);
+}
+
+// ── Migrations ────────────────────────────────────────────────
+
+async function runMigrations(db: SQLite.SQLiteDatabase): Promise<void> {
+  const versionRow = await db.getFirstAsync<{ user_version: number }>('PRAGMA user_version');
+  const version = versionRow?.user_version ?? 0;
+
+  if (version < 1) {
+    await migrateV1(db);
+  }
+}
+
+async function migrateV1(db: SQLite.SQLiteDatabase): Promise<void> {
+  const now = new Date().toISOString();
+
+  await db.withExclusiveTransactionAsync(async () => {
+    // Add accountId to expenses if column is missing (existing installs)
+    const expCols = await db.getAllAsync<{ name: string }>('PRAGMA table_info(expenses)');
+    if (!expCols.some((c) => c.name === 'accountId')) {
+      await db.runAsync('ALTER TABLE expenses ADD COLUMN accountId INTEGER');
+    }
+
+    // Add accountId to incomes if column is missing (existing installs)
+    const incCols = await db.getAllAsync<{ name: string }>('PRAGMA table_info(incomes)');
+    if (!incCols.some((c) => c.name === 'accountId')) {
+      await db.runAsync('ALTER TABLE incomes ADD COLUMN accountId INTEGER');
+    }
+
+    // Create default Cash account if it doesn't exist
+    const existing = await db.getFirstAsync<{ id: number }>(
+      "SELECT id FROM accounts WHERE name = 'Cash'",
+    );
+    let cashId: number;
+
+    if (existing) {
+      cashId = existing.id;
+    } else {
+      const result = await db.runAsync(
+        'INSERT INTO accounts (name, type, openingBalance, currentBalance, icon, color, isDefault, isArchived, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        ['Cash', 'cash', 0, 0, '💵', '#10B981', 1, 0, now, now],
+      );
+      cashId = result.lastInsertRowId;
+    }
+
+    // Assign all unlinked expenses/incomes to Cash
+    await db.runAsync('UPDATE expenses SET accountId = ? WHERE accountId IS NULL', [cashId]);
+    await db.runAsync('UPDATE incomes SET accountId = ? WHERE accountId IS NULL', [cashId]);
+
+    // Recalculate Cash account balance from actual data
+    const balRow = await db.getFirstAsync<{ balance: number }>(
+      `SELECT
+        (SELECT COALESCE(SUM(amount), 0) FROM incomes WHERE accountId = ?) -
+        (SELECT COALESCE(SUM(price),  0) FROM expenses WHERE accountId = ?) +
+        (SELECT COALESCE(SUM(amount), 0) FROM transfers WHERE toAccountId = ?) -
+        (SELECT COALESCE(SUM(amount), 0) FROM transfers WHERE fromAccountId = ?)
+       AS balance`,
+      [cashId, cashId, cashId, cashId],
+    );
+    await db.runAsync('UPDATE accounts SET currentBalance = ? WHERE id = ?', [
+      balRow?.balance ?? 0,
+      cashId,
+    ]);
+  });
+
+  await db.runAsync('PRAGMA user_version = 1');
 }
 
 // ── Category seed & migration ─────────────────────────────────

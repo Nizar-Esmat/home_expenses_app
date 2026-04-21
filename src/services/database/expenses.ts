@@ -42,33 +42,38 @@ export async function addExpense(
   note: string | null,
   createdAt?: string,
   subExpenses?: SubExpenseInput[],
+  accountId?: number | null,
 ): Promise<number> {
   const db = await getDb();
   const timestamp = createdAt ?? nowIso();
 
-  if (!subExpenses || subExpenses.length === 0) {
-    const result = await db.runAsync(
-      'INSERT INTO expenses (price, category, note, createdAt, monthKey) VALUES (?, ?, ?, ?, ?)',
-      [price, category, note ?? null, timestamp, toMonthKey(timestamp)],
-    );
-    return result.lastInsertRowId;
-  }
-
   let newId = 0;
   await db.withExclusiveTransactionAsync(async () => {
     const result = await db.runAsync(
-      'INSERT INTO expenses (price, category, note, createdAt, monthKey) VALUES (?, ?, ?, ?, ?)',
-      [price, category, note ?? null, timestamp, toMonthKey(timestamp)],
+      'INSERT INTO expenses (price, category, note, createdAt, monthKey, accountId) VALUES (?, ?, ?, ?, ?, ?)',
+      [price, category, note ?? null, timestamp, toMonthKey(timestamp), accountId ?? null],
     );
     newId = result.lastInsertRowId;
-    for (let i = 0; i < subExpenses.length; i++) {
-      const sub = subExpenses[i]!;
+
+    if (subExpenses && subExpenses.length > 0) {
+      for (let i = 0; i < subExpenses.length; i++) {
+        const sub = subExpenses[i]!;
+        await db.runAsync(
+          'INSERT INTO sub_expenses (expenseId, title, amount, sortOrder) VALUES (?, ?, ?, ?)',
+          [newId, sub.title, sub.amount, i],
+        );
+      }
+    }
+
+    // Subtract from account balance
+    if (accountId != null) {
       await db.runAsync(
-        'INSERT INTO sub_expenses (expenseId, title, amount, sortOrder) VALUES (?, ?, ?, ?)',
-        [newId, sub.title, sub.amount, i],
+        'UPDATE accounts SET currentBalance = currentBalance - ?, updatedAt = ? WHERE id = ?',
+        [price, nowIso(), accountId],
       );
     }
   });
+
   return newId;
 }
 
@@ -78,13 +83,22 @@ export async function updateExpense(
   category: string,
   note: string | null,
   subExpenses?: SubExpenseInput[],
+  accountId?: number | null,
 ): Promise<void> {
   const db = await getDb();
+
+  // Fetch the old expense to reverse its balance effect
+  const old = await db.getFirstAsync<{ price: number; accountId: number | null }>(
+    'SELECT price, accountId FROM expenses WHERE id = ?',
+    [id],
+  );
+
   await db.withExclusiveTransactionAsync(async () => {
     await db.runAsync(
-      'UPDATE expenses SET price=?, category=?, note=? WHERE id=?',
-      [price, category, note ?? null, id],
+      'UPDATE expenses SET price=?, category=?, note=?, accountId=? WHERE id=?',
+      [price, category, note ?? null, accountId ?? null, id],
     );
+
     await db.runAsync('DELETE FROM sub_expenses WHERE expenseId=?', [id]);
     if (subExpenses && subExpenses.length > 0) {
       for (let i = 0; i < subExpenses.length; i++) {
@@ -95,13 +109,44 @@ export async function updateExpense(
         );
       }
     }
+
+    // Reverse old balance effect
+    if (old?.accountId != null) {
+      await db.runAsync(
+        'UPDATE accounts SET currentBalance = currentBalance + ?, updatedAt = ? WHERE id = ?',
+        [old.price, nowIso(), old.accountId],
+      );
+    }
+    // Apply new balance effect
+    if (accountId != null) {
+      await db.runAsync(
+        'UPDATE accounts SET currentBalance = currentBalance - ?, updatedAt = ? WHERE id = ?',
+        [price, nowIso(), accountId],
+      );
+    }
   });
 }
 
 export async function deleteExpense(id: number): Promise<void> {
   const db = await getDb();
-  await db.runAsync('DELETE FROM sub_expenses WHERE expenseId=?', [id]);
-  await db.runAsync('DELETE FROM expenses WHERE id=?', [id]);
+
+  const exp = await db.getFirstAsync<{ price: number; accountId: number | null }>(
+    'SELECT price, accountId FROM expenses WHERE id = ?',
+    [id],
+  );
+
+  await db.withExclusiveTransactionAsync(async () => {
+    await db.runAsync('DELETE FROM sub_expenses WHERE expenseId=?', [id]);
+    await db.runAsync('DELETE FROM expenses WHERE id=?', [id]);
+
+    // Reverse the balance deduction
+    if (exp?.accountId != null) {
+      await db.runAsync(
+        'UPDATE accounts SET currentBalance = currentBalance + ?, updatedAt = ? WHERE id = ?',
+        [exp.price, nowIso(), exp.accountId],
+      );
+    }
+  });
 }
 
 export async function getExpensesByMonth(monthKey: string): Promise<Expense[]> {
@@ -122,3 +167,4 @@ export async function getAllExpenses(): Promise<Expense[]> {
   await attachSubExpenses(expenses);
   return expenses;
 }
+

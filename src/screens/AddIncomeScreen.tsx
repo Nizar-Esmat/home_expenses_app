@@ -1,15 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import {
-  View, Text, StyleSheet, TouchableOpacity, Alert,
+  View, Text, StyleSheet, TouchableOpacity, Alert, ScrollView,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/theme/ThemeContext';
-import { addIncome, getIncomeCategories } from '@/services/database';
-import { IncomeCategory } from '@/types';
+import { addIncome, getIncomeCategories, getActiveAccounts } from '@/services/database';
+import { Account, IncomeCategory } from '@/types';
 import AppInput from '@/components/AppInput';
 import AppButton from '@/components/AppButton';
 import DateTimeInput from '@/components/DateTimeInput';
+import AccountPicker from '@/components/AccountPicker';
 
 export default function AddIncomeScreen() {
   const { colors } = useTheme();
@@ -23,11 +24,15 @@ export default function AddIncomeScreen() {
   const [useCustomDate, setUseCustomDate] = useState(false);
   const [amountError, setAmountError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [accounts, setAccounts] = useState<Account[]>([]);
+  const [selectedAccount, setSelectedAccount] = useState<Account | null>(null);
 
   useEffect(() => {
-    getIncomeCategories().then((cats) => {
+    Promise.all([getIncomeCategories(), getActiveAccounts()]).then(([cats, accts]) => {
       setCategories(cats);
       setSelectedCategory(cats[0] ?? null);
+      setAccounts(accts);
+      setSelectedAccount(accts.find((a) => a.isDefault === 1) ?? accts[0] ?? null);
     });
   }, []);
 
@@ -46,7 +51,7 @@ export default function AddIncomeScreen() {
       const v = parseFloat(amount.replace(',', '.'));
       const createdAt = useCustomDate ? date.toISOString() : new Date().toISOString();
       const catName = selectedCategory?.name ?? 'Other';
-      await addIncome(v, catName, note.trim() || null, createdAt);
+      await addIncome(v, catName, note.trim() || null, createdAt, selectedAccount?.id ?? null);
       router.back();
     } catch {
       Alert.alert('Error', 'Failed to save income. Please try again.');
@@ -65,7 +70,7 @@ export default function AddIncomeScreen() {
         <View style={{ width: 24 }} />
       </View>
 
-      <View style={styles.content}>
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={[styles.banner, { backgroundColor: colors.successBg }]}>
           <Text style={styles.bannerEmoji}>💰</Text>
           <Text style={[styles.bannerText, { color: colors.success }]}>
@@ -107,6 +112,14 @@ export default function AddIncomeScreen() {
           })}
         </View>
 
+        {accounts.length > 0 && (
+          <AccountPicker
+            accounts={accounts}
+            selectedAccount={selectedAccount}
+            onSelect={setSelectedAccount}
+          />
+        )}
+
         <AppInput
           label="Source / Note (optional)"
           value={note}
@@ -120,7 +133,7 @@ export default function AddIncomeScreen() {
         <DateTimeInput date={date} onChange={setDate} useCustomDate={useCustomDate} onUseCustomDateChange={setUseCustomDate} />
 
         <AppButton label="Save Income" onPress={save} loading={loading} />
-      </View>
+      </ScrollView>
     </View>
   );
 }

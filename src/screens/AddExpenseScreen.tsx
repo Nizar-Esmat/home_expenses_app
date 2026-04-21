@@ -17,13 +17,15 @@ import {
   getCategories,
   getExpensesByMonth,
   getSubExpenses,
+  getActiveAccounts,
 } from '@/services/database';
 import { currentMonthKey } from '@/services/constants';
 import { parseExpression } from '@/services/mathParser';
-import { Category, Expense, SubExpenseInput } from '@/types';
+import { Account, Category, Expense, SubExpenseInput } from '@/types';
 import AppInput from '@/components/AppInput';
 import AppButton from '@/components/AppButton';
 import DateTimeInput from '@/components/DateTimeInput';
+import AccountPicker from '@/components/AccountPicker';
 
 interface SubItem {
   localId: string;
@@ -47,14 +49,20 @@ export default function AddExpenseScreen() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [subItems, setSubItems] = useState<SubItem[]>([]);
   const [subItemErrors, setSubItemErrors] = useState<Record<string, { title?: string; amount?: string }>>({});
+  const [accounts, setAccounts] = useState<Account[]>([]);
+  const [selectedAccount, setSelectedAccount] = useState<Account | null>(null);
 
   const subItemCounter = useRef(0);
   const makeLocalId = () => String(++subItemCounter.current);
 
   useEffect(() => {
     const init = async () => {
-      const cats = await getCategories();
+      const [cats, accts] = await Promise.all([
+        getCategories(),
+        getActiveAccounts(),
+      ]);
       setCategories(cats);
+      setAccounts(accts);
 
       if (expenseId) {
         const [expenses, existingSubs] = await Promise.all([
@@ -69,6 +77,8 @@ export default function AddExpenseScreen() {
           setDate(new Date(found.createdAt));
           const cat = cats.find((c) => c.name === found.category);
           setSelectedCategory(cat ?? cats[0] ?? null);
+          const acct = accts.find((a) => a.id === found.accountId);
+          setSelectedAccount(acct ?? accts[0] ?? null);
           if (existingSubs.length > 0) {
             setSubItems(
               existingSubs.map((s) => ({
@@ -83,6 +93,8 @@ export default function AddExpenseScreen() {
       }
 
       setSelectedCategory(cats[0] ?? null);
+      const defaultAcct = accts.find((a) => a.isDefault === 1) ?? accts[0] ?? null;
+      setSelectedAccount(defaultAcct);
     };
     init();
   }, [expenseId]);
@@ -197,9 +209,9 @@ export default function AddExpenseScreen() {
       const catName = selectedCategory?.name ?? 'Other';
       const createdAt = useCustomDate ? date.toISOString() : new Date().toISOString();
       if (editExpense) {
-        await updateExpense(editExpense.id, finalPrice, catName, note.trim() || null, subExpensesInput);
+        await updateExpense(editExpense.id, finalPrice, catName, note.trim() || null, subExpensesInput, selectedAccount?.id ?? null);
       } else {
-        await addExpense(finalPrice, catName, note.trim() || null, createdAt, subExpensesInput);
+        await addExpense(finalPrice, catName, note.trim() || null, createdAt, subExpensesInput, selectedAccount?.id ?? null);
       }
       router.back();
     } catch {
@@ -394,6 +406,15 @@ export default function AddExpenseScreen() {
             );
           })}
         </View>
+
+        {/* ── Account ─────────────────────────────────────────── */}
+        {accounts.length > 0 && (
+          <AccountPicker
+            accounts={accounts}
+            selectedAccount={selectedAccount}
+            onSelect={setSelectedAccount}
+          />
+        )}
 
         <AppInput
           label='Note (optional)'

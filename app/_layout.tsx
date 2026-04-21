@@ -19,6 +19,9 @@ function RootLayoutNav() {
         <Stack.Screen name="all-transactions" />
         <Stack.Screen name="categories" />
         <Stack.Screen name="income-categories" />
+        <Stack.Screen name="accounts" />
+        <Stack.Screen name="add-account" />
+        <Stack.Screen name="transfer" />
       </Stack>
     </>
   );

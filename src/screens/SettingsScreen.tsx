@@ -55,6 +55,8 @@ export default function SettingsScreen() {
           `Expenses skipped: ${result.expensesSkipped}`,
           `Income added: ${result.incomesAdded}`,
           `Income skipped: ${result.incomesSkipped}`,
+          `Accounts added: ${result.accountsAdded}`,
+          `Transfers added: ${result.transfersAdded}`,
           `Settings merged: ${result.settingsMerged}`,
           '',
           'Imported settings overwrite local settings. Reopen the app if theme/palette does not update instantly.',
@@ -134,6 +136,27 @@ export default function SettingsScreen() {
             thumbColor={colors.background}
           />
         </View>
+
+        {/* Categories */}
+        <Text style={[styles.sectionLabel, { color: colors.textSecondary, marginTop: 20 }]}>ACCOUNTS</Text>
+        <TouchableOpacity
+          style={[styles.navRow, { backgroundColor: colors.card }]}
+          onPress={() => router.push('/accounts')}
+          activeOpacity={0.75}
+        >
+          <View style={styles.navRowLeft}>
+            <View style={[styles.navIcon, { backgroundColor: colors.primary + '33' }]}>
+              <Ionicons name="wallet-outline" size={16} color={colors.primary} />
+            </View>
+            <View>
+              <Text style={[styles.navLabel, { color: colors.textPrimary }]}>Accounts</Text>
+              <Text style={[styles.navSub, { color: colors.textSecondary }]}>
+                Manage cash, bank & e-wallet accounts
+              </Text>
+            </View>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
+        </TouchableOpacity>
 
         {/* Categories */}
         <Text style={[styles.sectionLabel, { color: colors.textSecondary, marginTop: 20 }]}>CATEGORIES</Text>

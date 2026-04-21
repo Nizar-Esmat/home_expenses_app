@@ -7,13 +7,24 @@ export async function addIncome(
   category: string,
   note: string | null,
   createdAt?: string,
+  accountId?: number | null,
 ): Promise<void> {
   const db = await getDb();
   const timestamp = createdAt ?? nowIso();
-  await db.runAsync(
-    'INSERT INTO incomes (amount, category, note, createdAt, monthKey) VALUES (?, ?, ?, ?, ?)',
-    [amount, category, note ?? null, timestamp, toMonthKey(timestamp)],
-  );
+
+  await db.withExclusiveTransactionAsync(async () => {
+    await db.runAsync(
+      'INSERT INTO incomes (amount, category, note, createdAt, monthKey, accountId) VALUES (?, ?, ?, ?, ?, ?)',
+      [amount, category, note ?? null, timestamp, toMonthKey(timestamp), accountId ?? null],
+    );
+
+    if (accountId != null) {
+      await db.runAsync(
+        'UPDATE accounts SET currentBalance = currentBalance + ?, updatedAt = ? WHERE id = ?',
+        [amount, nowIso(), accountId],
+      );
+    }
+  });
 }
 
 export async function updateIncome(
@@ -21,17 +32,56 @@ export async function updateIncome(
   amount: number,
   category: string,
   note: string | null,
+  accountId?: number | null,
 ): Promise<void> {
   const db = await getDb();
-  await db.runAsync(
-    'UPDATE incomes SET amount=?, category=?, note=? WHERE id=?',
-    [amount, category, note ?? null, id],
+
+  const old = await db.getFirstAsync<{ amount: number; accountId: number | null }>(
+    'SELECT amount, accountId FROM incomes WHERE id = ?',
+    [id],
   );
+
+  await db.withExclusiveTransactionAsync(async () => {
+    await db.runAsync(
+      'UPDATE incomes SET amount=?, category=?, note=?, accountId=? WHERE id=?',
+      [amount, category, note ?? null, accountId ?? null, id],
+    );
+
+    // Reverse old balance effect
+    if (old?.accountId != null) {
+      await db.runAsync(
+        'UPDATE accounts SET currentBalance = currentBalance - ?, updatedAt = ? WHERE id = ?',
+        [old.amount, nowIso(), old.accountId],
+      );
+    }
+    // Apply new balance effect
+    if (accountId != null) {
+      await db.runAsync(
+        'UPDATE accounts SET currentBalance = currentBalance + ?, updatedAt = ? WHERE id = ?',
+        [amount, nowIso(), accountId],
+      );
+    }
+  });
 }
 
 export async function deleteIncome(id: number): Promise<void> {
   const db = await getDb();
-  await db.runAsync('DELETE FROM incomes WHERE id=?', [id]);
+
+  const inc = await db.getFirstAsync<{ amount: number; accountId: number | null }>(
+    'SELECT amount, accountId FROM incomes WHERE id = ?',
+    [id],
+  );
+
+  await db.withExclusiveTransactionAsync(async () => {
+    await db.runAsync('DELETE FROM incomes WHERE id=?', [id]);
+
+    if (inc?.accountId != null) {
+      await db.runAsync(
+        'UPDATE accounts SET currentBalance = currentBalance - ?, updatedAt = ? WHERE id = ?',
+        [inc.amount, nowIso(), inc.accountId],
+      );
+    }
+  });
 }
 
 export async function getIncomesByMonth(monthKey: string): Promise<Income[]> {
