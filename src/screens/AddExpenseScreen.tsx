@@ -14,12 +14,11 @@ import {
   addExpense,
   updateExpense,
   getCategories,
-  getExpensesByMonth,
+  getExpenseById,
   getSubExpenses,
   getActiveAccounts,
   getAccountById,
 } from '@/services/database';
-import { currentMonthKey } from '@/services/constants';
 import { Account, Category, Expense, SubExpenseInput } from '@/types';
 import AppInput from '@/components/AppInput';
 import AppButton from '@/components/AppButton';
@@ -66,19 +65,18 @@ export default function AddExpenseScreen() {
       setAccounts(accts);
 
       if (expenseId) {
-        const [expenses, existingSubs] = await Promise.all([
-          getExpensesByMonth(currentMonthKey()),
+        const [expense, existingSubs] = await Promise.all([
+          getExpenseById(Number(expenseId)),
           getSubExpenses(Number(expenseId)),
         ]);
-        const found = expenses.find((e) => String(e.id) === expenseId);
-        if (found) {
-          setEditExpense(found);
-          setPrice(String(found.price));
-          setNote(found.note ?? '');
-          setDate(new Date(found.createdAt));
-          const cat = cats.find((c) => c.name === found.category);
+        if (expense) {
+          setEditExpense(expense);
+          setPrice(String(expense.price));
+          setNote(expense.note ?? '');
+          setDate(new Date(expense.createdAt));
+          const cat = cats.find((c) => c.name === expense.category);
           setSelectedCategory(cat ?? cats[0] ?? null);
-          const acct = accts.find((a) => a.id === found.accountId);
+          const acct = accts.find((a) => a.id === expense.accountId);
           setSelectedAccount(acct ?? accts[0] ?? null);
           if (existingSubs.length > 0) {
             setSubItems(
@@ -91,6 +89,15 @@ export default function AddExpenseScreen() {
           }
           return;
         }
+
+        showDialog({
+          title: 'Expense Not Found',
+          message: 'This expense was not found or may have been deleted.',
+          icon: '⚠️',
+          type: 'warning',
+          buttons: [{ text: 'OK', style: 'default', onPress: () => router.back() }],
+        });
+        return;
       }
 
       setSelectedCategory(cats[0] ?? null);
@@ -98,7 +105,7 @@ export default function AddExpenseScreen() {
       setSelectedAccount(defaultAcct);
     };
     init();
-  }, [expenseId]);
+  }, [expenseId, router, showDialog]);
 
   // ── Sub-items ────────────────────────────────────────────────
   const hasSubItems = subItems.length > 0;
