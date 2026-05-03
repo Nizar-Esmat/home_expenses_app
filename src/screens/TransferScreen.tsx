@@ -93,6 +93,14 @@ export default function TransferScreen() {
     }
   };
 
+  const swapAccounts = () => {
+    setFromAccount(toAccount);
+    setToAccount(fromAccount);
+    setShowFromPicker(false);
+    setShowToPicker(false);
+    setAmountError('');
+  };
+
   const AccountSelector = ({
     label,
     selected,
@@ -194,9 +202,14 @@ export default function TransferScreen() {
 
         <View style={[styles.arrowRow]}>
           <View style={[styles.arrowLine, { backgroundColor: colors.border }]} />
-          <View style={[styles.arrowCircle, { backgroundColor: colors.primary + '22', borderColor: colors.primary + '44' }]}>
-            <Ionicons name="arrow-down" size={18} color={colors.primary} />
-          </View>
+          <TouchableOpacity
+            style={[styles.arrowCircle, { backgroundColor: colors.primary + '22', borderColor: colors.primary + '44' }]}
+            onPress={swapAccounts}
+            activeOpacity={0.75}
+            disabled={!fromAccount || !toAccount}
+          >
+            <Ionicons name="swap-vertical" size={18} color={colors.primary} />
+          </TouchableOpacity>
           <View style={[styles.arrowLine, { backgroundColor: colors.border }]} />
         </View>
 

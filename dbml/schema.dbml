@@ -1,0 +1,132 @@
+Table accounts {
+  id integer [pk]
+
+  name text [not null]
+  type text [not null] // CASH | BANK | EWALLET | CREDIT_CARD
+  currencyCode varchar(3) [not null, default: 'EGP']
+
+  openingBalanceMinor integer [not null, default: 0]
+  currentBalanceMinor integer [not null, default: 0]
+
+  icon text
+  color text
+
+  isPrimary integer [not null, default: 0]
+  isArchived integer [not null, default: 0]
+
+  createdAt timestamp [not null]
+  updatedAt timestamp
+
+  Indexes {
+    (name) [unique]
+    (type)
+    (isArchived)
+  }
+}
+
+Table categories {
+  id integer [pk]
+
+  name text [not null]
+  type text [not null] // EXPENSE | INCOME
+
+  icon text
+  color text
+
+  isDefault integer [not null, default: 0]
+  sortOrder integer [not null, default: 0]
+
+  createdAt timestamp [not null]
+  updatedAt timestamp
+
+  Indexes {
+    (type, name) [unique]
+    (type)
+  }
+}
+
+Table transactions {
+  id integer [pk]
+
+  accountId integer [not null]
+  categoryId integer [not null]
+
+  type text [not null] // EXPENSE | INCOME
+
+  amountMinor integer [not null]
+  currencyCode varchar(3) [not null, default: 'EGP']
+
+  title text
+  note text
+
+  transactionDate timestamp [not null]
+
+  createdAt timestamp [not null]
+  updatedAt timestamp
+  deletedAt timestamp
+
+  Indexes {
+    (accountId, transactionDate)
+    (categoryId, transactionDate)
+    (type, transactionDate)
+    (transactionDate)
+  }
+}
+
+Table transaction_items {
+  id integer [pk]
+
+  transactionId integer [not null]
+  categoryId integer
+
+  name text [not null]
+  amountMinor integer [not null]
+  quantity real
+  note text
+
+  sortOrder integer [not null, default: 0]
+
+  createdAt timestamp [not null]
+  updatedAt timestamp
+
+  Indexes {
+    (transactionId)
+    (categoryId)
+  }
+}
+
+Table transfers {
+  id integer [pk]
+
+  fromAccountId integer [not null]
+  toAccountId integer [not null]
+
+  amountMinor integer [not null]
+  currencyCode varchar(3) [not null, default: 'EGP']
+
+  feeAmountMinor integer [not null, default: 0]
+  feeAccountId integer
+
+  note text
+  transferDate timestamp [not null]
+
+  createdAt timestamp [not null]
+  updatedAt timestamp
+  deletedAt timestamp
+
+  Indexes {
+    (fromAccountId, transferDate)
+    (toAccountId, transferDate)
+    (transferDate)
+  }
+}
+
+Ref: transactions.accountId > accounts.id
+Ref: transactions.categoryId > categories.id
+
+Ref: transaction_items.transactionId > transactions.id
+Ref: transaction_items.categoryId > categories.id
+
+Ref: transfers.fromAccountId > accounts.id
+Ref: transfers.toAccountId > accounts.id
+Ref: transfers.feeAccountId > accounts.id

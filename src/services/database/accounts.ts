@@ -1,36 +1,84 @@
-import { Account, AccountType } from "@/types";
-import { getDb } from "./client";
-import { nowIso } from "./helpers";
+import { Account, AccountType } from '@/types';
+import { getDb } from './client';
+import { fromDbAccountType, fromMinorUnits, nowIso, toDbAccountType, toMinorUnits } from './helpers';
 
-// ── Balance recalculation ─────────────────────────────────────
+interface AccountRow {
+  id: number;
+  name: string;
+  type: string;
+  openingBalanceMinor: number;
+  currentBalanceMinor: number;
+  icon: string | null;
+  color: string | null;
+  isPrimary: number;
+  isArchived: number;
+  createdAt: string;
+  updatedAt: string | null;
+  isDefault: number;
+}
+
+const ACCOUNT_SELECT = `
+  SELECT
+    a.*,
+    CASE
+      WHEN a.id = (SELECT id FROM accounts ORDER BY createdAt ASC, id ASC LIMIT 1)
+      THEN 1 ELSE 0
+    END AS isDefault
+  FROM accounts a
+`;
 
 const DELTA_SQL = `
   SELECT
-    (SELECT COALESCE(SUM(amount), 0) FROM incomes    WHERE accountId      = ?) -
-    (SELECT COALESCE(SUM(price),  0) FROM expenses   WHERE accountId      = ?) +
-    (SELECT COALESCE(SUM(amount), 0) FROM transfers  WHERE toAccountId    = ?) -
-    (SELECT COALESCE(SUM(amount), 0) FROM transfers  WHERE fromAccountId  = ?)
-  AS txDelta
+    (SELECT COALESCE(SUM(
+      CASE
+        WHEN type = 'INCOME' THEN amountMinor
+        WHEN type = 'EXPENSE' THEN -amountMinor
+        ELSE 0
+      END
+    ), 0) FROM transactions WHERE accountId = ? AND deletedAt IS NULL) +
+    (SELECT COALESCE(SUM(amountMinor), 0) FROM transfers WHERE toAccountId = ? AND deletedAt IS NULL) -
+    (SELECT COALESCE(SUM(amountMinor), 0) FROM transfers WHERE fromAccountId = ? AND deletedAt IS NULL) -
+    (SELECT COALESCE(SUM(feeAmountMinor), 0) FROM transfers WHERE COALESCE(feeAccountId, fromAccountId) = ? AND deletedAt IS NULL)
+  AS txDeltaMinor
 `;
 
-/**
- * Recalculate currentBalance for a single account from scratch.
- * Safe to call at any time — no side effects beyond updating currentBalance.
- */
+function toAccount(row: AccountRow): Account {
+  return {
+    id: row.id,
+    name: row.name,
+    type: fromDbAccountType(row.type),
+    openingBalance: fromMinorUnits(row.openingBalanceMinor),
+    currentBalance: fromMinorUnits(row.currentBalanceMinor),
+    icon: row.icon,
+    color: row.color,
+    isDefault: row.isDefault,
+    isPrimary: row.isPrimary,
+    isArchived: row.isArchived,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt ?? row.createdAt,
+  };
+}
+
+// ── Balance recalculation ─────────────────────────────────────
+
 export async function recalculateBalance(accountId: number): Promise<void> {
   const db = await getDb();
-  const acc = await db.getFirstAsync<{ openingBalance: number }>(
-    "SELECT openingBalance FROM accounts WHERE id = ?",
+  const acc = await db.getFirstAsync<{ openingBalanceMinor: number }>(
+    'SELECT openingBalanceMinor FROM accounts WHERE id = ?',
     [accountId],
   );
   if (!acc) return;
-  const txRow = await db.getFirstAsync<{ txDelta: number }>(DELTA_SQL, [
-    accountId, accountId, accountId, accountId,
+
+  const txRow = await db.getFirstAsync<{ txDeltaMinor: number }>(DELTA_SQL, [
+    accountId,
+    accountId,
+    accountId,
+    accountId,
   ]);
-  const newBalance = acc.openingBalance + (txRow?.txDelta ?? 0);
+  const newBalanceMinor = acc.openingBalanceMinor + (txRow?.txDeltaMinor ?? 0);
   await db.runAsync(
-    "UPDATE accounts SET currentBalance = ?, updatedAt = ? WHERE id = ?",
-    [newBalance, nowIso(), accountId],
+    'UPDATE accounts SET currentBalanceMinor = ?, updatedAt = ? WHERE id = ?',
+    [newBalanceMinor, nowIso(), accountId],
   );
 }
 
@@ -43,35 +91,40 @@ export async function adjustAccountBalance(accountId: number, _delta: number): P
 
 export async function getAccounts(): Promise<Account[]> {
   const db = await getDb();
-  return db.getAllAsync<Account>(
-    "SELECT * FROM accounts ORDER BY isDefault DESC, createdAt ASC",
+  const rows = await db.getAllAsync<AccountRow>(
+    `${ACCOUNT_SELECT} ORDER BY isDefault DESC, a.createdAt ASC, a.id ASC`,
   );
+  return rows.map(toAccount);
 }
 
 export async function getActiveAccounts(): Promise<Account[]> {
   const db = await getDb();
-  return db.getAllAsync<Account>(
-    "SELECT * FROM accounts WHERE isArchived = 0 ORDER BY isDefault DESC, createdAt ASC",
+  const rows = await db.getAllAsync<AccountRow>(
+    `${ACCOUNT_SELECT} WHERE a.isArchived = 0 ORDER BY isDefault DESC, a.createdAt ASC, a.id ASC`,
   );
+  return rows.map(toAccount);
 }
 
 export async function getAccountById(id: number): Promise<Account | null> {
   const db = await getDb();
-  return db.getFirstAsync<Account>("SELECT * FROM accounts WHERE id = ?", [id]);
+  const row = await db.getFirstAsync<AccountRow>(`${ACCOUNT_SELECT} WHERE a.id = ?`, [id]);
+  return row ? toAccount(row) : null;
 }
 
 export async function getDefaultAccount(): Promise<Account | null> {
   const db = await getDb();
-  return db.getFirstAsync<Account>(
-    "SELECT * FROM accounts WHERE isDefault = 1 AND isArchived = 0 LIMIT 1",
+  const row = await db.getFirstAsync<AccountRow>(
+    `${ACCOUNT_SELECT} WHERE a.isArchived = 0 ORDER BY isDefault DESC, a.createdAt ASC, a.id ASC LIMIT 1`,
   );
+  return row ? toAccount(row) : null;
 }
 
 export async function getFavoriteBankAccount(): Promise<Account | null> {
   const db = await getDb();
-  return db.getFirstAsync<Account>(
-    "SELECT * FROM accounts WHERE isPrimary = 1 AND isArchived = 0 LIMIT 1",
+  const row = await db.getFirstAsync<AccountRow>(
+    `${ACCOUNT_SELECT} WHERE a.isPrimary = 1 AND a.type = 'BANK' AND a.isArchived = 0 LIMIT 1`,
   );
+  return row ? toAccount(row) : null;
 }
 
 /** Set id as the favorite bank account (clears any previous primary). Pass null to unset all. */
@@ -81,7 +134,10 @@ export async function setFavoriteBankAccount(id: number | null): Promise<void> {
   await db.withExclusiveTransactionAsync(async () => {
     await db.runAsync('UPDATE accounts SET isPrimary = 0, updatedAt = ? WHERE isPrimary = 1', [now]);
     if (id !== null) {
-      await db.runAsync('UPDATE accounts SET isPrimary = 1, updatedAt = ? WHERE id = ?', [now, id]);
+      await db.runAsync(
+        "UPDATE accounts SET isPrimary = 1, updatedAt = ? WHERE id = ? AND type = 'BANK'",
+        [now, id],
+      );
     }
   });
 }
@@ -100,18 +156,18 @@ export interface AddAccountInput {
 export async function addAccount(input: AddAccountInput): Promise<number> {
   const db = await getDb();
   const now = nowIso();
+  const balanceMinor = toMinorUnits(input.openingBalance);
   const result = await db.runAsync(
     `INSERT INTO accounts
-       (name, type, openingBalance, currentBalance, icon, color, isDefault, isArchived, createdAt, updatedAt)
-     VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`,
+       (name, type, currencyCode, openingBalanceMinor, currentBalanceMinor, icon, color, isPrimary, isArchived, createdAt, updatedAt)
+     VALUES (?, ?, 'EGP', ?, ?, ?, ?, 0, 0, ?, ?)`,
     [
       input.name.trim(),
-      input.type,
-      input.openingBalance,
-      input.openingBalance, // currentBalance starts equal to openingBalance
+      toDbAccountType(input.type),
+      balanceMinor,
+      balanceMinor,
       input.icon ?? null,
       input.color ?? null,
-      input.isDefault ?? 0,
       now,
       now,
     ],
@@ -131,29 +187,21 @@ export interface UpdateAccountInput {
   color?: string | null;
 }
 
-export async function updateAccount(
-  id: number,
-  input: UpdateAccountInput,
-): Promise<void> {
+export async function updateAccount(id: number, input: UpdateAccountInput): Promise<void> {
   const db = await getDb();
-
-  // Compute net transaction delta so we can derive the implied opening balance
-  const txRow = await db.getFirstAsync<{ txDelta: number }>(DELTA_SQL, [
-    id, id, id, id,
-  ]);
-  const txDelta = txRow?.txDelta ?? 0;
-  // openingBalance is back-calculated so that: currentBalance = openingBalance + txDelta
-  const newOpeningBalance = input.currentBalance - txDelta;
+  const txRow = await db.getFirstAsync<{ txDeltaMinor: number }>(DELTA_SQL, [id, id, id, id]);
+  const currentBalanceMinor = toMinorUnits(input.currentBalance);
+  const openingBalanceMinor = currentBalanceMinor - (txRow?.txDeltaMinor ?? 0);
 
   await db.runAsync(
     `UPDATE accounts
-     SET name = ?, type = ?, openingBalance = ?, currentBalance = ?, icon = ?, color = ?, updatedAt = ?
+     SET name = ?, type = ?, openingBalanceMinor = ?, currentBalanceMinor = ?, icon = ?, color = ?, updatedAt = ?
      WHERE id = ?`,
     [
       input.name.trim(),
-      input.type,
-      newOpeningBalance,
-      input.currentBalance,
+      toDbAccountType(input.type),
+      openingBalanceMinor,
+      currentBalanceMinor,
       input.icon ?? null,
       input.color ?? null,
       nowIso(),
@@ -164,18 +212,12 @@ export async function updateAccount(
 
 export async function archiveAccount(id: number): Promise<void> {
   const db = await getDb();
-  await db.runAsync(
-    "UPDATE accounts SET isArchived = 1, updatedAt = ? WHERE id = ?",
-    [nowIso(), id],
-  );
+  await db.runAsync('UPDATE accounts SET isArchived = 1, updatedAt = ? WHERE id = ?', [nowIso(), id]);
 }
 
 export async function unarchiveAccount(id: number): Promise<void> {
   const db = await getDb();
-  await db.runAsync(
-    "UPDATE accounts SET isArchived = 0, updatedAt = ? WHERE id = ?",
-    [nowIso(), id],
-  );
+  await db.runAsync('UPDATE accounts SET isArchived = 0, updatedAt = ? WHERE id = ?', [nowIso(), id]);
 }
 
 export type CanDeleteReason = 'default' | 'has_expenses' | 'has_incomes' | 'has_transfers';
@@ -183,28 +225,25 @@ export type CanDeleteReason = 'default' | 'has_expenses' | 'has_incomes' | 'has_
 /** Returns whether the account can be safely deleted, and why not if it cannot. */
 export async function canDeleteAccount(id: number): Promise<{ ok: boolean; reason?: CanDeleteReason }> {
   const db = await getDb();
-  const account = await db.getFirstAsync<{ isDefault: number }>(
-    "SELECT isDefault FROM accounts WHERE id = ?",
-    [id],
-  );
+  const account = await getAccountById(id);
   if (!account) return { ok: false };
   if (account.isDefault === 1) return { ok: false, reason: 'default' };
 
   const expRow = await db.getFirstAsync<{ n: number }>(
-    "SELECT COUNT(*) AS n FROM expenses WHERE accountId = ?",
+    "SELECT COUNT(*) AS n FROM transactions WHERE accountId = ? AND type = 'EXPENSE' AND deletedAt IS NULL",
     [id],
   );
   if ((expRow?.n ?? 1) > 0) return { ok: false, reason: 'has_expenses' };
 
   const incRow = await db.getFirstAsync<{ n: number }>(
-    "SELECT COUNT(*) AS n FROM incomes WHERE accountId = ?",
+    "SELECT COUNT(*) AS n FROM transactions WHERE accountId = ? AND type = 'INCOME' AND deletedAt IS NULL",
     [id],
   );
   if ((incRow?.n ?? 1) > 0) return { ok: false, reason: 'has_incomes' };
 
   const trRow = await db.getFirstAsync<{ n: number }>(
-    "SELECT COUNT(*) AS n FROM transfers WHERE fromAccountId = ? OR toAccountId = ?",
-    [id, id],
+    'SELECT COUNT(*) AS n FROM transfers WHERE (fromAccountId = ? OR toAccountId = ? OR feeAccountId = ?) AND deletedAt IS NULL',
+    [id, id, id],
   );
   if ((trRow?.n ?? 1) > 0) return { ok: false, reason: 'has_transfers' };
 
@@ -213,13 +252,9 @@ export async function canDeleteAccount(id: number): Promise<{ ok: boolean; reaso
 
 // ── Balance helpers ───────────────────────────────────────────
 
-/**
- * Recalculates currentBalance for all accounts from scratch.
- * Safe to call any time — delegates to recalculateBalance per account.
- */
 export async function recalculateAccountBalances(): Promise<void> {
   const db = await getDb();
-  const accounts = await db.getAllAsync<{ id: number }>("SELECT id FROM accounts");
+  const accounts = await db.getAllAsync<{ id: number }>('SELECT id FROM accounts');
   for (const acc of accounts) {
     await recalculateBalance(acc.id);
   }
