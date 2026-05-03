@@ -7,9 +7,10 @@ import {
   DatabaseBackupData,
   MergeBackupSummary,
 } from '@/services/database';
+import { getDb } from '@/services/database/client';
 
-const BACKUP_VERSION = 2;
-const SUPPORTED_VERSIONS = [1, 2];
+const BACKUP_VERSION = 3;
+const SUPPORTED_VERSIONS = [3];
 
 interface BackupPayload {
   schemaVersion: number;
@@ -31,6 +32,20 @@ function makeBackupFileName(): string {
   return `budgetbuddy-backup-${yyyy}${mm}${dd}-${hh}${min}.json`;
 }
 
+function makeDatabaseFileName(): string {
+  const now = new Date();
+  const yyyy = now.getFullYear();
+  const mm = String(now.getMonth() + 1).padStart(2, '0');
+  const dd = String(now.getDate()).padStart(2, '0');
+  const hh = String(now.getHours()).padStart(2, '0');
+  const min = String(now.getMinutes()).padStart(2, '0');
+  return `budgetbuddy-database-${yyyy}${mm}${dd}-${hh}${min}.db`;
+}
+
+function toFileUri(path: string): string {
+  return path.startsWith('file://') ? path : `file://${path}`;
+}
+
 function validatePayload(raw: unknown): BackupPayload {
   if (!raw || typeof raw !== 'object') {
     throw new Error('Invalid backup file.');
@@ -45,17 +60,17 @@ function validatePayload(raw: unknown): BackupPayload {
   }
 
   const data = payload.data as Partial<DatabaseBackupData>;
-  if (!Array.isArray(data.expenses) || !Array.isArray(data.incomes)) {
+  if (!Array.isArray(data.transactions) || !Array.isArray(data.transactionItems)) {
     throw new Error('Invalid transactions in backup.');
   }
-  if (!Array.isArray(data.categories) || !Array.isArray(data.incomeCategories)) {
+  if (!Array.isArray(data.categories)) {
     throw new Error('Invalid categories in backup.');
+  }
+  if (!Array.isArray(data.accounts) || !Array.isArray(data.transfers)) {
+    throw new Error('Invalid accounts or transfers in backup.');
   }
   if (!Array.isArray(data.settings)) {
     throw new Error('Invalid settings in backup.');
-  }
-  if (data.subExpenses !== undefined && !Array.isArray(data.subExpenses)) {
-    throw new Error('Invalid sub-expenses in backup.');
   }
 
   return payload as BackupPayload;
@@ -88,6 +103,32 @@ export async function exportBackupAndShare(): Promise<{ uri: string; fileName: s
       mimeType: 'application/json',
       dialogTitle: 'Export Budget Buddy Backup',
       UTI: 'public.json',
+    });
+  }
+
+  return { uri, fileName };
+}
+
+export async function exportDatabaseFileAndShare(): Promise<{ uri: string; fileName: string }> {
+  const db = await getDb();
+  await db.execAsync('PRAGMA wal_checkpoint(FULL);');
+
+  const fileName = makeDatabaseFileName();
+  const dir = FileSystem.documentDirectory;
+  if (!dir) throw new Error('Could not access local file system.');
+  const uri = `${dir}${fileName}`;
+
+  await FileSystem.copyAsync({
+    from: toFileUri(db.databasePath),
+    to: uri,
+  });
+
+  const canShare = await Sharing.isAvailableAsync();
+  if (canShare) {
+    await Sharing.shareAsync(uri, {
+      mimeType: 'application/vnd.sqlite3',
+      dialogTitle: 'Export Budget Buddy Database',
+      UTI: 'public.database',
     });
   }
 

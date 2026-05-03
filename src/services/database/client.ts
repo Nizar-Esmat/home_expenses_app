@@ -1,5 +1,9 @@
 import * as SQLite from 'expo-sqlite';
 import { DEFAULT_CATEGORY_COLORS } from '@/services/constants';
+import { nowIso } from './helpers';
+
+const SCHEMA_VERSION = 3;
+const DEFAULT_CURRENCY = 'EGP';
 
 let _db: SQLite.SQLiteDatabase | null = null;
 
@@ -14,91 +18,117 @@ export async function getDb(): Promise<SQLite.SQLiteDatabase> {
 // ── Schema ────────────────────────────────────────────────────
 
 async function initDb(db: SQLite.SQLiteDatabase): Promise<void> {
+  await db.execAsync('PRAGMA journal_mode = WAL;');
+  await runMigrations(db);
+  await createSchema(db);
+  await seedCategories(db);
+  await seedIncomeCategories(db);
+  await seedDefaultAccount(db);
+  await db.runAsync(`PRAGMA user_version = ${SCHEMA_VERSION}`);
+}
+
+async function createSchema(db: SQLite.SQLiteDatabase): Promise<void> {
   await db.execAsync(`
-    PRAGMA journal_mode = WAL;
-
-    CREATE TABLE IF NOT EXISTS expenses (
-      id        INTEGER PRIMARY KEY AUTOINCREMENT,
-      price     REAL    NOT NULL,
-      category  TEXT    NOT NULL,
-      note      TEXT,
-      createdAt TEXT    NOT NULL,
-      monthKey  TEXT    NOT NULL,
-      accountId INTEGER
-    );
-
-    CREATE TABLE IF NOT EXISTS incomes (
-      id        INTEGER PRIMARY KEY AUTOINCREMENT,
-      amount    REAL    NOT NULL,
-      category  TEXT    NOT NULL,
-      note      TEXT,
-      createdAt TEXT    NOT NULL,
-      monthKey  TEXT    NOT NULL,
-      accountId INTEGER
-    );
-
     CREATE TABLE IF NOT EXISTS settings (
       key   TEXT PRIMARY KEY,
       value TEXT NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS accounts (
+      id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+      name                TEXT    NOT NULL UNIQUE,
+      type                TEXT    NOT NULL,
+      currencyCode        TEXT    NOT NULL DEFAULT '${DEFAULT_CURRENCY}',
+      openingBalanceMinor INTEGER NOT NULL DEFAULT 0,
+      currentBalanceMinor INTEGER NOT NULL DEFAULT 0,
+      icon                TEXT,
+      color               TEXT,
+      isPrimary           INTEGER NOT NULL DEFAULT 0,
+      isArchived          INTEGER NOT NULL DEFAULT 0,
+      createdAt           TEXT    NOT NULL,
+      updatedAt           TEXT
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_accounts_type ON accounts(type);
+    CREATE INDEX IF NOT EXISTS idx_accounts_isArchived ON accounts(isArchived);
+
     CREATE TABLE IF NOT EXISTS categories (
       id        INTEGER PRIMARY KEY AUTOINCREMENT,
-      name      TEXT    NOT NULL UNIQUE,
-      emoji     TEXT    NOT NULL DEFAULT '📦',
-      color     TEXT    NOT NULL DEFAULT '#408A71',
+      name      TEXT    NOT NULL,
+      type      TEXT    NOT NULL,
+      icon      TEXT,
+      color     TEXT,
       isDefault INTEGER NOT NULL DEFAULT 0,
       sortOrder INTEGER NOT NULL DEFAULT 0,
-      createdAt TEXT    NOT NULL
+      createdAt TEXT    NOT NULL,
+      updatedAt TEXT,
+      UNIQUE(type, name)
     );
 
-    CREATE TABLE IF NOT EXISTS income_categories (
-      id        INTEGER PRIMARY KEY AUTOINCREMENT,
-      name      TEXT    NOT NULL UNIQUE,
-      emoji     TEXT    NOT NULL DEFAULT '💰',
-      color     TEXT    NOT NULL DEFAULT '#10B981',
-      isDefault INTEGER NOT NULL DEFAULT 0,
-      sortOrder INTEGER NOT NULL DEFAULT 0,
-      createdAt TEXT    NOT NULL
+    CREATE INDEX IF NOT EXISTS idx_categories_type ON categories(type);
+
+    CREATE TABLE IF NOT EXISTS transactions (
+      id              INTEGER PRIMARY KEY AUTOINCREMENT,
+      accountId       INTEGER NOT NULL,
+      categoryId      INTEGER NOT NULL,
+      type            TEXT    NOT NULL,
+      amountMinor     INTEGER NOT NULL,
+      currencyCode    TEXT    NOT NULL DEFAULT '${DEFAULT_CURRENCY}',
+      title           TEXT,
+      note            TEXT,
+      transactionDate TEXT    NOT NULL,
+      createdAt       TEXT    NOT NULL,
+      updatedAt       TEXT,
+      deletedAt       TEXT,
+      FOREIGN KEY(accountId) REFERENCES accounts(id),
+      FOREIGN KEY(categoryId) REFERENCES categories(id)
     );
 
-    CREATE TABLE IF NOT EXISTS sub_expenses (
-      id        INTEGER PRIMARY KEY AUTOINCREMENT,
-      expenseId INTEGER NOT NULL,
-      title     TEXT    NOT NULL,
-      amount    REAL    NOT NULL,
-      sortOrder INTEGER NOT NULL DEFAULT 0
+    CREATE INDEX IF NOT EXISTS idx_transactions_account_date ON transactions(accountId, transactionDate);
+    CREATE INDEX IF NOT EXISTS idx_transactions_category_date ON transactions(categoryId, transactionDate);
+    CREATE INDEX IF NOT EXISTS idx_transactions_type_date ON transactions(type, transactionDate);
+    CREATE INDEX IF NOT EXISTS idx_transactions_date ON transactions(transactionDate);
+
+    CREATE TABLE IF NOT EXISTS transaction_items (
+      id            INTEGER PRIMARY KEY AUTOINCREMENT,
+      transactionId INTEGER NOT NULL,
+      categoryId    INTEGER,
+      name          TEXT    NOT NULL,
+      amountMinor   INTEGER NOT NULL,
+      quantity      REAL,
+      note          TEXT,
+      sortOrder     INTEGER NOT NULL DEFAULT 0,
+      createdAt     TEXT    NOT NULL,
+      updatedAt     TEXT,
+      FOREIGN KEY(transactionId) REFERENCES transactions(id),
+      FOREIGN KEY(categoryId) REFERENCES categories(id)
     );
 
-    CREATE TABLE IF NOT EXISTS accounts (
-      id             INTEGER PRIMARY KEY AUTOINCREMENT,
-      name           TEXT    NOT NULL UNIQUE,
-      type           TEXT    NOT NULL DEFAULT 'cash',
-      openingBalance REAL    NOT NULL DEFAULT 0,
-      currentBalance REAL    NOT NULL DEFAULT 0,
-      icon           TEXT,
-      color          TEXT,
-      isDefault      INTEGER NOT NULL DEFAULT 0,
-      isPrimary      INTEGER NOT NULL DEFAULT 0,
-      isArchived     INTEGER NOT NULL DEFAULT 0,
-      createdAt      TEXT    NOT NULL,
-      updatedAt      TEXT    NOT NULL
-    );
+    CREATE INDEX IF NOT EXISTS idx_transaction_items_transaction ON transaction_items(transactionId);
+    CREATE INDEX IF NOT EXISTS idx_transaction_items_category ON transaction_items(categoryId);
 
     CREATE TABLE IF NOT EXISTS transfers (
-      id            INTEGER PRIMARY KEY AUTOINCREMENT,
-      fromAccountId INTEGER NOT NULL,
-      toAccountId   INTEGER NOT NULL,
-      amount        REAL    NOT NULL,
-      note          TEXT,
-      createdAt     TEXT    NOT NULL,
-      monthKey      TEXT    NOT NULL
+      id             INTEGER PRIMARY KEY AUTOINCREMENT,
+      fromAccountId  INTEGER NOT NULL,
+      toAccountId    INTEGER NOT NULL,
+      amountMinor    INTEGER NOT NULL,
+      currencyCode   TEXT    NOT NULL DEFAULT '${DEFAULT_CURRENCY}',
+      feeAmountMinor INTEGER NOT NULL DEFAULT 0,
+      feeAccountId   INTEGER,
+      note           TEXT,
+      transferDate   TEXT    NOT NULL,
+      createdAt      TEXT    NOT NULL,
+      updatedAt      TEXT,
+      deletedAt      TEXT,
+      FOREIGN KEY(fromAccountId) REFERENCES accounts(id),
+      FOREIGN KEY(toAccountId) REFERENCES accounts(id),
+      FOREIGN KEY(feeAccountId) REFERENCES accounts(id)
     );
-  `);
 
-  await seedCategories(db);
-  await seedIncomeCategories(db);
-  await runMigrations(db);
+    CREATE INDEX IF NOT EXISTS idx_transfers_from_date ON transfers(fromAccountId, transferDate);
+    CREATE INDEX IF NOT EXISTS idx_transfers_to_date ON transfers(toAccountId, transferDate);
+    CREATE INDEX IF NOT EXISTS idx_transfers_date ON transfers(transferDate);
+  `);
 }
 
 // ── Migrations ────────────────────────────────────────────────
@@ -107,150 +137,107 @@ async function runMigrations(db: SQLite.SQLiteDatabase): Promise<void> {
   const versionRow = await db.getFirstAsync<{ user_version: number }>('PRAGMA user_version');
   const version = versionRow?.user_version ?? 0;
 
-  if (version < 1) {
-    await migrateV1(db);
-  }
-  if (version < 2) {
-    await migrateV2(db);
+  if (version < SCHEMA_VERSION) {
+    await freshResetFinancialSchema(db);
   }
 }
 
-async function migrateV1(db: SQLite.SQLiteDatabase): Promise<void> {
-  const now = new Date().toISOString();
-
-  await db.withExclusiveTransactionAsync(async () => {
-    // Add accountId to expenses if column is missing (existing installs)
-    const expCols = await db.getAllAsync<{ name: string }>('PRAGMA table_info(expenses)');
-    if (!expCols.some((c) => c.name === 'accountId')) {
-      await db.runAsync('ALTER TABLE expenses ADD COLUMN accountId INTEGER');
-    }
-
-    // Add accountId to incomes if column is missing (existing installs)
-    const incCols = await db.getAllAsync<{ name: string }>('PRAGMA table_info(incomes)');
-    if (!incCols.some((c) => c.name === 'accountId')) {
-      await db.runAsync('ALTER TABLE incomes ADD COLUMN accountId INTEGER');
-    }
-
-    // Create default Cash account if it doesn't exist
-    const existing = await db.getFirstAsync<{ id: number }>(
-      "SELECT id FROM accounts WHERE name = 'Cash'",
-    );
-    let cashId: number;
-
-    if (existing) {
-      cashId = existing.id;
-    } else {
-      const result = await db.runAsync(
-        'INSERT INTO accounts (name, type, openingBalance, currentBalance, icon, color, isDefault, isArchived, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        ['Cash', 'cash', 0, 0, '💵', '#10B981', 1, 0, now, now],
-      );
-      cashId = result.lastInsertRowId;
-    }
-
-    // Assign all unlinked expenses/incomes to Cash
-    await db.runAsync('UPDATE expenses SET accountId = ? WHERE accountId IS NULL', [cashId]);
-    await db.runAsync('UPDATE incomes SET accountId = ? WHERE accountId IS NULL', [cashId]);
-
-    // Recalculate Cash account balance from actual data
-    const balRow = await db.getFirstAsync<{ balance: number }>(
-      `SELECT
-        (SELECT COALESCE(SUM(amount), 0) FROM incomes WHERE accountId = ?) -
-        (SELECT COALESCE(SUM(price),  0) FROM expenses WHERE accountId = ?) +
-        (SELECT COALESCE(SUM(amount), 0) FROM transfers WHERE toAccountId = ?) -
-        (SELECT COALESCE(SUM(amount), 0) FROM transfers WHERE fromAccountId = ?)
-       AS balance`,
-      [cashId, cashId, cashId, cashId],
-    );
-    await db.runAsync('UPDATE accounts SET currentBalance = ? WHERE id = ?', [
-      balRow?.balance ?? 0,
-      cashId,
-    ]);
-  });
-
-  await db.runAsync('PRAGMA user_version = 1');
+async function freshResetFinancialSchema(db: SQLite.SQLiteDatabase): Promise<void> {
+  await db.execAsync(`
+    DROP TABLE IF EXISTS transaction_items;
+    DROP TABLE IF EXISTS transactions;
+    DROP TABLE IF EXISTS transfers;
+    DROP TABLE IF EXISTS income_categories;
+    DROP TABLE IF EXISTS sub_expenses;
+    DROP TABLE IF EXISTS expenses;
+    DROP TABLE IF EXISTS incomes;
+    DROP TABLE IF EXISTS categories;
+    DROP TABLE IF EXISTS accounts;
+  `);
 }
 
-async function migrateV2(db: SQLite.SQLiteDatabase): Promise<void> {
-  const cols = await db.getAllAsync<{ name: string }>('PRAGMA table_info(accounts)');
-  if (!cols.some((c) => c.name === 'isPrimary')) {
-    await db.runAsync('ALTER TABLE accounts ADD COLUMN isPrimary INTEGER NOT NULL DEFAULT 0');
-  }
-  await db.runAsync('PRAGMA user_version = 2');
-}
-
-// ── Category seed & migration ─────────────────────────────────
+// ── Seed data ─────────────────────────────────────────────────
 
 const BUILT_IN: { name: string; emoji: string; sortOrder: number }[] = [
-  { name: 'Food',      emoji: '🍔', sortOrder: 0 },
-  { name: 'Bills',     emoji: '💡', sortOrder: 1 },
+  { name: 'Food', emoji: '🍔', sortOrder: 0 },
+  { name: 'Bills', emoji: '💡', sortOrder: 1 },
   { name: 'Transport', emoji: '🚗', sortOrder: 2 },
-  { name: 'Shopping',  emoji: '🛍️', sortOrder: 3 },
-  { name: 'Home',      emoji: '🏠', sortOrder: 4 },
-  { name: 'Other',     emoji: '📦', sortOrder: 5 },
+  { name: 'Shopping', emoji: '🛍️', sortOrder: 3 },
+  { name: 'Home', emoji: '🏠', sortOrder: 4 },
+  { name: 'Other', emoji: '📦', sortOrder: 5 },
 ];
 
 async function seedCategories(db: SQLite.SQLiteDatabase): Promise<void> {
-  const count = await db.getFirstAsync<{ n: number }>('SELECT COUNT(*) AS n FROM categories');
+  const count = await db.getFirstAsync<{ n: number }>(
+    "SELECT COUNT(*) AS n FROM categories WHERE type = 'EXPENSE'",
+  );
   if (count && count.n > 0) return;
 
-  const now = new Date().toISOString();
-
+  const now = nowIso();
   for (const cat of BUILT_IN) {
     await db.runAsync(
-      'INSERT OR IGNORE INTO categories (name, emoji, color, isDefault, sortOrder, createdAt) VALUES (?,?,?,1,?,?)',
-      [cat.name, cat.emoji, DEFAULT_CATEGORY_COLORS[cat.name] ?? '#408A71', cat.sortOrder, now],
+      'INSERT OR IGNORE INTO categories (name, type, icon, color, isDefault, sortOrder, createdAt, updatedAt) VALUES (?, ?, ?, ?, 1, ?, ?, ?)',
+      [
+        cat.name,
+        'EXPENSE',
+        cat.emoji,
+        DEFAULT_CATEGORY_COLORS[cat.name] ?? '#408A71',
+        cat.sortOrder,
+        now,
+        now,
+      ],
     );
-  }
-
-  // Migrate old customCategories from settings JSON (if any)
-  const customCatsRow = await db.getFirstAsync<{ value: string }>(
-    "SELECT value FROM settings WHERE key='customCategories'",
-  );
-  const customEmojiRow = await db.getFirstAsync<{ value: string }>(
-    "SELECT value FROM settings WHERE key='customCategoryEmojis'",
-  );
-
-  if (customCatsRow?.value) {
-    const cats: string[] = JSON.parse(customCatsRow.value);
-    const emojis: Record<string, string> = customEmojiRow?.value
-      ? JSON.parse(customEmojiRow.value)
-      : {};
-    let sortOrder = BUILT_IN.length;
-    for (const cat of cats) {
-      await db.runAsync(
-        'INSERT OR IGNORE INTO categories (name, emoji, color, isDefault, sortOrder, createdAt) VALUES (?,?,?,0,?,?)',
-        [cat, emojis[cat] ?? '📦', '#408A71', sortOrder++, now],
-      );
-    }
   }
 }
 
 const INCOME_BUILT_IN: { name: string; emoji: string; sortOrder: number }[] = [
-  { name: 'Salary',     emoji: '💼', sortOrder: 0 },
-  { name: 'Freelance',  emoji: '💻', sortOrder: 1 },
-  { name: 'Gift',       emoji: '🎁', sortOrder: 2 },
+  { name: 'Salary', emoji: '💼', sortOrder: 0 },
+  { name: 'Freelance', emoji: '💻', sortOrder: 1 },
+  { name: 'Gift', emoji: '🎁', sortOrder: 2 },
   { name: 'Investment', emoji: '📈', sortOrder: 3 },
-  { name: 'Other',      emoji: '💰', sortOrder: 4 },
+  { name: 'Other', emoji: '💰', sortOrder: 4 },
 ];
 
 const DEFAULT_INCOME_COLORS: Record<string, string> = {
-  Salary:     '#10B981',
-  Freelance:  '#3B82F6',
-  Gift:       '#A855F7',
+  Salary: '#10B981',
+  Freelance: '#3B82F6',
+  Gift: '#A855F7',
   Investment: '#F59E0B',
-  Other:      '#6B7280',
+  Other: '#6B7280',
 };
 
 async function seedIncomeCategories(db: SQLite.SQLiteDatabase): Promise<void> {
-  const count = await db.getFirstAsync<{ n: number }>('SELECT COUNT(*) AS n FROM income_categories');
+  const count = await db.getFirstAsync<{ n: number }>(
+    "SELECT COUNT(*) AS n FROM categories WHERE type = 'INCOME'",
+  );
   if (count && count.n > 0) return;
 
-  const now = new Date().toISOString();
-
+  const now = nowIso();
   for (const cat of INCOME_BUILT_IN) {
     await db.runAsync(
-      'INSERT OR IGNORE INTO income_categories (name, emoji, color, isDefault, sortOrder, createdAt) VALUES (?,?,?,1,?,?)',
-      [cat.name, cat.emoji, DEFAULT_INCOME_COLORS[cat.name] ?? '#10B981', cat.sortOrder, now],
+      'INSERT OR IGNORE INTO categories (name, type, icon, color, isDefault, sortOrder, createdAt, updatedAt) VALUES (?, ?, ?, ?, 1, ?, ?, ?)',
+      [
+        cat.name,
+        'INCOME',
+        cat.emoji,
+        DEFAULT_INCOME_COLORS[cat.name] ?? '#10B981',
+        cat.sortOrder,
+        now,
+        now,
+      ],
     );
   }
+}
+
+async function seedDefaultAccount(db: SQLite.SQLiteDatabase): Promise<void> {
+  const count = await db.getFirstAsync<{ n: number }>('SELECT COUNT(*) AS n FROM accounts');
+  if (count && count.n > 0) return;
+
+  const now = nowIso();
+  await db.runAsync(
+    `INSERT INTO accounts
+       (name, type, currencyCode, openingBalanceMinor, currentBalanceMinor, icon, color, isPrimary, isArchived, createdAt, updatedAt)
+     VALUES (?, ?, ?, 0, 0, ?, ?, 0, 0, ?, ?)`,
+    ['Cash', 'CASH', DEFAULT_CURRENCY, '💵', '#10B981', now, now],
+  );
 }

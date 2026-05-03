@@ -7,7 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/theme/ThemeContext';
 import { COLOR_PALETTES, ColorPaletteName, PALETTE_COLORS, PALETTE_COLORS_DARK } from '@/theme/colors';
 import { saveSettings } from '@/services/database';
-import { exportBackupAndShare, pickAndImportBackupMerge } from '@/services/sync';
+import { exportBackupAndShare, exportDatabaseFileAndShare, pickAndImportBackupMerge } from '@/services/sync';
 import AppButton from '@/components/AppButton';
 import { useAppDialog } from '@/components/AppDialog';
 
@@ -21,7 +21,7 @@ export default function SettingsScreen() {
   const ringColor = isDark ? '#FFFFFF' : '#374151';
 
   const [saving, setSaving] = useState(false);
-  const [syncingAction, setSyncingAction] = useState<'export' | 'import' | null>(null);
+  const [syncingAction, setSyncingAction] = useState<'export_json' | 'export_db' | 'import' | null>(null);
 
   const saveAll = async () => {
     setSaving(true);
@@ -29,14 +29,14 @@ export default function SettingsScreen() {
     setSaving(false);
   };
 
-  const handleExport = async () => {
+  const startJsonExport = async () => {
     if (syncingAction) return;
     try {
-      setSyncingAction('export');
+      setSyncingAction('export_json');
       const { fileName } = await exportBackupAndShare();
       showDialog({
-        title: 'Backup Exported',
-        message: `Your backup file "${fileName}" is ready to share.`,
+        title: 'JSON Backup Exported',
+        message: `Your JSON backup file "${fileName}" is ready to share.`,
         icon: '📤',
         type: 'success',
         buttons: [{ text: 'OK', style: 'default' }],
@@ -53,6 +53,46 @@ export default function SettingsScreen() {
     } finally {
       setSyncingAction(null);
     }
+  };
+
+  const startDatabaseExport = async () => {
+    if (syncingAction) return;
+    try {
+      setSyncingAction('export_db');
+      const { fileName } = await exportDatabaseFileAndShare();
+      showDialog({
+        title: 'Database Exported',
+        message: `Your database file "${fileName}" is ready to share.`,
+        icon: '📤',
+        type: 'success',
+        buttons: [{ text: 'OK', style: 'default' }],
+      });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Database export failed.';
+      showDialog({
+        title: 'Export Failed',
+        message: msg,
+        icon: '❌',
+        type: 'danger',
+        buttons: [{ text: 'OK', style: 'default' }],
+      });
+    } finally {
+      setSyncingAction(null);
+    }
+  };
+
+  const handleExport = () => {
+    showDialog({
+      title: 'Export Data',
+      message: 'Choose the export format. JSON is best for app backup/import. Database file is a raw SQLite copy.',
+      icon: '📤',
+      type: 'info',
+      buttons: [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Export JSON Backup', style: 'default', onPress: () => { startJsonExport(); } },
+        { text: 'Export Database File', style: 'default', onPress: () => { startDatabaseExport(); } },
+      ],
+    });
   };
 
   const startImport = async () => {
@@ -243,7 +283,7 @@ export default function SettingsScreen() {
               </Text>
             </View>
           </View>
-          {syncingAction === 'export'
+          {syncingAction === 'export_json' || syncingAction === 'export_db'
             ? <ActivityIndicator color={colors.primary} size="small" />
             : <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />}
         </TouchableOpacity>

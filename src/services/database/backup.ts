@@ -1,17 +1,58 @@
-import { Category, IncomeCategory, Expense, Income, SubExpense, Account, Transfer } from '@/types';
+import { Transaction, TransactionItem } from '@/types';
 import { getDb } from './client';
-import { nowIso, toMonthKey } from './helpers';
+import { nowIso } from './helpers';
+import { recalculateAccountBalances } from './accounts';
 import { SettingsRow } from './settings';
 
+interface BackupAccount {
+  id: number;
+  name: string;
+  type: string;
+  currencyCode: string;
+  openingBalanceMinor: number;
+  currentBalanceMinor: number;
+  icon: string | null;
+  color: string | null;
+  isPrimary: number;
+  isArchived: number;
+  createdAt: string;
+  updatedAt: string | null;
+}
+
+interface BackupCategory {
+  id: number;
+  name: string;
+  type: 'EXPENSE' | 'INCOME';
+  icon: string | null;
+  color: string | null;
+  isDefault: number;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string | null;
+}
+
+interface BackupTransfer {
+  id: number;
+  fromAccountId: number;
+  toAccountId: number;
+  amountMinor: number;
+  currencyCode: string;
+  feeAmountMinor: number;
+  feeAccountId: number | null;
+  note: string | null;
+  transferDate: string;
+  createdAt: string;
+  updatedAt: string | null;
+  deletedAt: string | null;
+}
+
 export interface DatabaseBackupData {
-  expenses: Expense[];
-  incomes: Income[];
-  categories: Category[];
-  incomeCategories: IncomeCategory[];
+  accounts: BackupAccount[];
+  categories: BackupCategory[];
+  transactions: Transaction[];
+  transactionItems: TransactionItem[];
+  transfers: BackupTransfer[];
   settings: SettingsRow[];
-  subExpenses?: SubExpense[];
-  accounts?: Account[];
-  transfers?: Transfer[];
 }
 
 export interface MergeBackupSummary {
@@ -29,19 +70,17 @@ export interface MergeBackupSummary {
 
 export async function exportDatabaseBackupData(): Promise<DatabaseBackupData> {
   const db = await getDb();
-  const [expenses, incomes, categories, incomeCategories, settings, subExpenses, accounts, transfers] =
+  const [accounts, categories, transactions, transactionItems, transfers, settings] =
     await Promise.all([
-      db.getAllAsync<Expense>('SELECT * FROM expenses ORDER BY createdAt DESC'),
-      db.getAllAsync<Income>('SELECT * FROM incomes ORDER BY createdAt DESC'),
-      db.getAllAsync<Category>('SELECT * FROM categories ORDER BY sortOrder ASC, id ASC'),
-      db.getAllAsync<IncomeCategory>('SELECT * FROM income_categories ORDER BY sortOrder ASC, id ASC'),
+      db.getAllAsync<BackupAccount>('SELECT * FROM accounts ORDER BY createdAt ASC, id ASC'),
+      db.getAllAsync<BackupCategory>('SELECT * FROM categories ORDER BY type ASC, sortOrder ASC, id ASC'),
+      db.getAllAsync<Transaction>('SELECT * FROM transactions ORDER BY transactionDate DESC, id DESC'),
+      db.getAllAsync<TransactionItem>('SELECT * FROM transaction_items ORDER BY transactionId ASC, sortOrder ASC'),
+      db.getAllAsync<BackupTransfer>('SELECT * FROM transfers ORDER BY transferDate DESC, id DESC'),
       db.getAllAsync<SettingsRow>('SELECT key, value FROM settings'),
-      db.getAllAsync<SubExpense>('SELECT * FROM sub_expenses ORDER BY expenseId ASC, sortOrder ASC'),
-      db.getAllAsync<Account>('SELECT * FROM accounts ORDER BY createdAt ASC'),
-      db.getAllAsync<Transfer>('SELECT * FROM transfers ORDER BY createdAt DESC'),
     ]);
 
-  return { expenses, incomes, categories, incomeCategories, settings, subExpenses, accounts, transfers };
+  return { accounts, categories, transactions, transactionItems, transfers, settings };
 }
 
 export async function mergeBackupIntoDatabase(data: DatabaseBackupData): Promise<MergeBackupSummary> {
@@ -60,22 +99,12 @@ export async function mergeBackupIntoDatabase(data: DatabaseBackupData): Promise
   };
 
   const normalize = (v: string) => v.trim().toLowerCase();
-
-  // Build sub-expenses map keyed by original expense ID (before remapping)
-  const subExpensesMap = new Map<number, SubExpense[]>();
-  for (const sub of (data.subExpenses ?? [])) {
-    if (!sub?.expenseId || typeof sub.amount !== 'number' || !sub.title) continue;
-    const arr = subExpensesMap.get(sub.expenseId) ?? [];
-    arr.push(sub);
-    subExpensesMap.set(sub.expenseId, arr);
-  }
-
-  // Build a map from backup account IDs → local account IDs for relinking
   const accountIdRemap = new Map<number, number>();
+  const categoryIdRemap = new Map<number, number>();
+  const transactionIdRemap = new Map<number, number>();
 
   await db.withExclusiveTransactionAsync(async () => {
-    // ── Accounts ────────────────────────────────────────────
-    for (const acc of (data.accounts ?? [])) {
+    for (const acc of data.accounts) {
       if (!acc?.name || !acc?.type) continue;
 
       const existing = await db.getFirstAsync<{ id: number }>(
@@ -88,16 +117,18 @@ export async function mergeBackupIntoDatabase(data: DatabaseBackupData): Promise
       }
 
       const result = await db.runAsync(
-        `INSERT INTO accounts (name, type, openingBalance, currentBalance, icon, color, isDefault, isArchived, createdAt, updatedAt)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO accounts
+           (name, type, currencyCode, openingBalanceMinor, currentBalanceMinor, icon, color, isPrimary, isArchived, createdAt, updatedAt)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           acc.name,
           acc.type,
-          acc.openingBalance ?? 0,
-          acc.currentBalance ?? 0,
+          acc.currencyCode ?? 'EGP',
+          acc.openingBalanceMinor ?? 0,
+          acc.currentBalanceMinor ?? 0,
           acc.icon ?? null,
           acc.color ?? null,
-          0, // imported accounts are never default
+          acc.isPrimary ?? 0,
           acc.isArchived ?? 0,
           acc.createdAt ?? nowIso(),
           acc.updatedAt ?? nowIso(),
@@ -107,116 +138,138 @@ export async function mergeBackupIntoDatabase(data: DatabaseBackupData): Promise
       summary.accountsAdded += 1;
     }
 
-    // ── Categories ──────────────────────────────────────────
-    const existingCategories = await db.getAllAsync<{ name: string }>('SELECT name FROM categories');
-    const existingCategorySet = new Set(existingCategories.map((c) => normalize(c.name)));
+    const existingCategories = await db.getAllAsync<{ id: number; name: string; type: string }>(
+      'SELECT id, name, type FROM categories',
+    );
+    const existingCategoryMap = new Map(
+      existingCategories.map((c) => [`${c.type}:${normalize(c.name)}`, c.id]),
+    );
 
     for (const cat of data.categories) {
-      if (!cat?.name) continue;
-      const key = normalize(cat.name);
-      if (existingCategorySet.has(key)) continue;
-      await db.runAsync(
-        'INSERT INTO categories (name, emoji, color, isDefault, sortOrder, createdAt) VALUES (?,?,?,?,?,?)',
-        [cat.name, cat.emoji ?? '📦', cat.color ?? '#408A71', 0, cat.sortOrder ?? 0, cat.createdAt ?? nowIso()],
-      );
-      existingCategorySet.add(key);
-      summary.categoriesAdded += 1;
-    }
-
-    // ── Income categories ────────────────────────────────────
-    const existingIncomeCategories = await db.getAllAsync<{ name: string }>('SELECT name FROM income_categories');
-    const existingIncomeCategorySet = new Set(existingIncomeCategories.map((c) => normalize(c.name)));
-
-    for (const cat of data.incomeCategories) {
-      if (!cat?.name) continue;
-      const key = normalize(cat.name);
-      if (existingIncomeCategorySet.has(key)) continue;
-      await db.runAsync(
-        'INSERT INTO income_categories (name, emoji, color, isDefault, sortOrder, createdAt) VALUES (?,?,?,?,?,?)',
-        [cat.name, cat.emoji ?? '💰', cat.color ?? '#10B981', 0, cat.sortOrder ?? 0, cat.createdAt ?? nowIso()],
-      );
-      existingIncomeCategorySet.add(key);
-      summary.incomeCategoriesAdded += 1;
-    }
-
-    // ── Expenses ────────────────────────────────────────────
-    const existingExpenses = await db.getAllAsync<Expense>('SELECT * FROM expenses');
-    const expenseFingerprints = new Set(
-      existingExpenses.map((e) => `${e.createdAt}|${e.price}|${normalize(e.category)}|${(e.note ?? '').trim()}`),
-    );
-
-    for (const exp of data.expenses) {
-      if (!exp?.createdAt || typeof exp.price !== 'number' || !exp.category) continue;
-      const fp = `${exp.createdAt}|${exp.price}|${normalize(exp.category)}|${(exp.note ?? '').trim()}`;
-      if (expenseFingerprints.has(fp)) {
-        summary.expensesSkipped += 1;
+      if (!cat?.name || !cat?.type) continue;
+      const key = `${cat.type}:${normalize(cat.name)}`;
+      const existingId = existingCategoryMap.get(key);
+      if (existingId) {
+        categoryIdRemap.set(cat.id, existingId);
         continue;
       }
 
-      // Remap accountId
-      const remappedAccountId = exp.accountId != null
-        ? (accountIdRemap.get(exp.accountId) ?? exp.accountId)
-        : null;
-
-      const expResult = await db.runAsync(
-        'INSERT INTO expenses (price, category, note, createdAt, monthKey, accountId) VALUES (?, ?, ?, ?, ?, ?)',
-        [exp.price, exp.category, exp.note ?? null, exp.createdAt, exp.monthKey || toMonthKey(exp.createdAt), remappedAccountId],
+      const result = await db.runAsync(
+        `INSERT INTO categories
+           (name, type, icon, color, isDefault, sortOrder, createdAt, updatedAt)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          cat.name,
+          cat.type,
+          cat.icon ?? null,
+          cat.color ?? null,
+          0,
+          cat.sortOrder ?? 0,
+          cat.createdAt ?? nowIso(),
+          cat.updatedAt ?? nowIso(),
+        ],
       );
-      const newExpenseId = expResult.lastInsertRowId;
-
-      const subsToInsert = subExpensesMap.get(exp.id);
-      if (subsToInsert && subsToInsert.length > 0) {
-        for (let i = 0; i < subsToInsert.length; i++) {
-          const sub = subsToInsert[i]!;
-          await db.runAsync(
-            'INSERT INTO sub_expenses (expenseId, title, amount, sortOrder) VALUES (?, ?, ?, ?)',
-            [newExpenseId, sub.title, sub.amount, sub.sortOrder ?? i],
-          );
-        }
-      }
-
-      expenseFingerprints.add(fp);
-      summary.expensesAdded += 1;
+      categoryIdRemap.set(cat.id, result.lastInsertRowId);
+      existingCategoryMap.set(key, result.lastInsertRowId);
+      if (cat.type === 'INCOME') summary.incomeCategoriesAdded += 1;
+      else summary.categoriesAdded += 1;
     }
 
-    // ── Incomes ─────────────────────────────────────────────
-    const existingIncomes = await db.getAllAsync<Income>('SELECT * FROM incomes');
-    const incomeFingerprints = new Set(
-      existingIncomes.map((i) => `${i.createdAt}|${i.amount}|${normalize(i.category)}|${(i.note ?? '').trim()}`),
+    const fallbackAccount = await db.getFirstAsync<{ id: number }>(
+      'SELECT id FROM accounts ORDER BY id ASC LIMIT 1',
+    );
+    const fallbackExpenseCategory = await db.getFirstAsync<{ id: number }>(
+      "SELECT id FROM categories WHERE type = 'EXPENSE' ORDER BY isDefault DESC, sortOrder ASC LIMIT 1",
+    );
+    const fallbackIncomeCategory = await db.getFirstAsync<{ id: number }>(
+      "SELECT id FROM categories WHERE type = 'INCOME' ORDER BY isDefault DESC, sortOrder ASC LIMIT 1",
     );
 
-    for (const inc of data.incomes) {
-      if (!inc?.createdAt || typeof inc.amount !== 'number' || !inc.category) continue;
-      const fp = `${inc.createdAt}|${inc.amount}|${normalize(inc.category)}|${(inc.note ?? '').trim()}`;
-      if (incomeFingerprints.has(fp)) {
-        summary.incomesSkipped += 1;
+    const existingTransactions = await db.getAllAsync<{
+      transactionDate: string;
+      amountMinor: number;
+      type: string;
+      note: string | null;
+    }>('SELECT transactionDate, amountMinor, type, note FROM transactions');
+    const transactionFingerprints = new Set(
+      existingTransactions.map((t) => `${t.transactionDate}|${t.amountMinor}|${t.type}|${(t.note ?? '').trim()}`),
+    );
+
+    for (const tx of data.transactions) {
+      if (!tx?.transactionDate || typeof tx.amountMinor !== 'number' || !tx.type) continue;
+      const fp = `${tx.transactionDate}|${tx.amountMinor}|${tx.type}|${(tx.note ?? '').trim()}`;
+      if (transactionFingerprints.has(fp)) {
+        if (tx.type === 'INCOME') summary.incomesSkipped += 1;
+        else summary.expensesSkipped += 1;
         continue;
       }
 
-      const remappedAccountId = inc.accountId != null
-        ? (accountIdRemap.get(inc.accountId) ?? inc.accountId)
-        : null;
+      const accountId = accountIdRemap.get(tx.accountId) ?? tx.accountId ?? fallbackAccount?.id;
+      const fallbackCategory = tx.type === 'INCOME' ? fallbackIncomeCategory : fallbackExpenseCategory;
+      const categoryId = categoryIdRemap.get(tx.categoryId) ?? tx.categoryId ?? fallbackCategory?.id;
+      if (!accountId || !categoryId) continue;
 
-      await db.runAsync(
-        'INSERT INTO incomes (amount, category, note, createdAt, monthKey, accountId) VALUES (?, ?, ?, ?, ?, ?)',
-        [inc.amount, inc.category, inc.note ?? null, inc.createdAt, inc.monthKey || toMonthKey(inc.createdAt), remappedAccountId],
+      const result = await db.runAsync(
+        `INSERT INTO transactions
+           (accountId, categoryId, type, amountMinor, currencyCode, title, note, transactionDate, createdAt, updatedAt, deletedAt)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          accountId,
+          categoryId,
+          tx.type,
+          tx.amountMinor,
+          tx.currencyCode ?? 'EGP',
+          tx.title ?? null,
+          tx.note ?? null,
+          tx.transactionDate,
+          tx.createdAt ?? tx.transactionDate,
+          tx.updatedAt ?? null,
+          tx.deletedAt ?? null,
+        ],
       );
-      incomeFingerprints.add(fp);
-      summary.incomesAdded += 1;
+      transactionIdRemap.set(tx.id, result.lastInsertRowId);
+      transactionFingerprints.add(fp);
+      if (tx.type === 'INCOME') summary.incomesAdded += 1;
+      else summary.expensesAdded += 1;
     }
 
-    // ── Transfers ────────────────────────────────────────────
-    const existingTransfers = await db.getAllAsync<Transfer>('SELECT * FROM transfers');
+    for (const item of data.transactionItems) {
+      const transactionId = transactionIdRemap.get(item.transactionId);
+      if (!transactionId || !item?.name || typeof item.amountMinor !== 'number') continue;
+      await db.runAsync(
+        `INSERT INTO transaction_items
+           (transactionId, categoryId, name, amountMinor, quantity, note, sortOrder, createdAt, updatedAt)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          transactionId,
+          item.categoryId != null ? (categoryIdRemap.get(item.categoryId) ?? item.categoryId) : null,
+          item.name,
+          item.amountMinor,
+          item.quantity ?? null,
+          item.note ?? null,
+          item.sortOrder ?? 0,
+          item.createdAt ?? nowIso(),
+          item.updatedAt ?? null,
+        ],
+      );
+    }
+
+    const existingTransfers = await db.getAllAsync<BackupTransfer>(
+      'SELECT * FROM transfers',
+    );
     const transferFingerprints = new Set(
-      existingTransfers.map((t) => `${t.createdAt}|${t.amount}|${t.fromAccountId}|${t.toAccountId}`),
+      existingTransfers.map((t) => `${t.transferDate}|${t.amountMinor}|${t.fromAccountId}|${t.toAccountId}`),
     );
 
-    for (const tr of (data.transfers ?? [])) {
-      if (!tr?.createdAt || typeof tr.amount !== 'number') continue;
+    for (const tr of data.transfers) {
+      if (!tr?.transferDate || typeof tr.amountMinor !== 'number') continue;
 
       const remappedFrom = accountIdRemap.get(tr.fromAccountId) ?? tr.fromAccountId;
-      const remappedTo   = accountIdRemap.get(tr.toAccountId)   ?? tr.toAccountId;
-      const fp = `${tr.createdAt}|${tr.amount}|${remappedFrom}|${remappedTo}`;
+      const remappedTo = accountIdRemap.get(tr.toAccountId) ?? tr.toAccountId;
+      const remappedFee = tr.feeAccountId != null
+        ? (accountIdRemap.get(tr.feeAccountId) ?? tr.feeAccountId)
+        : null;
+      const fp = `${tr.transferDate}|${tr.amountMinor}|${remappedFrom}|${remappedTo}`;
 
       if (transferFingerprints.has(fp)) {
         summary.transfersSkipped += 1;
@@ -224,14 +277,27 @@ export async function mergeBackupIntoDatabase(data: DatabaseBackupData): Promise
       }
 
       await db.runAsync(
-        'INSERT INTO transfers (fromAccountId, toAccountId, amount, note, createdAt, monthKey) VALUES (?, ?, ?, ?, ?, ?)',
-        [remappedFrom, remappedTo, tr.amount, tr.note ?? null, tr.createdAt, tr.monthKey || toMonthKey(tr.createdAt)],
+        `INSERT INTO transfers
+           (fromAccountId, toAccountId, amountMinor, currencyCode, feeAmountMinor, feeAccountId, note, transferDate, createdAt, updatedAt, deletedAt)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          remappedFrom,
+          remappedTo,
+          tr.amountMinor,
+          tr.currencyCode ?? 'EGP',
+          tr.feeAmountMinor ?? 0,
+          remappedFee,
+          tr.note ?? null,
+          tr.transferDate,
+          tr.createdAt ?? tr.transferDate,
+          tr.updatedAt ?? null,
+          tr.deletedAt ?? null,
+        ],
       );
       transferFingerprints.add(fp);
       summary.transfersAdded += 1;
     }
 
-    // ── Settings ────────────────────────────────────────────
     for (const row of data.settings) {
       if (!row?.key) continue;
       await db.runAsync(
@@ -240,30 +306,8 @@ export async function mergeBackupIntoDatabase(data: DatabaseBackupData): Promise
       );
       summary.settingsMerged += 1;
     }
-
-    // Recalculate all account balances after merge to ensure consistency
-    const accounts = await db.getAllAsync<{ id: number; openingBalance: number }>(
-      'SELECT id, openingBalance FROM accounts',
-    );
-    const now = nowIso();
-    for (const acc of accounts) {
-      const txRow = await db.getFirstAsync<{ txDelta: number }>(
-        `SELECT
-           (SELECT COALESCE(SUM(amount), 0) FROM incomes WHERE accountId = ?) -
-           (SELECT COALESCE(SUM(price),  0) FROM expenses WHERE accountId = ?) +
-           (SELECT COALESCE(SUM(amount), 0) FROM transfers WHERE toAccountId = ?) -
-           (SELECT COALESCE(SUM(amount), 0) FROM transfers WHERE fromAccountId = ?)
-         AS txDelta`,
-        [acc.id, acc.id, acc.id, acc.id],
-      );
-      await db.runAsync('UPDATE accounts SET currentBalance = ?, updatedAt = ? WHERE id = ?', [
-        acc.openingBalance + (txRow?.txDelta ?? 0),
-        now,
-        acc.id,
-      ]);
-    }
   });
 
+  await recalculateAccountBalances();
   return summary;
 }
-
