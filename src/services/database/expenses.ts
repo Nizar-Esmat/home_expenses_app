@@ -220,6 +220,17 @@ export async function getExpensesByMonth(monthKey: string): Promise<Expense[]> {
   return expenses;
 }
 
+export async function getExpenseById(id: number): Promise<Expense | null> {
+  const db = await getDb();
+  const expenses = await db.getAllAsync<ExpenseRow>(
+    `${EXPENSE_SELECT} AND t.id=? LIMIT 1`,
+    [id],
+  );
+  if (expenses.length === 0) return null;
+  await attachSubExpenses(expenses);
+  return expenses[0] ?? null;
+}
+
 export async function getAllExpenses(): Promise<Expense[]> {
   const db = await getDb();
   const expenses = await db.getAllAsync<ExpenseRow>(
