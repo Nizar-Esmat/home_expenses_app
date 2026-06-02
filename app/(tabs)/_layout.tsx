@@ -1,18 +1,39 @@
 import { Tabs, usePathname, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/theme/ThemeContext';
-import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  StyleSheet,
+  Platform,
+} from 'react-native';
 
 const TAB_ITEMS = [
-  { name: 'home', title: 'Home', icon: 'home' as const, iconOutline: 'home-outline' as const },
-  { name: 'statistics', title: 'Statistics', icon: 'stats-chart' as const, iconOutline: 'stats-chart-outline' as const },
-  { name: 'settings', title: 'Settings', icon: 'settings' as const, iconOutline: 'settings-outline' as const },
+  {
+    name: 'home',
+    title: 'Home',
+    icon: 'home' as const,
+    iconOutline: 'home-outline' as const,
+  },
+  {
+    name: 'statistics',
+    title: 'Statistics',
+    icon: 'stats-chart' as const,
+    iconOutline: 'stats-chart-outline' as const,
+  },
+  {
+    name: 'settings',
+    title: 'Settings',
+    icon: 'settings' as const,
+    iconOutline: 'settings-outline' as const,
+  },
 ];
 
 function FloatingTabBar() {
   const { colors, isDark } = useTheme();
   const pathname = usePathname();
-  
+
   const tabBarBg = isDark ? '#0A0A0A' : '#FFFFFF';
   const selectedBg = isDark ? colors.primary + '30' : colors.primary + '20';
 
@@ -33,15 +54,23 @@ function FloatingTabBar() {
           return (
             <TouchableOpacity
               key={item.name}
-              style={[styles.tabItem, isActive && { backgroundColor: selectedBg }]}
+              style={[
+                styles.tabItem,
+                isActive && { backgroundColor: selectedBg },
+              ]}
               onPress={() => router.push(`/${item.name}` as any)}
             >
               <Ionicons
                 name={isActive ? item.icon : item.iconOutline}
-                size={22}
+                size={24}
                 color={isActive ? colors.primary : colors.textSecondary}
               />
-              <Text style={[styles.tabLabel, { color: isActive ? colors.primary : colors.textSecondary }]}>
+              <Text
+                style={[
+                  styles.tabLabel,
+                  { color: isActive ? colors.primary : colors.textSecondary },
+                ]}
+              >
                 {item.title}
               </Text>
             </TouchableOpacity>
@@ -62,9 +91,9 @@ export default function TabsLayout() {
           tabBarButton: () => null,
         }}
       >
-        <Tabs.Screen name="home" />
-        <Tabs.Screen name="statistics" />
-        <Tabs.Screen name="settings" />
+        <Tabs.Screen name='home' />
+        <Tabs.Screen name='statistics' />
+        <Tabs.Screen name='settings' />
       </Tabs>
       <FloatingTabBar />
     </View>
@@ -74,19 +103,18 @@ export default function TabsLayout() {
 const styles = StyleSheet.create({
   wrapper: {
     position: 'absolute',
-    bottom: Platform.OS === 'ios' ? 34 : 20,
-    left: 0,
-    right: 0,
+    bottom: 16,
+    left: 20,
+    right: 20,
     alignItems: 'center',
   },
   tabBar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-evenly',
-    height: 70,
-    width: '92%',
-    maxWidth: 400,
-    borderRadius: 24,
+    height: 78,
+    width: '100%',
+    borderRadius: 20,
     paddingHorizontal: 4,
     ...Platform.select({
       ios: {
@@ -104,15 +132,13 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 8,
+    height: 66,
     marginHorizontal: 2,
-    borderRadius: 16,
-    height: 52,
-    maxWidth: 120,
+    borderRadius: 18,
   },
   tabLabel: {
-    fontSize: 11,
-    fontWeight: '600',
-    marginTop: 4,
+    fontSize: 12,
+    fontWeight: '500',
+    marginTop: 2,
   },
 });

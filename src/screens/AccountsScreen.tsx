@@ -5,7 +5,16 @@ import {
 import { useFocusEffect, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/theme/ThemeContext';
-import { getAccounts, archiveAccount, unarchiveAccount, canDeleteAccount, recalculateAccountBalances, setFavoriteBankAccount } from '@/services/database';
+import {
+  getAccounts,
+  archiveAccount,
+  unarchiveAccount,
+  canDeleteAccount,
+  recalculateAccountBalances,
+  setFavoriteBankAccount,
+  getSettings,
+  saveSettings,
+} from '@/services/database';
 import { Account, AccountType } from '@/types';
 import { ACCOUNT_TYPE_LABELS, ACCOUNT_TYPE_ICONS } from '@/components/AccountPicker';
 import { useAppDialog } from '@/components/AppDialog';
@@ -30,11 +39,19 @@ export default function AccountsScreen() {
   const router = useRouter();
   const { showDialog } = useAppDialog();
   const [accounts, setAccounts] = useState<Account[]>([]);
+  const [homeAccountIds, setHomeAccountIds] = useState<number[]>([]);
 
   const load = useCallback(async () => {
     await recalculateAccountBalances();
-    const all = await getAccounts();
+    const [all, settings] = await Promise.all([getAccounts(), getSettings()]);
     setAccounts(all);
+    const validIds = (settings.homeAccountIds ?? [])
+      .filter((id) => all.some((a) => a.id === id && a.isArchived === 0 && a.type !== 'cash'))
+      .slice(0, 2);
+    setHomeAccountIds(validIds);
+    if ((settings.homeAccountIds ?? []).join(',') !== validIds.join(',')) {
+      saveSettings({ homeAccountIds: validIds });
+    }
   }, []);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
@@ -112,9 +129,53 @@ export default function AccountsScreen() {
   const active  = accounts.filter((a) => a.isArchived === 0);
   const archived = accounts.filter((a) => a.isArchived === 1);
 
+  const handleToggleHome = async (acc: Account) => {
+    if (acc.type === 'cash') return;
+    const isPinned = homeAccountIds.includes(acc.id);
+    if (acc.isArchived === 1 && !isPinned) return;
+    if (isPinned) {
+      const updated = homeAccountIds.filter((id) => id !== acc.id);
+      setHomeAccountIds(updated);
+      await saveSettings({ homeAccountIds: updated });
+      return;
+    }
+    const activePinnedIds = homeAccountIds
+      .filter((id) => accounts.some((a) => a.id === id && a.isArchived === 0 && a.type !== 'cash'));
+    if (activePinnedIds.length < 2) {
+      const updated = [...activePinnedIds, acc.id];
+      setHomeAccountIds(updated);
+      await saveSettings({ homeAccountIds: updated });
+      return;
+    }
+
+    const current = activePinnedIds
+      .map((id) => accounts.find((a) => a.id === id && a.isArchived === 0))
+      .filter((a): a is Account => Boolean(a));
+
+    showDialog({
+      title: 'Replace Home Account',
+      message: 'You can show only 2 accounts on Home (cash is always included). Choose one to replace.',
+      icon: '🏷️',
+      type: 'info',
+      buttons: [
+        { text: 'Cancel', style: 'cancel' },
+        ...current.map((c) => ({
+          text: c.name,
+          style: 'default' as const,
+          onPress: async () => {
+            const updated = activePinnedIds.filter((id) => id !== c.id).concat(acc.id);
+            setHomeAccountIds(updated);
+            await saveSettings({ homeAccountIds: updated });
+          },
+        })),
+      ],
+    });
+  };
+
   const renderCard = (acc: Account) => {
     const accentColor = acc.color ?? colors.primary;
     const balanceColor = acc.currentBalance >= 0 ? colors.success : colors.danger;
+    const isPinnedHome = homeAccountIds.includes(acc.id);
 
     return (
       <View key={acc.id} style={[styles.card, { backgroundColor: colors.card }]}>
@@ -147,6 +208,21 @@ export default function AccountsScreen() {
         <View style={[styles.cardDivider, { backgroundColor: colors.border }]} />
 
         <View style={styles.cardActions}>
+          {acc.type !== 'cash' && (acc.isArchived === 0 || isPinnedHome) && (
+            <TouchableOpacity
+              style={styles.actionBtn}
+              onPress={() => handleToggleHome(acc)}
+            >
+              <Ionicons
+                name={isPinnedHome ? 'home' : 'home-outline'}
+                size={16}
+                color={isPinnedHome ? colors.primary : colors.textSecondary}
+              />
+              <Text style={[styles.actionLabel, { color: isPinnedHome ? colors.primary : colors.textSecondary }]}> 
+                {isPinnedHome ? 'On Home' : 'Show on Home'}
+              </Text>
+            </TouchableOpacity>
+          )}
           <TouchableOpacity
             style={styles.actionBtn}
             onPress={() => router.push({ pathname: '/add-account', params: { accountId: String(acc.id) } })}

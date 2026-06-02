@@ -114,6 +114,20 @@ export interface Settings {
   colorPalette?: string;
   customCategories: string[];
   customCategoryEmojis: Record<string, string>;
+  homeAccountIds?: number[];
+}
+
+export interface HomeTransaction {
+  id: number;
+  type: 'expense' | 'income' | 'transfer';
+  category: string;
+  emoji: string;
+  amount: number;
+  note: string | null;
+  createdAt: string;
+  accountId: number | null;
+  accountName: string;
+  accountIcon: string | null;
 }
 
 export interface MonthSummary {

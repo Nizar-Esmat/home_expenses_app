@@ -1,6 +1,7 @@
 import { View, ActivityIndicator } from 'react-native';
 import { Stack } from 'expo-router';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useFonts } from 'expo-font';
 import { Ionicons } from '@expo/vector-icons';
 import { ThemeProvider, useTheme } from '@/theme/ThemeContext';
@@ -23,6 +24,7 @@ function RootLayoutNav() {
         <Stack.Screen name="accounts" />
         <Stack.Screen name="add-account" />
         <Stack.Screen name="transfer" />
+        <Stack.Screen name="transfers" />
       </Stack>
     </DialogProvider>
   );
@@ -43,9 +45,11 @@ export default function RootLayout() {
 
   return (
     <SafeAreaProvider>
-      <ThemeProvider>
-        <RootLayoutNav />
-      </ThemeProvider>
+      <GestureHandlerRootView style={{ flex: 1 }}>
+        <ThemeProvider>
+          <RootLayoutNav />
+        </ThemeProvider>
+      </GestureHandlerRootView>
     </SafeAreaProvider>
   );
 }
