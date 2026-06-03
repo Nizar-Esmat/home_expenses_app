@@ -1,6 +1,6 @@
 import { Transfer } from '@/types';
 import { getDb } from './client';
-import { nowIso, toMinorUnits } from './helpers';
+import { nowIso, toMinorUnits, tzMonthKey } from './helpers';
 import { recalculateBalance } from './accounts';
 
 interface TransferRow {
@@ -28,7 +28,7 @@ const TRANSFER_SELECT = `
     feeAccountId,
     note,
     transferDate AS createdAt,
-    substr(transferDate, 1, 7) AS monthKey,
+    ${tzMonthKey('transferDate')} AS monthKey,
     transferDate,
     updatedAt,
     deletedAt
@@ -83,7 +83,7 @@ export async function deleteTransfer(id: number): Promise<void> {
 export async function getTransfersByMonth(monthKey: string): Promise<Transfer[]> {
   const db = await getDb();
   return db.getAllAsync<TransferRow>(
-    `${TRANSFER_SELECT} AND substr(transferDate, 1, 7) = ? ORDER BY transferDate DESC, id DESC`,
+    `${TRANSFER_SELECT} AND ${tzMonthKey('transferDate')} = ? ORDER BY transferDate DESC, id DESC`,
     [monthKey],
   );
 }
@@ -91,4 +91,15 @@ export async function getTransfersByMonth(monthKey: string): Promise<Transfer[]>
 export async function getAllTransfers(): Promise<Transfer[]> {
   const db = await getDb();
   return db.getAllAsync<TransferRow>(`${TRANSFER_SELECT} ORDER BY transferDate DESC, id DESC`);
+}
+
+export async function getAvailableTransferMonthKeys(): Promise<string[]> {
+  const db = await getDb();
+  const rows = await db.getAllAsync<{ monthKey: string }>(
+    `SELECT DISTINCT ${tzMonthKey('transferDate')} AS monthKey
+     FROM transfers
+     WHERE deletedAt IS NULL
+     ORDER BY monthKey DESC`,
+  );
+  return rows.map((r) => r.monthKey);
 }

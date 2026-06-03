@@ -21,11 +21,22 @@ export async function getSettings(): Promise<Settings> {
   );
   const map: Record<string, string> = {};
   rows.forEach((r) => (map[r.key] = r.value));
+  let homeAccountIds: unknown = undefined;
+  if (map['homeAccountIds']) {
+    try {
+      homeAccountIds = JSON.parse(map['homeAccountIds']);
+    } catch {
+      homeAccountIds = undefined;
+    }
+  }
   return {
     currency: map['currency'] ?? 'EGP',
     themeMode: (map['themeMode'] as Settings['themeMode']) ?? 'dark',
     customCategories: map['customCategories'] ? JSON.parse(map['customCategories']) : [],
     customCategoryEmojis: map['customCategoryEmojis'] ? JSON.parse(map['customCategoryEmojis']) : {},
+    homeAccountIds: Array.isArray(homeAccountIds)
+      ? homeAccountIds.map((id: unknown) => Number(id)).filter((id: number) => Number.isFinite(id))
+      : undefined,
   };
 }
 

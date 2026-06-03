@@ -1,6 +1,6 @@
 import { Expense, SubExpense, SubExpenseInput } from '@/types';
 import { getDb } from './client';
-import { nowIso, toMinorUnits } from './helpers';
+import { nowIso, toMinorUnits, tzMonthKey } from './helpers';
 import { recalculateBalance } from './accounts';
 
 interface ExpenseRow {
@@ -28,7 +28,7 @@ const EXPENSE_SELECT = `
     c.name AS category,
     t.note,
     t.transactionDate AS createdAt,
-    substr(t.transactionDate, 1, 7) AS monthKey,
+    ${tzMonthKey('t.transactionDate')} AS monthKey,
     t.accountId
   FROM transactions t
   JOIN categories c ON c.id = t.categoryId
@@ -213,8 +213,22 @@ export async function deleteExpense(id: number): Promise<void> {
 export async function getExpensesByMonth(monthKey: string): Promise<Expense[]> {
   const db = await getDb();
   const expenses = await db.getAllAsync<ExpenseRow>(
-    `${EXPENSE_SELECT} AND substr(t.transactionDate, 1, 7)=? ORDER BY t.transactionDate DESC, t.id DESC`,
+    `${EXPENSE_SELECT} AND ${tzMonthKey('t.transactionDate')}=? ORDER BY t.transactionDate DESC, t.id DESC`,
     [monthKey],
+  );
+  await attachSubExpenses(expenses);
+  return expenses;
+}
+
+export async function getExpensesByMonthPaged(
+  monthKey: string,
+  limit: number,
+  offset: number,
+): Promise<Expense[]> {
+  const db = await getDb();
+  const expenses = await db.getAllAsync<ExpenseRow>(
+    `${EXPENSE_SELECT} AND ${tzMonthKey('t.transactionDate')}=? ORDER BY t.transactionDate DESC, t.id DESC LIMIT ? OFFSET ?`,
+    [monthKey, limit, offset],
   );
   await attachSubExpenses(expenses);
   return expenses;
@@ -231,10 +245,37 @@ export async function getExpenseById(id: number): Promise<Expense | null> {
   return expenses[0] ?? null;
 }
 
+export async function getExpenseTotalByMonth(monthKey: string): Promise<number> {
+  const db = await getDb();
+  const row = await db.getFirstAsync<{ total: number }>(
+    `SELECT COALESCE(SUM(amountMinor), 0) / 100.0 AS total FROM transactions WHERE type = 'EXPENSE' AND deletedAt IS NULL AND ${tzMonthKey('transactionDate')} = ?`,
+    [monthKey],
+  );
+  return row?.total ?? 0;
+}
+
 export async function getAllExpenses(): Promise<Expense[]> {
   const db = await getDb();
   const expenses = await db.getAllAsync<ExpenseRow>(
     `${EXPENSE_SELECT} ORDER BY t.transactionDate DESC, t.id DESC`,
+  );
+  await attachSubExpenses(expenses);
+  return expenses;
+}
+
+export async function getExpenseTotalAll(): Promise<number> {
+  const db = await getDb();
+  const row = await db.getFirstAsync<{ total: number }>(
+    "SELECT COALESCE(SUM(amountMinor), 0) / 100.0 AS total FROM transactions WHERE type = 'EXPENSE' AND deletedAt IS NULL",
+  );
+  return row?.total ?? 0;
+}
+
+export async function getAllExpensesPaged(limit: number, offset: number): Promise<Expense[]> {
+  const db = await getDb();
+  const expenses = await db.getAllAsync<ExpenseRow>(
+    `${EXPENSE_SELECT} ORDER BY t.transactionDate DESC, t.id DESC LIMIT ? OFFSET ?`,
+    [limit, offset],
   );
   await attachSubExpenses(expenses);
   return expenses;

@@ -1,6 +1,6 @@
 import { Income, MonthSummary } from '@/types';
 import { getDb } from './client';
-import { nowIso, toMinorUnits } from './helpers';
+import { nowIso, toMinorUnits, tzMonthKey } from './helpers';
 import { recalculateBalance } from './accounts';
 
 interface IncomeRow {
@@ -20,7 +20,7 @@ const INCOME_SELECT = `
     c.name AS category,
     t.note,
     t.transactionDate AS createdAt,
-    substr(t.transactionDate, 1, 7) AS monthKey,
+    ${tzMonthKey('t.transactionDate')} AS monthKey,
     t.accountId
   FROM transactions t
   JOIN categories c ON c.id = t.categoryId
@@ -131,8 +131,29 @@ export async function deleteIncome(id: number): Promise<void> {
 export async function getIncomesByMonth(monthKey: string): Promise<Income[]> {
   const db = await getDb();
   return db.getAllAsync<IncomeRow>(
-    `${INCOME_SELECT} AND substr(t.transactionDate, 1, 7)=? ORDER BY t.transactionDate DESC, t.id DESC`,
+    `${INCOME_SELECT} AND ${tzMonthKey('t.transactionDate')}=? ORDER BY t.transactionDate DESC, t.id DESC`,
     [monthKey],
+  );
+}
+
+export async function getIncomeTotalByMonth(monthKey: string): Promise<number> {
+  const db = await getDb();
+  const row = await db.getFirstAsync<{ total: number }>(
+    `SELECT COALESCE(SUM(amountMinor), 0) / 100.0 AS total FROM transactions WHERE type = 'INCOME' AND deletedAt IS NULL AND ${tzMonthKey('transactionDate')} = ?`,
+    [monthKey],
+  );
+  return row?.total ?? 0;
+}
+
+export async function getIncomesByMonthPaged(
+  monthKey: string,
+  limit: number,
+  offset: number,
+): Promise<Income[]> {
+  const db = await getDb();
+  return db.getAllAsync<IncomeRow>(
+    `${INCOME_SELECT} AND ${tzMonthKey('t.transactionDate')}=? ORDER BY t.transactionDate DESC, t.id DESC LIMIT ? OFFSET ?`,
+    [monthKey, limit, offset],
   );
 }
 
@@ -143,10 +164,26 @@ export async function getAllIncomes(): Promise<Income[]> {
   );
 }
 
+export async function getIncomeTotalAll(): Promise<number> {
+  const db = await getDb();
+  const row = await db.getFirstAsync<{ total: number }>(
+    "SELECT COALESCE(SUM(amountMinor), 0) / 100.0 AS total FROM transactions WHERE type = 'INCOME' AND deletedAt IS NULL",
+  );
+  return row?.total ?? 0;
+}
+
+export async function getAllIncomesPaged(limit: number, offset: number): Promise<Income[]> {
+  const db = await getDb();
+  return db.getAllAsync<IncomeRow>(
+    `${INCOME_SELECT} ORDER BY t.transactionDate DESC, t.id DESC LIMIT ? OFFSET ?`,
+    [limit, offset],
+  );
+}
+
 export async function getAvailableMonthKeys(): Promise<string[]> {
   const db = await getDb();
   const rows = await db.getAllAsync<{ monthKey: string }>(
-    `SELECT DISTINCT substr(transactionDate, 1, 7) AS monthKey
+    `SELECT DISTINCT ${tzMonthKey('transactionDate')} AS monthKey
      FROM transactions
      WHERE deletedAt IS NULL
      ORDER BY monthKey DESC`,
@@ -164,13 +201,13 @@ export async function getMonthHistory(): Promise<MonthSummary[]> {
     count: number;
   }>(
     `SELECT
-       substr(transactionDate, 1, 7) AS monthKey,
+       ${tzMonthKey('transactionDate')} AS monthKey,
        COALESCE(SUM(CASE WHEN type = 'EXPENSE' THEN amountMinor ELSE 0 END), 0) / 100.0 AS totalSpent,
        COALESCE(SUM(CASE WHEN type = 'INCOME' THEN amountMinor ELSE 0 END), 0) / 100.0 AS totalIncome,
        SUM(CASE WHEN type = 'EXPENSE' THEN 1 ELSE 0 END) AS count
      FROM transactions
      WHERE deletedAt IS NULL
-     GROUP BY substr(transactionDate, 1, 7)
+      GROUP BY ${tzMonthKey('transactionDate')}
      ORDER BY monthKey DESC`,
   );
 

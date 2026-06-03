@@ -63,6 +63,7 @@ export const EMOJI_GROUPS: { label: string; icon: string; emojis: string[] }[] =
 ];
 
 export function monthKeyToLabel(monthKey: string): string {
+  if (monthKey === 'ALL') return 'All Time';
   const [year, month] = monthKey.split('-');
   const date = new Date(parseInt(year), parseInt(month) - 1, 1);
   return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
