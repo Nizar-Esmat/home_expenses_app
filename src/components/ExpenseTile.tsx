@@ -18,8 +18,14 @@ interface Props {
 }
 
 export default function ExpenseTile({
-  expense, currency, categoryEmoji, categoryColor, onEdit, onDelete,
-  accountName, accountIcon,
+  expense,
+  currency,
+  categoryEmoji,
+  categoryColor,
+  onEdit,
+  onDelete,
+  accountName,
+  accountIcon,
 }: Props) {
   const { colors } = useTheme();
   const { showDialog } = useAppDialog();
@@ -39,8 +45,12 @@ export default function ExpenseTile({
     });
 
   return (
-    <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
-
+    <View
+      style={[
+        styles.card,
+        { backgroundColor: colors.card, borderColor: colors.border },
+      ]}
+    >
       {/* ── Main row ──────────────────────────────────────── */}
       <View style={styles.mainRow}>
         <View style={[styles.badge, { backgroundColor: categoryColor }]}>
@@ -48,17 +58,31 @@ export default function ExpenseTile({
         </View>
 
         <View style={styles.info}>
-          <Text style={[styles.category, { color: colors.textPrimary }]}>{expense.category}</Text>
+          <Text style={[styles.category, { color: colors.textPrimary }]}>
+            {expense.category}
+          </Text>
           {expense.note ? (
-            <Text style={[styles.note, { color: colors.textSecondary }]} numberOfLines={1}>
+            <Text
+              style={[styles.note, { color: colors.textSecondary }]}
+              numberOfLines={1}
+            >
               {expense.note}
             </Text>
           ) : null}
-          <Text style={[styles.date, { color: colors.textSecondary }]}>{formatDate(expense.createdAt)}</Text>
+          <Text style={[styles.date, { color: colors.textSecondary }]}>
+            {formatDate(expense.createdAt)}
+          </Text>
           {accountName ? (
             <View style={styles.accountChip}>
               <Text style={styles.accountChipIcon}>{accountIcon ?? '💳'}</Text>
-              <Text style={[styles.accountChipText, { color: colors.textSecondary }]}>{accountName}</Text>
+              <Text
+                style={[
+                  styles.accountChipText,
+                  { color: colors.textSecondary },
+                ]}
+              >
+                {accountName}
+              </Text>
             </View>
           ) : null}
         </View>
@@ -68,11 +92,23 @@ export default function ExpenseTile({
         </Text>
 
         <View style={styles.actions}>
-          <TouchableOpacity onPress={onEdit} style={styles.action} hitSlop={{ top:8,bottom:8,left:8,right:8 }}>
-            <Ionicons name="pencil-outline" size={18} color={colors.textSecondary} />
+          <TouchableOpacity
+            onPress={onEdit}
+            style={styles.action}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Ionicons
+              name='pencil-outline'
+              size={18}
+              color={colors.textSecondary}
+            />
           </TouchableOpacity>
-          <TouchableOpacity onPress={confirmDelete} style={styles.action} hitSlop={{ top:8,bottom:8,left:8,right:8 }}>
-            <Ionicons name="trash-outline" size={18} color={colors.danger} />
+          <TouchableOpacity
+            onPress={confirmDelete}
+            style={styles.action}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Ionicons name='trash-outline' size={18} color={colors.danger} />
           </TouchableOpacity>
         </View>
       </View>
@@ -90,24 +126,27 @@ export default function ExpenseTile({
               size={13}
               color={colors.textSecondary}
             />
-            <Text style={[styles.subToggleText, { color: colors.textSecondary }]}>
+            <Text
+              style={[styles.subToggleText, { color: colors.textSecondary }]}
+            >
               {subs.length} item{subs.length !== 1 ? 's' : ''}
             </Text>
           </TouchableOpacity>
 
-          {expanded && subs.map((sub, i) => (
-            <View key={i} style={styles.subRow}>
-              <Text
-                style={[styles.subTitle, { color: colors.textSecondary }]}
-                numberOfLines={1}
-              >
-                {sub.title}
-              </Text>
-              <Text style={[styles.subAmount, { color: colors.danger }]}>
-                -{formatCurrency(sub.amount, currency)}
-              </Text>
-            </View>
-          ))}
+          {expanded &&
+            subs.map((sub, i) => (
+              <View key={i} style={styles.subRow}>
+                <Text
+                  style={[styles.subTitle, { color: colors.textSecondary }]}
+                  numberOfLines={1}
+                >
+                  {sub.title}
+                </Text>
+                <Text style={[styles.subAmount, { color: colors.danger }]}>
+                  -{formatCurrency(sub.amount, currency)}
+                </Text>
+              </View>
+            ))}
         </View>
       )}
     </View>
@@ -116,37 +155,60 @@ export default function ExpenseTile({
 
 const styles = StyleSheet.create({
   card: {
-    borderRadius: 14, borderWidth: 1, marginBottom: 10, overflow: 'hidden',
+    borderRadius: 14,
+    borderWidth: 1,
+    marginBottom: 10,
+    overflow: 'hidden',
   },
   mainRow: {
-    flexDirection: 'row', alignItems: 'center', padding: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 14,
   },
   badge: {
-    width: 44, height: 44, borderRadius: 22,
-    alignItems: 'center', justifyContent: 'center', marginRight: 12,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
   },
   emoji: { fontSize: 22 },
   info: { flex: 1 },
   category: { fontSize: 15, fontWeight: '600' },
   note: { fontSize: 13, marginTop: 2 },
   date: { fontSize: 12, marginTop: 2 },
-  accountChip: { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 3 },
+  accountChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    marginTop: 3,
+  },
   accountChipIcon: { fontSize: 11 },
   accountChipText: { fontSize: 11 },
   price: { fontSize: 15, fontWeight: '700', marginRight: 8 },
   actions: { flexDirection: 'row' },
   action: { padding: 4, marginLeft: 4 },
   subSection: {
-    borderTopWidth: 1, paddingHorizontal: 14, paddingBottom: 10, paddingTop: 8,
+    borderTopWidth: 1,
+    paddingHorizontal: 14,
+    paddingBottom: 10,
+    paddingTop: 8,
   },
   subToggle: {
-    flexDirection: 'row', alignItems: 'center', gap: 4,
-    alignSelf: 'flex-start', marginBottom: 2,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    alignSelf: 'flex-start',
+    marginBottom: 2,
   },
   subToggleText: { fontSize: 12, fontWeight: '600' },
   subRow: {
-    flexDirection: 'row', alignItems: 'center',
-    justifyContent: 'space-between', paddingVertical: 4, paddingLeft: 17,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 4,
+    paddingLeft: 17,
   },
   subTitle: { flex: 1, fontSize: 13, marginRight: 8 },
   subAmount: { fontSize: 13, fontWeight: '600' },
