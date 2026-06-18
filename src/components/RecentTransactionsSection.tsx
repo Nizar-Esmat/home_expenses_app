@@ -3,8 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/theme/ThemeContext';
 import { HomeTransaction } from '@/types';
-import { formatCurrency, formatDate } from '@/services/constants';
-import SwipeableTransactionRow from '@/components/SwipeableTransactionRow';
+import TransactionRow from '@/components/TransactionRow';
 import { useAppDialog } from '@/components/AppDialog';
 
 interface Props {
@@ -56,7 +55,7 @@ export default function RecentTransactionsSection({
         </View>
         <TouchableOpacity style={styles.headerAction} onPress={onSeeAll}>
           <Text style={[styles.headerActionText, { color: colors.primary }]}>
-            See all
+            View all
           </Text>
           <Ionicons name='chevron-forward' size={16} color={colors.primary} />
         </TouchableOpacity>
@@ -78,51 +77,14 @@ export default function RecentTransactionsSection({
         </View>
       ) : (
         transactions.map((tx, index) => (
-          <React.Fragment key={`${tx.type}-${tx.id}`}>
-            <SwipeableTransactionRow
-              onEdit={() => onEdit(tx)}
-              onDelete={() => handleDeleteConfirm(tx)}
-            >
-              <View style={styles.txCard}>
-                <View style={styles.txBadge}>
-                  <Text style={styles.txEmoji}>{tx.emoji}</Text>
-                </View>
-                <View style={styles.txInfo}>
-                  <Text style={styles.txTitle} numberOfLines={1}>
-                    {tx.category}
-                  </Text>
-                  <Text style={styles.txMeta} numberOfLines={1}>
-                    {formatDate(tx.createdAt)} · {tx.accountName}
-                  </Text>
-                </View>
-                <Text
-                  style={[
-                    styles.txAmount,
-                    {
-                      color:
-                        tx.type === 'expense'
-                          ? '#EF4444'
-                          : tx.type === 'income'
-                            ? '#10B981'
-                            : '#F8FAFC',
-                    },
-                  ]}
-                >
-                  {tx.type === 'expense'
-                    ? '-'
-                    : tx.type === 'income'
-                      ? '+'
-                      : ''}
-                  {formatCurrency(tx.amount, currency)}
-                </Text>
-              </View>
-            </SwipeableTransactionRow>
-            {index < transactions.length - 1 && (
-              <View
-                style={[styles.txDivider, { backgroundColor: '#263247' }]}
-              />
-            )}
-          </React.Fragment>
+          <TransactionRow
+            key={`${tx.type}-${tx.id}`}
+            tx={tx}
+            currency={currency}
+            onEdit={() => onEdit(tx)}
+            onDelete={() => handleDeleteConfirm(tx)}
+            showDivider={index < transactions.length - 1}
+          />
         ))
       )}
     </View>
@@ -135,11 +97,14 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     justifyContent: 'space-between',
     marginBottom: 12,
+    borderTopWidth: 1,
+    borderColor: '#C0C0C080',
+    paddingTop: 12,
     gap: 12,
   },
   headerLeft: { flex: 1 },
   headerTitle: {
-    fontSize: 24,
+    fontSize: 20,
     lineHeight: 26,
     fontWeight: '700',
     color: '#F8FAFC',
@@ -158,46 +123,6 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   headerActionText: { fontSize: 14, fontWeight: '600' },
-  txCard: {
-    height: 80,
-    padding: 14,
-    paddingHorizontal: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  txDivider: {
-    height: 1,
-    marginHorizontal: 16,
-  },
-  txBadge: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#1A1F2E',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
-  },
-  txEmoji: { fontSize: 22 },
-  txInfo: { flex: 1, marginRight: 8 },
-  txTitle: {
-    fontSize: 16,
-    lineHeight: 21,
-    fontWeight: '700',
-    color: '#F8FAFC',
-  },
-  txMeta: {
-    fontSize: 13,
-    lineHeight: 18,
-    fontWeight: '400',
-    color: '#AAB2C0',
-    marginTop: 1,
-  },
-  txAmount: {
-    fontSize: 16,
-    lineHeight: 22,
-    fontWeight: '700',
-  },
   empty: { alignItems: 'center', paddingVertical: 32 },
   emptyText: {
     fontSize: 14,
