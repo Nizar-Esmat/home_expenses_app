@@ -13,19 +13,22 @@ function RootLayoutNav() {
   return (
     <DialogProvider>
       <StatusBar style={isDark ? 'light' : 'dark'} />
-      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.background } }}>
-        <Stack.Screen name="(tabs)" />
-        <Stack.Screen name="add-expense" options={{ presentation: 'modal' }} />
-        <Stack.Screen name="add-income" options={{ presentation: 'modal' }} />
-        <Stack.Screen name="report" />
-        <Stack.Screen name="all-transactions" />
-        <Stack.Screen name="categories" />
-        <Stack.Screen name="income-categories" />
-        <Stack.Screen name="accounts" />
-        <Stack.Screen name="add-account" />
-        <Stack.Screen name="transfer" />
-        <Stack.Screen name="transfers" />
-      </Stack>
+      <View style={{ flex: 1, backgroundColor: colors.background }}>
+        <Stack detachInactiveScreens={false} screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.background } }}>
+          <Stack.Screen name="(tabs)" />
+          <Stack.Screen name="add-expense" options={{ presentation: 'modal' }} />
+          <Stack.Screen name="add-income" options={{ presentation: 'modal' }} />
+          <Stack.Screen name="daily-spending" />
+          <Stack.Screen name="category-spending" />
+          <Stack.Screen name="all-transactions" />
+          <Stack.Screen name="categories" />
+          <Stack.Screen name="income-categories" />
+          <Stack.Screen name="accounts" />
+          <Stack.Screen name="add-account" />
+          <Stack.Screen name="transfer" />
+          <Stack.Screen name="transfers" />
+        </Stack>
+      </View>
     </DialogProvider>
   );
 }
@@ -44,12 +47,14 @@ export default function RootLayout() {
   }
 
   return (
-    <SafeAreaProvider>
-      <GestureHandlerRootView style={{ flex: 1 }}>
-        <ThemeProvider>
-          <RootLayoutNav />
-        </ThemeProvider>
-      </GestureHandlerRootView>
-    </SafeAreaProvider>
+    <View style={{ flex: 1, backgroundColor: '#091413' }}>
+      <SafeAreaProvider>
+        <GestureHandlerRootView style={{ flex: 1, backgroundColor: '#091413' }}>
+          <ThemeProvider>
+            <RootLayoutNav />
+          </ThemeProvider>
+        </GestureHandlerRootView>
+      </SafeAreaProvider>
+    </View>
   );
 }
