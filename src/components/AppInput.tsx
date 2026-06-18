@@ -1,5 +1,11 @@
 import React from 'react';
-import { View, Text, TextInput, StyleSheet, TextInputProps } from 'react-native';
+import {
+  View,
+  Text,
+  TextInput,
+  StyleSheet,
+  TextInputProps,
+} from 'react-native';
 import { useTheme } from '@/theme/ThemeContext';
 
 interface Props extends TextInputProps {
@@ -7,11 +13,19 @@ interface Props extends TextInputProps {
   error?: string;
 }
 
-export default function AppInput({ label, error, style, ...rest }: Props) {
+export default function AppInput({
+  label,
+  error,
+  style,
+  textAlign,
+  ...rest
+}: Props) {
   const { colors } = useTheme();
   return (
     <View style={styles.wrapper}>
-      <Text style={[styles.label, { color: colors.textSecondary }]}>{label}</Text>
+      <Text style={[styles.label, { color: colors.textSecondary }]}>
+        {label}
+      </Text>
       <TextInput
         style={[
           styles.input,
@@ -19,13 +33,16 @@ export default function AppInput({ label, error, style, ...rest }: Props) {
             backgroundColor: colors.inputFill,
             color: colors.textPrimary,
             borderColor: error ? colors.danger : colors.border,
+            textAlign,
           },
           style,
         ]}
         placeholderTextColor={colors.textSecondary}
         {...rest}
       />
-      {error ? <Text style={[styles.err, { color: colors.danger }]}>{error}</Text> : null}
+      {error ? (
+        <Text style={[styles.err, { color: colors.danger }]}>{error}</Text>
+      ) : null}
     </View>
   );
 }
