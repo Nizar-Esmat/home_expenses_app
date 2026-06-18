@@ -1,6 +1,8 @@
 import { Tabs, usePathname, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/theme/ThemeContext';
+import { MonthProvider } from '@/contexts/MonthContext';
+import { setTabSlideDirection } from '@/utils/tabAnimation';
 import {
   View,
   Text,
@@ -30,6 +32,12 @@ const TAB_ITEMS = [
   },
 ];
 
+function getIndexFromPathname(path: string): number {
+  if (path.includes('statistics')) return 1;
+  if (path.includes('settings')) return 2;
+  return 0;
+}
+
 function FloatingTabBar() {
   const { colors, isDark } = useTheme();
   const pathname = usePathname();
@@ -37,14 +45,7 @@ function FloatingTabBar() {
   const tabBarBg = isDark ? '#0A0A0A' : '#FFFFFF';
   const selectedBg = isDark ? colors.primary + '30' : colors.primary + '20';
 
-  const getActiveIndex = () => {
-    if (pathname.includes('home')) return 0;
-    if (pathname.includes('statistics')) return 1;
-    if (pathname.includes('settings')) return 2;
-    return 0;
-  };
-
-  const activeIndex = getActiveIndex();
+  const activeIndex = getIndexFromPathname(pathname);
 
   return (
     <View style={styles.wrapper}>
@@ -58,7 +59,11 @@ function FloatingTabBar() {
                 styles.tabItem,
                 isActive && { backgroundColor: selectedBg },
               ]}
-              onPress={() => router.push(`/${item.name}` as any)}
+              onPress={() => {
+                if (index === activeIndex) return;
+                setTabSlideDirection(activeIndex, index);
+                router.push(`/${item.name}` as any);
+              }}
             >
               <Ionicons
                 name={isActive ? item.icon : item.iconOutline}
@@ -83,20 +88,23 @@ function FloatingTabBar() {
 
 export default function TabsLayout() {
   return (
-    <View style={{ flex: 1 }}>
-      <Tabs
-        screenOptions={{
-          headerShown: false,
-          tabBarStyle: { display: 'none' },
-          tabBarButton: () => null,
-        }}
-      >
-        <Tabs.Screen name='home' />
-        <Tabs.Screen name='statistics' />
-        <Tabs.Screen name='settings' />
-      </Tabs>
-      <FloatingTabBar />
-    </View>
+    <MonthProvider>
+      <View style={{ flex: 1 }}>
+        <Tabs
+          screenOptions={{
+            headerShown: false,
+            tabBarStyle: { display: 'none' },
+            tabBarButton: () => null,
+            freezeOnBlur: false,
+          }}
+        >
+          <Tabs.Screen name='home' />
+          <Tabs.Screen name='statistics' />
+          <Tabs.Screen name='settings' />
+        </Tabs>
+        <FloatingTabBar />
+      </View>
+    </MonthProvider>
   );
 }
 
