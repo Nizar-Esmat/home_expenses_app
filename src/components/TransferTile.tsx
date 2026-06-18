@@ -73,6 +73,11 @@ export default function TransferTile({
               {transfer.note}
             </Text>
           ) : null}
+          {transfer.feeAmount && transfer.feeAmount > 0 ? (
+            <Text style={[styles.fee, { color: colors.danger }]}>
+              Fee: {formatCurrency(transfer.feeAmount, currency)}
+            </Text>
+          ) : null}
         </View>
 
         <View style={styles.right}>
@@ -109,6 +114,7 @@ const styles = StyleSheet.create({
   title: { fontSize: 14, fontWeight: '600' },
   date: { fontSize: 12, marginTop: 2 },
   note: { fontSize: 12, marginTop: 2 },
+  fee: { fontSize: 12, marginTop: 2, fontWeight: '500' },
   right: { alignItems: 'flex-end', marginLeft: 10 },
   amount: { fontSize: 14, fontWeight: '700', marginBottom: 6 },
   deleteBtn: { padding: 2 },
