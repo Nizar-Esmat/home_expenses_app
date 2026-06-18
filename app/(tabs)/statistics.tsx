@@ -1,13 +1,16 @@
 import { StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import HistoryScreen from '@/screens/HistoryScreen';
+import StatisticsScreen from '@/screens/StatisticsScreen';
 import { useTheme } from '@/theme/ThemeContext';
+import TabSlideWrapper from '@/components/TabSlideWrapper';
 
 export default function StatisticsTab() {
   const { colors } = useTheme();
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.background }]}>
-      <HistoryScreen />
+      <TabSlideWrapper>
+        <StatisticsScreen />
+      </TabSlideWrapper>
     </SafeAreaView>
   );
 }
