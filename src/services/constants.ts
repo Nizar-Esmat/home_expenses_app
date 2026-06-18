@@ -78,6 +78,22 @@ export function formatCurrency(amount: number, currency = 'EGP'): string {
   return `${currency} ${amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
+export function formatCurrencyCompact(amount: number, currency = 'EGP'): string {
+  if (Math.abs(amount) >= 1_000_000) {
+    const val = amount / 1_000_000;
+    return `${currency} ${val.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}M`;
+  }
+  if (Math.abs(amount) >= 100_000) {
+    const val = amount / 1_000;
+    return `${currency} ${val.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}k`;
+  }
+  if (Math.abs(amount) >= 10_000) {
+    const val = amount / 1_000;
+    return `${currency} ${val.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}k`;
+  }
+  return formatCurrency(amount, currency);
+}
+
 export function formatDate(iso: string): string {
   const date = new Date(iso);
   return (

@@ -123,11 +123,14 @@ export interface HomeTransaction {
   category: string;
   emoji: string;
   amount: number;
+  feeAmount?: number;
   note: string | null;
   createdAt: string;
   accountId: number | null;
   accountName: string;
   accountIcon: string | null;
+  accountColor?: string | null;
+  subExpenses?: SubExpense[];
 }
 
 export interface MonthSummary {
