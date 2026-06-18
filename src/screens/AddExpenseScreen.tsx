@@ -6,6 +6,8 @@ import {
   ScrollView,
   TouchableOpacity,
   StyleSheet,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -40,7 +42,9 @@ export default function AddExpenseScreen() {
 
   const [editExpense, setEditExpense] = useState<Expense | null>(null);
   const [price, setPrice] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
+  const [selectedCategory, setSelectedCategory] = useState<Category | null>(
+    null,
+  );
   const [note, setNote] = useState('');
   const [date, setDate] = useState(new Date());
   const [useCustomDate, setUseCustomDate] = useState(false);
@@ -48,9 +52,12 @@ export default function AddExpenseScreen() {
   const [loading, setLoading] = useState(false);
   const [categories, setCategories] = useState<Category[]>([]);
   const [subItems, setSubItems] = useState<SubItem[]>([]);
-  const [subItemErrors, setSubItemErrors] = useState<Record<string, { title?: string; amount?: string }>>({});
+  const [subItemErrors, setSubItemErrors] = useState<
+    Record<string, { title?: string; amount?: string }>
+  >({});
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [selectedAccount, setSelectedAccount] = useState<Account | null>(null);
+  const [showAllCategories, setShowAllCategories] = useState(false);
 
   const subItemCounter = useRef(0);
   const makeLocalId = () => String(++subItemCounter.current);
@@ -95,13 +102,16 @@ export default function AddExpenseScreen() {
           message: 'This expense was not found or may have been deleted.',
           icon: '⚠️',
           type: 'warning',
-          buttons: [{ text: 'OK', style: 'default', onPress: () => router.back() }],
+          buttons: [
+            { text: 'OK', style: 'default', onPress: () => router.back() },
+          ],
         });
         return;
       }
 
       setSelectedCategory(cats[0] ?? null);
-      const defaultAcct = accts.find((a) => a.isDefault === 1) ?? accts[0] ?? null;
+      const defaultAcct =
+        accts.find((a) => a.isDefault === 1) ?? accts[0] ?? null;
       setSelectedAccount(defaultAcct);
     };
     init();
@@ -122,7 +132,10 @@ export default function AddExpenseScreen() {
 
   const addSubItem = () => {
     const initialAmount = subItems.length === 0 ? price : '';
-    setSubItems((prev) => [...prev, { localId: makeLocalId(), title: '', amount: initialAmount }]);
+    setSubItems((prev) => [
+      ...prev,
+      { localId: makeLocalId(), title: '', amount: initialAmount },
+    ]);
     setSubItemErrors({});
   };
 
@@ -135,7 +148,11 @@ export default function AddExpenseScreen() {
     });
   };
 
-  const updateSubItemField = (localId: string, field: 'title' | 'amount', value: string) => {
+  const updateSubItemField = (
+    localId: string,
+    field: 'title' | 'amount',
+    value: string,
+  ) => {
     setSubItems((prev) =>
       prev.map((i) => (i.localId === localId ? { ...i, [field]: value } : i)),
     );
@@ -196,7 +213,8 @@ export default function AddExpenseScreen() {
     if (hasSubItems) {
       const subs = validateSubItems();
       if (subs === null) return;
-      finalPrice = Math.round(subs.reduce((s, i) => s + i.amount, 0) * 1e10) / 1e10;
+      finalPrice =
+        Math.round(subs.reduce((s, i) => s + i.amount, 0) * 1e10) / 1e10;
       subExpensesInput = subs;
     } else {
       const v = validate();
@@ -210,7 +228,8 @@ export default function AddExpenseScreen() {
       if (freshAcc) {
         // For edits on the same account, the old expense amount is already deducted,
         // so the effective available balance is currentBalance + oldAmount.
-        const isEditSameAccount = editExpense != null && editExpense.accountId === freshAcc.id;
+        const isEditSameAccount =
+          editExpense != null && editExpense.accountId === freshAcc.id;
         const available = isEditSameAccount
           ? freshAcc.currentBalance + editExpense!.price
           : freshAcc.currentBalance;
@@ -231,11 +250,27 @@ export default function AddExpenseScreen() {
     setLoading(true);
     try {
       const catName = selectedCategory?.name ?? 'Other';
-      const createdAt = useCustomDate ? date.toISOString() : new Date().toISOString();
+      const createdAt = useCustomDate
+        ? date.toISOString()
+        : new Date().toISOString();
       if (editExpense) {
-        await updateExpense(editExpense.id, finalPrice, catName, note.trim() || null, subExpensesInput, selectedAccount?.id ?? null);
+        await updateExpense(
+          editExpense.id,
+          finalPrice,
+          catName,
+          note.trim() || null,
+          subExpensesInput,
+          selectedAccount?.id ?? null,
+        );
       } else {
-        await addExpense(finalPrice, catName, note.trim() || null, createdAt, subExpensesInput, selectedAccount?.id ?? null);
+        await addExpense(
+          finalPrice,
+          catName,
+          note.trim() || null,
+          createdAt,
+          subExpensesInput,
+          selectedAccount?.id ?? null,
+        );
       }
       router.back();
     } catch {
@@ -252,7 +287,10 @@ export default function AddExpenseScreen() {
   };
 
   return (
-    <View style={[styles.screen, { backgroundColor: colors.background }]}>
+    <KeyboardAvoidingView
+      style={styles.screen}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+    >
       <View style={[styles.header, { borderBottomColor: colors.border }]}>
         <TouchableOpacity onPress={() => router.back()}>
           <Ionicons name='arrow-back' size={24} color={colors.textPrimary} />
@@ -263,22 +301,44 @@ export default function AddExpenseScreen() {
         <View style={{ width: 24 }} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-
+      <ScrollView
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps='handled'
+      >
         {/* ── Amount / Total ──────────────────────────────────── */}
         {hasSubItems ? (
           <View style={styles.totalSection}>
-            <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>TOTAL</Text>
-            <View style={[styles.totalBox, {
-              backgroundColor: colors.inputFill,
-              borderColor: subTotal !== null ? colors.primary : colors.border,
-            }]}>
-              <Text style={[styles.totalValue, {
-                color: subTotal !== null ? colors.primary : colors.textSecondary,
-              }]}>
+            <Text
+              style={[styles.sectionTitle, { color: colors.textSecondary }]}
+            >
+              Total Amount
+            </Text>
+            <View
+              style={[
+                styles.totalBox,
+                {
+                  backgroundColor: colors.inputFill,
+                  borderColor:
+                    subTotal !== null ? colors.primary : colors.border,
+                },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.totalValue,
+                  {
+                    color:
+                      subTotal !== null ? colors.primary : colors.textSecondary,
+                  },
+                ]}
+              >
                 {subTotal !== null
-                  ? subTotal.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })
-                  : '—'}
+                  ? subTotal.toLocaleString(undefined, {
+                      minimumFractionDigits: 0,
+                      maximumFractionDigits: 2,
+                    })
+                  : '0.00'}
               </Text>
             </View>
             <Text style={[styles.totalHint, { color: colors.textSecondary }]}>
@@ -298,12 +358,24 @@ export default function AddExpenseScreen() {
             error={priceError}
             autoCorrect={false}
             autoCapitalize='none'
+            textAlign='center'
+            style={{
+              height: 59,
+              paddingVertical: 14,
+              fontSize: 26,
+              fontWeight: '800',
+            }}
           />
         )}
 
         {/* ── Sub-items ───────────────────────────────────────── */}
-        <Text style={[styles.sectionLabel, { color: colors.textSecondary, marginTop: 4 }]}>
-          ITEMS (OPTIONAL)
+        <Text
+          style={[
+            styles.sectionLabel,
+            { color: colors.textSecondary, marginTop: 4 },
+          ]}
+        >
+          Items (optional)
         </Text>
 
         {subItems.map((item) => {
@@ -312,25 +384,35 @@ export default function AddExpenseScreen() {
             <View key={item.localId} style={styles.subItemBlock}>
               <View style={styles.subItemRow}>
                 <TextInput
-                  style={[styles.subTitleInput, {
-                    backgroundColor: colors.inputFill,
-                    borderColor: errs?.title ? colors.danger : colors.border,
-                    color: colors.textPrimary,
-                  }]}
+                  style={[
+                    styles.subTitleInput,
+                    {
+                      backgroundColor: colors.inputFill,
+                      borderColor: errs?.title ? colors.danger : colors.border,
+                      color: colors.textPrimary,
+                    },
+                  ]}
                   value={item.title}
-                  onChangeText={(t) => updateSubItemField(item.localId, 'title', t)}
+                  onChangeText={(t) =>
+                    updateSubItemField(item.localId, 'title', t)
+                  }
                   placeholder='Item name'
                   placeholderTextColor={colors.textSecondary}
                   autoCorrect={false}
                 />
                 <TextInput
-                  style={[styles.subAmountInput, {
-                    backgroundColor: colors.inputFill,
-                    borderColor: errs?.amount ? colors.danger : colors.border,
-                    color: colors.textPrimary,
-                  }]}
+                  style={[
+                    styles.subAmountInput,
+                    {
+                      backgroundColor: colors.inputFill,
+                      borderColor: errs?.amount ? colors.danger : colors.border,
+                      color: colors.textPrimary,
+                    },
+                  ]}
                   value={item.amount}
-                  onChangeText={(t) => updateSubItemField(item.localId, 'amount', t)}
+                  onChangeText={(t) =>
+                    updateSubItemField(item.localId, 'amount', t)
+                  }
                   placeholder='0.00'
                   placeholderTextColor={colors.textSecondary}
                   keyboardType='decimal-pad'
@@ -340,18 +422,26 @@ export default function AddExpenseScreen() {
                   onPress={() => removeSubItem(item.localId)}
                   hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 >
-                  <Ionicons name='close-circle' size={22} color={colors.danger} />
+                  <Ionicons
+                    name='close-circle'
+                    size={22}
+                    color={colors.danger}
+                  />
                 </TouchableOpacity>
               </View>
               {(errs?.title || errs?.amount) && (
                 <View style={styles.subItemErrorRow}>
                   {errs?.title && (
-                    <Text style={[styles.subItemError, { color: colors.danger }]}>
+                    <Text
+                      style={[styles.subItemError, { color: colors.danger }]}
+                    >
                       Name: {errs.title}
                     </Text>
                   )}
                   {errs?.amount && (
-                    <Text style={[styles.subItemError, { color: colors.danger }]}>
+                    <Text
+                      style={[styles.subItemError, { color: colors.danger }]}
+                    >
                       Amount: {errs.amount}
                     </Text>
                   )}
@@ -366,40 +456,60 @@ export default function AddExpenseScreen() {
           onPress={addSubItem}
         >
           <Ionicons name='add' size={18} color={colors.primary} />
-          <Text style={[styles.addItemLabel, { color: colors.primary }]}>Add item</Text>
+          <Text style={[styles.addItemLabel, { color: colors.primary }]}>
+            Add item
+          </Text>
         </TouchableOpacity>
 
         {/* ── Category ────────────────────────────────────────── */}
-        <Text style={[styles.sectionLabel, { color: colors.textSecondary, marginTop: 8 }]}>
-          CATEGORY
+        <Text
+          style={[
+            styles.sectionLabel,
+            { color: colors.textSecondary, marginTop: 8 },
+          ]}
+        >
+          Category
         </Text>
         <View style={styles.categoryGrid}>
-          {categories.map((cat) => {
-            const selected = selectedCategory?.id === cat.id;
-            return (
-              <TouchableOpacity
-                key={cat.id}
-                style={[
-                  styles.categoryPill,
-                  {
-                    backgroundColor: selected ? cat.color : colors.inputFill,
-                    borderColor: selected ? cat.color : colors.border,
-                  },
-                ]}
-                onPress={() => setSelectedCategory(cat)}
-              >
-                <Text style={styles.pillEmoji}>{cat.emoji}</Text>
-                <Text
+          {categories
+            .slice(0, showAllCategories ? categories.length : 6)
+            .map((cat) => {
+              const selected = selectedCategory?.id === cat.id;
+              return (
+                <TouchableOpacity
+                  key={cat.id}
                   style={[
-                    styles.pillLabel,
-                    { color: selected ? '#fff' : colors.textPrimary },
+                    styles.categoryPill,
+                    {
+                      backgroundColor: selected ? cat.color : colors.inputFill,
+                      borderColor: selected ? cat.color : colors.border,
+                    },
                   ]}
+                  onPress={() => setSelectedCategory(cat)}
                 >
-                  {cat.name}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
+                  <Text style={styles.pillEmoji}>{cat.emoji}</Text>
+                  <Text
+                    style={[
+                      styles.pillLabel,
+                      { color: selected ? '#fff' : colors.textPrimary },
+                    ]}
+                  >
+                    {cat.name}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          {categories.length > 6 && !showAllCategories && (
+            <TouchableOpacity
+              style={[styles.showMoreBtn, { borderColor: colors.primary }]}
+              onPress={() => setShowAllCategories(true)}
+            >
+              <Ionicons name='chevron-down' size={12} color={colors.primary} />
+              <Text style={[styles.showMoreLabel, { color: colors.primary }]}>
+                More
+              </Text>
+            </TouchableOpacity>
+          )}
         </View>
 
         {/* ── Account ─────────────────────────────────────────── */}
@@ -418,7 +528,7 @@ export default function AddExpenseScreen() {
           placeholder='What was this for?'
           multiline
           numberOfLines={3}
-          style={{ height: 80, paddingTop: 12, textAlignVertical: 'top' }}
+          style={{ textAlignVertical: 'center' }}
         />
 
         {editExpense ? null : (
@@ -436,7 +546,7 @@ export default function AddExpenseScreen() {
           loading={loading}
         />
       </ScrollView>
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -452,21 +562,24 @@ const styles = StyleSheet.create({
   },
   title: { fontSize: 18, fontWeight: '700' },
   content: { padding: 20 },
-  totalSection: { marginBottom: 20 },
+  totalSection: {},
   totalBox: {
     borderWidth: 1.5,
     borderRadius: 12,
     paddingHorizontal: 16,
     paddingVertical: 14,
     alignItems: 'center',
-    marginVertical: 8,
   },
   totalValue: { fontSize: 26, fontWeight: '800' },
-  totalHint: { fontSize: 12, textAlign: 'center' },
+  totalHint: {
+    fontSize: 12,
+    textAlign: 'center',
+    paddingTop: 4,
+  },
+  sectionTitle: { fontSize: 13, fontWeight: '600', marginBottom: 6 },
   sectionLabel: {
-    fontSize: 11,
+    fontSize: 13,
     fontWeight: '700',
-    letterSpacing: 1,
     marginBottom: 10,
   },
   subItemBlock: { marginBottom: 8 },
@@ -487,7 +600,12 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     fontSize: 14,
   },
-  subItemErrorRow: { flexDirection: 'row', gap: 12, marginTop: 4, paddingHorizontal: 4 },
+  subItemErrorRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 4,
+    paddingHorizontal: 4,
+  },
   subItemError: { fontSize: 12 },
   addItemBtn: {
     flexDirection: 'row',
@@ -510,12 +628,24 @@ const styles = StyleSheet.create({
   },
   categoryPill: {
     flexDirection: 'row',
+    gap: 4,
     alignItems: 'center',
-    paddingHorizontal: 14,
+    paddingHorizontal: 10,
     paddingVertical: 10,
-    borderRadius: 12,
+    borderRadius: 16,
     borderWidth: 1.5,
   },
+  showMoreBtn: {
+    flexDirection: 'row',
+    gap: 4,
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 10,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+  },
+  showMoreLabel: { fontSize: 14, fontWeight: '600' },
   pillEmoji: { fontSize: 16, marginRight: 6 },
   pillLabel: { fontSize: 14, fontWeight: '600' },
 });
