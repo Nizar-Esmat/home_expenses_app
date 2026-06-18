@@ -14,7 +14,7 @@ export default function ReportButton({ onPress }: Props) {
       onPress={onPress}
       activeOpacity={0.8}
     >
-      <Text style={styles.text}> View Full Report</Text>
+      <Text style={styles.text}> View statistics</Text>
       <Ionicons name='chevron-forward' size={16} color='#9CA3AF' />
     </TouchableOpacity>
   );
