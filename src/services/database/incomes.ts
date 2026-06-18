@@ -53,6 +53,15 @@ async function getTransactionAccountId(accountId?: number | null): Promise<numbe
   return account.id;
 }
 
+export async function getIncomeById(id: number): Promise<Income | null> {
+  const db = await getDb();
+  const rows = await db.getAllAsync<IncomeRow>(
+    `${INCOME_SELECT} AND t.id = ? LIMIT 1`,
+    [id],
+  );
+  return rows[0] ?? null;
+}
+
 export async function addIncome(
   amount: number,
   category: string,
@@ -194,27 +203,38 @@ export async function getAvailableMonthKeys(): Promise<string[]> {
 export async function getMonthHistory(): Promise<MonthSummary[]> {
   const db = await getDb();
 
-  const rows = await db.getAllAsync<{
+  const txRows = await db.getAllAsync<{
     monthKey: string;
     totalSpent: number;
     totalIncome: number;
     count: number;
   }>(
     `SELECT
-       ${tzMonthKey('transactionDate')} AS monthKey,
-       COALESCE(SUM(CASE WHEN type = 'EXPENSE' THEN amountMinor ELSE 0 END), 0) / 100.0 AS totalSpent,
-       COALESCE(SUM(CASE WHEN type = 'INCOME' THEN amountMinor ELSE 0 END), 0) / 100.0 AS totalIncome,
-       SUM(CASE WHEN type = 'EXPENSE' THEN 1 ELSE 0 END) AS count
-     FROM transactions
-     WHERE deletedAt IS NULL
-      GROUP BY ${tzMonthKey('transactionDate')}
-     ORDER BY monthKey DESC`,
+      ${tzMonthKey('transactionDate')} AS monthKey,
+      COALESCE(SUM(CASE WHEN type = 'EXPENSE' THEN amountMinor ELSE 0 END), 0) / 100.0 AS totalSpent,
+      COALESCE(SUM(CASE WHEN type = 'INCOME' THEN amountMinor ELSE 0 END), 0) / 100.0 AS totalIncome,
+      SUM(CASE WHEN type = 'EXPENSE' THEN 1 ELSE 0 END) AS count
+    FROM transactions
+    WHERE deletedAt IS NULL
+    GROUP BY ${tzMonthKey('transactionDate')}`,
   );
 
-  return rows.map((row) => ({
+  const feeRows = await db.getAllAsync<{ monthKey: string; feeTotal: number }>(
+    `SELECT
+      ${tzMonthKey('transferDate')} AS monthKey,
+      COALESCE(SUM(feeAmountMinor), 0) / 100.0 AS feeTotal
+    FROM transfers
+    WHERE deletedAt IS NULL
+    GROUP BY ${tzMonthKey('transferDate')}`,
+  );
+
+  const feeMap = new Map<string, number>();
+  for (const r of feeRows) feeMap.set(r.monthKey, r.feeTotal);
+
+  return txRows.map((row) => ({
     monthKey: row.monthKey,
-    totalSpent: row.totalSpent,
+    totalSpent: row.totalSpent + (feeMap.get(row.monthKey) ?? 0),
     totalIncome: row.totalIncome,
     count: row.count,
-  }));
+  })).sort((a, b) => b.monthKey.localeCompare(a.monthKey));
 }

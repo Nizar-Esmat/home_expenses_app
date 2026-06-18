@@ -248,8 +248,11 @@ export async function getExpenseById(id: number): Promise<Expense | null> {
 export async function getExpenseTotalByMonth(monthKey: string): Promise<number> {
   const db = await getDb();
   const row = await db.getFirstAsync<{ total: number }>(
-    `SELECT COALESCE(SUM(amountMinor), 0) / 100.0 AS total FROM transactions WHERE type = 'EXPENSE' AND deletedAt IS NULL AND ${tzMonthKey('transactionDate')} = ?`,
-    [monthKey],
+    `SELECT
+      ((SELECT COALESCE(SUM(amountMinor), 0) FROM transactions WHERE type = 'EXPENSE' AND deletedAt IS NULL AND ${tzMonthKey('transactionDate')} = ?) +
+       (SELECT COALESCE(SUM(feeAmountMinor), 0) FROM transfers WHERE deletedAt IS NULL AND ${tzMonthKey('transferDate')} = ?))
+      / 100.0 AS total`,
+    [monthKey, monthKey],
   );
   return row?.total ?? 0;
 }
@@ -266,7 +269,10 @@ export async function getAllExpenses(): Promise<Expense[]> {
 export async function getExpenseTotalAll(): Promise<number> {
   const db = await getDb();
   const row = await db.getFirstAsync<{ total: number }>(
-    "SELECT COALESCE(SUM(amountMinor), 0) / 100.0 AS total FROM transactions WHERE type = 'EXPENSE' AND deletedAt IS NULL",
+    `SELECT
+      ((SELECT COALESCE(SUM(amountMinor), 0) FROM transactions WHERE type = 'EXPENSE' AND deletedAt IS NULL) +
+       (SELECT COALESCE(SUM(feeAmountMinor), 0) FROM transfers WHERE deletedAt IS NULL))
+      / 100.0 AS total`,
   );
   return row?.total ?? 0;
 }
