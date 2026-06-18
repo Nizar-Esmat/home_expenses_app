@@ -160,25 +160,19 @@ export default function CategoryManagerScreen() {
         <TouchableOpacity onPress={() => router.back()} hitSlop={{ top:8,bottom:8,left:8,right:8 }}>
           <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
         </TouchableOpacity>
-        <View>
+        <View style={styles.headerText}>
           <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Categories</Text>
           <Text style={[styles.headerSub, { color: colors.textSecondary }]}>
             {categories.length} total · {custom.length} custom
           </Text>
         </View>
-        <TouchableOpacity
-          style={[styles.headerAddBtn, { backgroundColor: colors.primary }]}
-          onPress={openAdd}
-        >
-          <Ionicons name="add" size={20} color={colors.background} />
-        </TouchableOpacity>
       </View>
 
       {/* List */}
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
 
         {/* Built-in */}
-        <SectionHeader label="Built-in" count={builtIn.length} colors={colors} />
+        <SectionHeader label="Built-in" subtitle="Default categories" colors={colors} />
         {builtIn.map((cat) => (
           <CategoryCard
             key={cat.id}
@@ -190,7 +184,7 @@ export default function CategoryManagerScreen() {
         ))}
 
         {/* Custom */}
-        <SectionHeader label="Custom" count={custom.length} colors={colors} style={{ marginTop: 10 }} />
+        <SectionHeader label="Custom" subtitle="Your categories" colors={colors} style={{ marginTop: 10 }} />
         {custom.length === 0 ? (
           <EmptyCustom colors={colors} onAdd={openAdd} />
         ) : (
@@ -241,37 +235,32 @@ export default function CategoryManagerScreen() {
 // ── Sub-components ────────────────────────────────────────────
 
 function SectionHeader({
-  label, count, colors, style,
-}: { label: string; count: number; colors: ReturnType<typeof useTheme>['colors']; style?: object }) {
+  label, subtitle, colors, style,
+}: { label: string; subtitle: string; colors: ReturnType<typeof useTheme>['colors']; style?: object }) {
   return (
     <View style={[styles.sectionRow, style]}>
-      <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>
-        {label.toUpperCase()}
-      </Text>
-      <View style={[styles.countBadge, { backgroundColor: colors.inputFill }]}>
-        <Text style={[styles.countText, { color: colors.textSecondary }]}>{count}</Text>
+      <View>
+        <Text style={[styles.sectionLabel, { color: colors.textPrimary }]}>
+          {label}
+        </Text>
+        <Text style={[styles.sectionSub, { color: colors.textSecondary }]}>
+          {subtitle}
+        </Text>
       </View>
     </View>
   );
 }
 
 function EmptyCustom({
-  colors, onAdd,
+  colors,
 }: { colors: ReturnType<typeof useTheme>['colors']; onAdd: () => void }) {
   return (
     <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
       <Text style={styles.emptyEmoji}>🏷️</Text>
-      <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>No custom categories</Text>
+      <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>No custom categories yet</Text>
       <Text style={[styles.emptyDesc, { color: colors.textSecondary }]}>
-        Create your own to personalize expense tracking
+        Tap the + button to create one
       </Text>
-      <TouchableOpacity
-        style={[styles.emptyBtn, { backgroundColor: colors.primary }]}
-        onPress={onAdd}
-      >
-        <Ionicons name="add" size={16} color={colors.background} />
-        <Text style={[styles.emptyBtnText, { color: colors.background }]}>Add Category</Text>
-      </TouchableOpacity>
     </View>
   );
 }
@@ -333,6 +322,9 @@ function CategoryForm({ form, setField, onSave, onClose, colors }: FormProps) {
             placeholderTextColor={colors.textSecondary}
             value={form.name}
             onChangeText={(v) => { setField('name', v); setField('nameError', ''); }}
+            onBlur={() => {
+              if (!form.name.trim()) setField('nameError', 'Category name is required.');
+            }}
             autoCapitalize="words"
             maxLength={24}
           />
@@ -362,6 +354,9 @@ function CategoryForm({ form, setField, onSave, onClose, colors }: FormProps) {
             </TouchableOpacity>
           ))}
         </View>
+        <Text style={[styles.colorHex, { color: colors.textSecondary }]}>
+          {form.color}
+        </Text>
       </View>
 
       {/* Emoji picker */}
@@ -403,7 +398,8 @@ function CategoryForm({ form, setField, onSave, onClose, colors }: FormProps) {
               onPress={() => setField('emoji', em)}
               style={[
                 styles.emojiCell,
-                form.emoji === em && { backgroundColor: colors.primary + '33', borderRadius: 10 },
+                form.emoji === em && styles.emojiCellSelected,
+                form.emoji === em && { borderColor: colors.primary },
               ]}
             >
               <Text style={styles.emojiCellText}>{em}</Text>
@@ -433,40 +429,27 @@ function CategoryForm({ form, setField, onSave, onClose, colors }: FormProps) {
 const styles = StyleSheet.create({
   screen: { flex: 1 },
 
-  // Header
   header: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: 1,
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1,
   },
-  headerTitle: { fontSize: 18, fontWeight: '700' },
-  headerSub: { fontSize: 12, marginTop: 1 },
-  headerAddBtn: {
-    width: 34, height: 34, borderRadius: 17,
-    alignItems: 'center', justifyContent: 'center',
-  },
+  headerText: { flex: 1, marginLeft: 12 },
+  headerTitle: { fontSize: 20, fontWeight: '800' },
+  headerSub: { fontSize: 12, marginTop: 2 },
 
-  // List
   content: { padding: 16 },
-  sectionRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 10 },
-  sectionLabel: { fontSize: 11, fontWeight: '700', letterSpacing: 1 },
-  countBadge: { marginLeft: 8, paddingHorizontal: 7, paddingVertical: 2, borderRadius: 8 },
-  countText: { fontSize: 11, fontWeight: '600' },
+  sectionRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 12, marginTop: 4 },
+  sectionLabel: { fontSize: 15, fontWeight: '700' },
+  sectionSub: { fontSize: 12, marginTop: 2 },
 
-  // Empty state
   emptyCard: {
     borderRadius: 16, padding: 28, alignItems: 'center',
     borderWidth: 1.5, borderStyle: 'dashed',
   },
-  emptyEmoji: { fontSize: 40, marginBottom: 10 },
-  emptyTitle: { fontSize: 16, fontWeight: '700', marginBottom: 6 },
-  emptyDesc: { fontSize: 13, textAlign: 'center', marginBottom: 20, lineHeight: 18 },
-  emptyBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
-    paddingHorizontal: 20, paddingVertical: 12, borderRadius: 12,
-  },
-  emptyBtnText: { fontSize: 14, fontWeight: '700' },
+  emptyEmoji: { fontSize: 36, marginBottom: 10 },
+  emptyTitle: { fontSize: 15, fontWeight: '700', marginBottom: 4 },
+  emptyDesc: { fontSize: 13, textAlign: 'center', lineHeight: 18 },
 
-  // FAB
   fab: {
     position: 'absolute', bottom: 28, right: 24,
     width: 56, height: 56, borderRadius: 28,
@@ -475,14 +458,12 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
   },
 
-  // Modal
   modalOverlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: '#00000055' },
   sheet: { borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 20, paddingBottom: 20, maxHeight: '90%' },
   handle: { width: 40, height: 4, borderRadius: 2, alignSelf: 'center', marginTop: 12, marginBottom: 8 },
   sheetHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 },
   sheetTitle: { fontSize: 18, fontWeight: '700' },
 
-  // Preview
   previewRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 20 },
   previewBadge: { width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center', marginRight: 14 },
   previewEmoji: { fontSize: 28 },
@@ -490,7 +471,6 @@ const styles = StyleSheet.create({
   previewName: { fontSize: 17, fontWeight: '700' },
   previewSub: { fontSize: 12, marginTop: 3 },
 
-  // Fields
   field: { marginBottom: 20 },
   fieldLabel: { fontSize: 12, fontWeight: '600', marginBottom: 8, letterSpacing: 0.5 },
   textInput: {
@@ -500,15 +480,14 @@ const styles = StyleSheet.create({
   },
   errorText: { fontSize: 12, marginTop: 4 },
 
-  // Colors
   colorRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   colorSwatch: {
     width: 36, height: 36, borderRadius: 18,
     alignItems: 'center', justifyContent: 'center',
   },
   colorSelected: { borderWidth: 3, borderColor: '#fff' },
+  colorHex: { fontSize: 11, marginTop: 8, letterSpacing: 0.5 },
 
-  // Emoji picker
   groupTabScroll: { marginBottom: 12 },
   groupTabContent: { gap: 8, paddingBottom: 4 },
   groupTab: {
@@ -518,10 +497,14 @@ const styles = StyleSheet.create({
   groupTabEmoji: { fontSize: 14 },
   groupTabLabel: { fontSize: 12, fontWeight: '600' },
   emojiGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 4 },
-  emojiCell: { width: '13%', aspectRatio: 1, alignItems: 'center', justifyContent: 'center' },
+  emojiCell: {
+    width: '13%', aspectRatio: 1, alignItems: 'center', justifyContent: 'center', borderRadius: 10,
+  },
+  emojiCellSelected: {
+    borderWidth: 2, backgroundColor: '#00000015',
+  },
   emojiCellText: { fontSize: 24 },
 
-  // Save
   saveBtn: { borderRadius: 14, paddingVertical: 16, alignItems: 'center', marginTop: 8 },
   saveBtnText: { fontSize: 16, fontWeight: '700' },
 });
