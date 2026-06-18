@@ -1,12 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/theme/ThemeContext';
-import { getActiveAccounts, addTransfer } from '@/services/database';
-import { Account } from '@/types';
+import { getActiveAccounts, addTransfer, getTransferById, updateTransfer } from '@/services/database';
+import { Account, Transfer } from '@/types';
 import { ACCOUNT_TYPE_LABELS } from '@/components/AccountPicker';
 import AppInput from '@/components/AppInput';
 import AppButton from '@/components/AppButton';
@@ -16,29 +18,60 @@ import { useAppDialog } from '@/components/AppDialog';
 export default function TransferScreen() {
   const { colors } = useTheme();
   const router = useRouter();
+  const { transferId } = useLocalSearchParams<{ transferId?: string }>();
   const { showDialog } = useAppDialog();
 
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [fromAccount, setFromAccount] = useState<Account | null>(null);
   const [toAccount, setToAccount] = useState<Account | null>(null);
   const [amount, setAmount] = useState('');
+  const [fee, setFee] = useState('');
   const [note, setNote] = useState('');
   const [date, setDate] = useState(new Date());
   const [useCustomDate, setUseCustomDate] = useState(false);
   const [amountError, setAmountError] = useState('');
+  const [feeError, setFeeError] = useState('');
   const [loading, setLoading] = useState(false);
   const [showFromPicker, setShowFromPicker] = useState(false);
   const [showToPicker, setShowToPicker] = useState(false);
+  const [editTransfer, setEditTransfer] = useState<Transfer | null>(null);
 
   useEffect(() => {
-    getActiveAccounts().then((accts) => {
+    const init = async () => {
+      const accts = await getActiveAccounts();
       setAccounts(accts);
+
+      if (transferId) {
+        const existing = await getTransferById(Number(transferId));
+        if (existing) {
+          setEditTransfer(existing);
+          setAmount(String(existing.amount));
+          setFee(existing.feeAmount ? String(existing.feeAmount) : '');
+          setNote(existing.note ?? '');
+          setDate(new Date(existing.transferDate ?? existing.createdAt));
+          const from = accts.find((a) => a.id === existing.fromAccountId) ?? accts[0] ?? null;
+          const to = accts.find((a) => a.id === existing.toAccountId) ?? accts[1] ?? null;
+          setFromAccount(from);
+          setToAccount(to);
+          return;
+        }
+        showDialog({
+          title: 'Transfer Not Found',
+          message: 'This transfer was not found or may have been deleted.',
+          icon: '⚠️',
+          type: 'warning',
+          buttons: [{ text: 'OK', style: 'default', onPress: () => router.back() }],
+        });
+        return;
+      }
+
       setFromAccount(accts[0] ?? null);
       setToAccount(accts[1] ?? null);
-    });
-  }, []);
+    };
+    init();
+  }, [transferId, router, showDialog]);
 
-  const validate = (): number | null => {
+  const validate = (): { amount: number; fee: number } | null => {
     if (!fromAccount || !toAccount) {
       showDialog({
         title: 'Error',
@@ -64,21 +97,38 @@ export default function TransferScreen() {
       setAmountError('Enter a valid amount greater than 0');
       return null;
     }
-    if (v > fromAccount.currentBalance) {
-      setAmountError(`Insufficient balance. Available: ${fromAccount.currentBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
+    setAmountError('');
+
+    let f = 0;
+    if (fee.trim()) {
+      f = parseFloat(fee.replace(',', '.'));
+      if (isNaN(f) || f < 0) {
+        setFeeError('Enter a valid fee amount');
+        return null;
+      }
+    }
+    setFeeError('');
+
+    const maxAvailable = fromAccount.currentBalance + (editTransfer?.fromAccountId === fromAccount.id ? editTransfer.amount + (editTransfer.feeAmount ?? 0) : 0);
+    if (v + f > maxAvailable) {
+      setAmountError(`Insufficient balance. Available: ${maxAvailable.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
       return null;
     }
-    setAmountError('');
-    return v;
+    return { amount: v, fee: f };
   };
 
   const save = async () => {
-    const v = validate();
-    if (v === null) return;
+    const result = validate();
+    if (result === null) return;
+    const { amount: v, fee: f } = result;
     setLoading(true);
     try {
-      const createdAt = useCustomDate ? date.toISOString() : new Date().toISOString();
-      await addTransfer(fromAccount!.id, toAccount!.id, v, note.trim() || null, createdAt);
+      if (editTransfer) {
+        await updateTransfer(editTransfer.id, fromAccount!.id, toAccount!.id, v, note.trim() || null, f, null);
+      } else {
+        const createdAt = useCustomDate ? date.toISOString() : new Date().toISOString();
+        await addTransfer(fromAccount!.id, toAccount!.id, v, note.trim() || null, createdAt, f, null);
+      }
       router.back();
     } catch {
       showDialog({
@@ -99,6 +149,7 @@ export default function TransferScreen() {
     setShowFromPicker(false);
     setShowToPicker(false);
     setAmountError('');
+    setFeeError('');
   };
 
   const AccountSelector = ({
@@ -173,16 +224,19 @@ export default function TransferScreen() {
   );
 
   return (
-    <View style={[styles.screen, { backgroundColor: colors.background }]}>
+    <KeyboardAvoidingView
+      style={styles.screen}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+    >
       <View style={[styles.header, { borderBottomColor: colors.border }]}>
         <TouchableOpacity onPress={() => router.back()}>
           <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
         </TouchableOpacity>
-        <Text style={[styles.title, { color: colors.textPrimary }]}>Transfer</Text>
+        <Text style={[styles.title, { color: colors.textPrimary }]}>{editTransfer ? 'Edit Transfer' : 'Transfer'}</Text>
         <View style={{ width: 24 }} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
         {/* Banner */}
         <View style={[styles.banner, { backgroundColor: colors.primary + '18' }]}>
           <Ionicons name="swap-horizontal" size={22} color={colors.primary} />
@@ -232,6 +286,15 @@ export default function TransferScreen() {
         />
 
         <AppInput
+          label="Fee (optional)"
+          value={fee}
+          onChangeText={(v) => { setFee(v); if (feeError) setFeeError(''); }}
+          placeholder="0.00"
+          keyboardType="decimal-pad"
+          error={feeError}
+        />
+
+        <AppInput
           label="Note (optional)"
           value={note}
           onChangeText={setNote}
@@ -241,22 +304,24 @@ export default function TransferScreen() {
           style={{ height: 64, paddingTop: 10, textAlignVertical: 'top' }}
         />
 
-        <DateTimeInput
-          date={date}
-          onChange={setDate}
-          useCustomDate={useCustomDate}
-          onUseCustomDateChange={setUseCustomDate}
-        />
+        {editTransfer ? null : (
+          <DateTimeInput
+            date={date}
+            onChange={setDate}
+            useCustomDate={useCustomDate}
+            onUseCustomDateChange={setUseCustomDate}
+          />
+        )}
 
         <AppButton
-          label="Transfer"
+          label={editTransfer ? 'Update Transfer' : 'Transfer'}
           onPress={save}
           loading={loading}
           disabled={!fromAccount || !toAccount || fromAccount.id === toAccount?.id}
         />
         <View style={{ height: 40 }} />
       </ScrollView>
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 

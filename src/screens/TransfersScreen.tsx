@@ -1,7 +1,8 @@
 import React, { useCallback, useState } from 'react';
 import {
-  View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator,
+  View, Text, ScrollView, TouchableOpacity, StyleSheet,
 } from 'react-native';
+import TransfersSkeleton from '@/components/skeletons/TransfersSkeleton';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/theme/ThemeContext';
@@ -81,8 +82,8 @@ export default function TransfersScreen() {
 
   if (loading) {
     return (
-      <View style={[styles.center, { backgroundColor: colors.background }]}> 
-        <ActivityIndicator color={colors.primary} size="large" />
+      <View style={[styles.screen, { backgroundColor: colors.background }]}>
+        <TransfersSkeleton />
       </View>
     );
   }
