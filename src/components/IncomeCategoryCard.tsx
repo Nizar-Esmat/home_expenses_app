@@ -15,7 +15,11 @@ export default function IncomeCategoryCard({ category, onEdit, onDelete }: Props
   const isBuiltIn = category.isDefault === 1;
 
   return (
-    <View style={[styles.card, { backgroundColor: colors.card }]}>
+    <TouchableOpacity
+      style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}
+      onPress={onEdit}
+      activeOpacity={0.6}
+    >
       <View style={[styles.badge, { backgroundColor: category.color }]}>
         <Text style={styles.badgeEmoji}>{category.emoji}</Text>
       </View>
@@ -36,24 +40,18 @@ export default function IncomeCategoryCard({ category, onEdit, onDelete }: Props
         </View>
       )}
 
-      <TouchableOpacity
-        onPress={onEdit}
-        style={[styles.actionBtn, { backgroundColor: colors.inputFill }]}
-        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-      >
-        <Ionicons name="pencil-outline" size={16} color={colors.primary} />
-      </TouchableOpacity>
-
       {!isBuiltIn && (
         <TouchableOpacity
           onPress={onDelete}
-          style={[styles.actionBtn, { backgroundColor: colors.dangerBg, marginLeft: 6 }]}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          style={[styles.deleteBtn, { backgroundColor: colors.dangerBg }]}
+          hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
         >
-          <Ionicons name="trash-outline" size={16} color={colors.danger} />
+          <Ionicons name="trash-outline" size={15} color={colors.danger} />
         </TouchableOpacity>
       )}
-    </View>
+
+      <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} style={{ marginLeft: 4 }} />
+    </TouchableOpacity>
   );
 }
 
@@ -64,6 +62,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     padding: 14,
     marginBottom: 10,
+    borderWidth: 1,
   },
   badge: {
     width: 44,
@@ -87,11 +86,12 @@ const styles = StyleSheet.create({
     gap: 3,
   },
   lockText: { fontSize: 10, fontWeight: '600' },
-  actionBtn: {
-    width: 32,
-    height: 32,
+  deleteBtn: {
+    width: 36,
+    height: 36,
     borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
+    marginLeft: 4,
   },
 });
