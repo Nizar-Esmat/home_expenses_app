@@ -1,5 +1,11 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  StyleSheet,
+  ScrollView,
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/theme/ThemeContext';
 import { Account, AccountType } from '@/types';
@@ -16,20 +22,28 @@ export const ACCOUNT_TYPE_LABELS: Record<AccountType, string> = {
   e_wallet: 'E-Wallet',
 };
 
-export const ACCOUNT_TYPE_ICONS: Record<AccountType, keyof typeof Ionicons.glyphMap> = {
+export const ACCOUNT_TYPE_ICONS: Record<
+  AccountType,
+  keyof typeof Ionicons.glyphMap
+> = {
   cash: 'cash-outline',
   bank_account: 'business-outline',
   e_wallet: 'phone-portrait-outline',
 };
 
-export default function AccountPicker({ accounts, selectedAccount, onSelect }: Props) {
+export default function AccountPicker({
+  accounts,
+  selectedAccount,
+  onSelect,
+}: Props) {
   const { colors } = useTheme();
 
   return (
     <View style={styles.wrapper}>
-      <Text style={[styles.label, { color: colors.textSecondary }]}>ACCOUNT</Text>
+      <Text style={[styles.label, { color: colors.textSecondary }]}>
+        Account
+      </Text>
       <ScrollView
-        horizontal
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
@@ -49,20 +63,16 @@ export default function AccountPicker({ accounts, selectedAccount, onSelect }: P
               onPress={() => onSelect(acc)}
               activeOpacity={0.75}
             >
-              <View style={styles.cardTop}>
-                <Text style={styles.cardIcon}>{acc.icon ?? '💳'}</Text>
-                {selected && (
-                  <Ionicons name="checkmark-circle" size={16} color={accent} />
-                )}
-              </View>
+              <Text style={styles.cardIcon}>{acc.icon ?? '💳'}</Text>
               <Text
-                style={[styles.cardName, { color: selected ? accent : colors.textPrimary }]}
+                style={[
+                  styles.cardName,
+                  { color: selected ? accent : colors.textPrimary },
+                ]}
                 numberOfLines={1}
+                ellipsizeMode='tail'
               >
                 {acc.name}
-              </Text>
-              <Text style={[styles.cardType, { color: colors.textSecondary }]}>
-                {ACCOUNT_TYPE_LABELS[acc.type]}
               </Text>
             </TouchableOpacity>
           );
@@ -74,23 +84,36 @@ export default function AccountPicker({ accounts, selectedAccount, onSelect }: P
 
 const styles = StyleSheet.create({
   wrapper: { marginBottom: 20 },
-  label: { fontSize: 11, fontWeight: '700', letterSpacing: 1, marginBottom: 10 },
-  scrollContent: { paddingHorizontal: 2, gap: 10 },
+  label: {
+    fontSize: 13,
+    fontWeight: '700',
+    marginBottom: 10,
+  },
+  scrollContent: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    paddingHorizontal: 2,
+    gap: 10,
+    width: '100%',
+  },
   card: {
-    width: 100,
+    // let the card size to its content instead of fixed width
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
     paddingHorizontal: 12,
     paddingVertical: 10,
     borderRadius: 14,
     borderWidth: 1.5,
+    flexShrink: 0,
   },
-  cardTop: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 8,
+  cardIcon: { fontSize: 20 },
+  cardName: {
+    fontSize: 15,
+    fontWeight: '700',
+    marginBottom: 2,
+    marginLeft: 8,
+    flexShrink: 1,
   },
-  cardIcon: { fontSize: 22 },
-  cardName: { fontSize: 13, fontWeight: '700', marginBottom: 2 },
-  cardType: { fontSize: 11 },
 });
-
