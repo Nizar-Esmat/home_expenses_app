@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -36,12 +38,10 @@ export default function AddEditAccountScreen() {
   const [editAccount, setEditAccount] = useState<Account | null>(null);
   const [name, setName] = useState('');
   const [type, setType] = useState<AccountType>('cash');
-  const [openingBalance, setOpeningBalance] = useState('0');
   const [icon, setIcon] = useState('💵');
   const [color, setColor] = useState(PRESET_COLORS[0]!);
 
   const [nameError, setNameError] = useState('');
-  const [balanceError, setBalanceError] = useState('');
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -51,7 +51,6 @@ export default function AddEditAccountScreen() {
       setEditAccount(acc);
       setName(acc.name);
       setType(acc.type);
-      setOpeningBalance(String(acc.currentBalance));
       setIcon(acc.icon ?? '💵');
       setColor(acc.color ?? PRESET_COLORS[0]!);
     });
@@ -65,33 +64,22 @@ export default function AddEditAccountScreen() {
   }, [type, isEdit]);
 
   const validate = (): boolean => {
-    let ok = true;
     if (!name.trim()) {
       setNameError('Account name is required');
-      ok = false;
-    } else {
-      setNameError('');
+      return false;
     }
-    const bal = parseFloat(openingBalance.replace(',', '.'));
-    if (isNaN(bal) || bal < 0) {
-      setBalanceError(isEdit ? 'Current balance must be 0 or more' : 'Opening balance must be 0 or more');
-      ok = false;
-    } else {
-      setBalanceError('');
-    }
-    return ok;
+    setNameError('');
+    return true;
   };
 
   const save = async () => {
     if (!validate()) return;
     setLoading(true);
     try {
-      const bal = parseFloat(openingBalance.replace(',', '.'));
       if (isEdit && editAccount) {
         await updateAccount(editAccount.id, {
           name: name.trim(),
           type,
-          currentBalance: bal,
           icon,
           color,
         });
@@ -99,7 +87,7 @@ export default function AddEditAccountScreen() {
         await addAccount({
           name: name.trim(),
           type,
-          openingBalance: bal,
+          openingBalance: 0,
           icon,
           color,
           isDefault: 0,
@@ -125,9 +113,11 @@ export default function AddEditAccountScreen() {
   };
 
   return (
-    <View style={[styles.screen, { backgroundColor: colors.background }]}>
-      {/* Header */}
-      <View style={[styles.header, { borderBottomColor: colors.border }]}>
+    <KeyboardAvoidingView
+      style={styles.screen}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+    >
+          <View style={[styles.header, { borderBottomColor: colors.border }]}>
         <TouchableOpacity onPress={() => router.back()}>
           <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
         </TouchableOpacity>
@@ -137,7 +127,7 @@ export default function AddEditAccountScreen() {
         <View style={{ width: 24 }} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
 
         {/* Preview card */}
         <View style={[styles.preview, { backgroundColor: color + '22', borderColor: color + '44' }]}>
@@ -196,21 +186,6 @@ export default function AddEditAccountScreen() {
           })}
         </View>
 
-        {/* Opening/Current balance */}
-        <AppInput
-          label={isEdit ? 'Current Balance' : 'Opening Balance'}
-          value={openingBalance}
-          onChangeText={(v) => { setOpeningBalance(v); if (balanceError) setBalanceError(''); }}
-          placeholder="0.00"
-          keyboardType="decimal-pad"
-          error={balanceError}
-        />
-        {isEdit && (
-          <Text style={[styles.editNote, { color: colors.textSecondary }]}>
-            Set your current balance directly — transactions are preserved and the opening balance is adjusted automatically.
-          </Text>
-        )}
-
         {/* Icon */}
         <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>ICON</Text>
         <View style={styles.iconGrid}>
@@ -249,15 +224,15 @@ export default function AddEditAccountScreen() {
           ))}
         </View>
 
-        <AppButton
-          label={isEdit ? 'Update Account' : 'Create Account'}
-          onPress={save}
-          loading={loading}
-        />
+          <AppButton
+            label={isEdit ? 'Update Account' : 'Create Account'}
+            onPress={save}
+            loading={loading}
+          />
 
-        <View style={{ height: 40 }} />
-      </ScrollView>
-    </View>
+          <View style={{ height: 40 }} />
+        </ScrollView>
+      </KeyboardAvoidingView>
   );
 }
 
@@ -304,8 +279,6 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
   },
   typePillLabel: { fontSize: 13, fontWeight: '600' },
-
-  editNote: { fontSize: 12, marginTop: -14, marginBottom: 20 },
 
   iconGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 20 },
   iconOption: {
