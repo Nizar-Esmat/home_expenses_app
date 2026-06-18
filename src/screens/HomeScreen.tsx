@@ -9,6 +9,7 @@ import {
 import { useFocusEffect, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/theme/ThemeContext';
+import { useMonth } from '@/contexts/MonthContext';
 import {
   getSettings,
   getActiveAccounts,
@@ -18,6 +19,7 @@ import {
   recalculateAccountBalances,
   deleteExpense,
   deleteIncome,
+  deleteTransfer,
   getRecentTransactions,
   getIncomeTotalAll,
   getExpenseTotalAll,
@@ -40,6 +42,7 @@ export default function HomeScreen() {
   const { colors } = useTheme();
   const router = useRouter();
   const currentMonth = currentMonthKey();
+  const { selectedMonthKey, setSelectedMonthKey } = useMonth();
 
   const [settings, setSettings] = useState<Settings | null>(null);
   const [accountMap, setAccountMap] = useState<Record<number, Account>>({});
@@ -49,8 +52,6 @@ export default function HomeScreen() {
     'ALL',
     currentMonth,
   ]);
-  const [selectedMonthKey, setSelectedMonthKey] =
-    useState<string>(currentMonth);
   const [monthMenuOpen, setMonthMenuOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
@@ -86,7 +87,10 @@ export default function HomeScreen() {
       const totalsPromise =
         monthKey === 'ALL'
           ? Promise.all([getIncomeTotalAll(), getExpenseTotalAll()])
-          : Promise.all([getIncomeTotalByMonth(monthKey), getExpenseTotalByMonth(monthKey)]);
+          : Promise.all([
+              getIncomeTotalByMonth(monthKey),
+              getExpenseTotalByMonth(monthKey),
+            ]);
 
       Promise.all([
         getRecentTransactions(monthKey === 'ALL' ? undefined : monthKey, 5),
@@ -145,6 +149,8 @@ export default function HomeScreen() {
       deleteExpense(tx.id).then(() => load(selectedMonthKey));
     } else if (tx.type === 'income') {
       deleteIncome(tx.id).then(() => load(selectedMonthKey));
+    } else if (tx.type === 'transfer') {
+      deleteTransfer(tx.id).then(() => load(selectedMonthKey));
     }
   };
 
@@ -157,7 +163,12 @@ export default function HomeScreen() {
     } else if (tx.type === 'income') {
       router.push({
         pathname: '/add-income',
-        params: { expenseId: String(tx.id) },
+        params: { incomeId: String(tx.id) },
+      });
+    } else if (tx.type === 'transfer') {
+      router.push({
+        pathname: '/transfer',
+        params: { transferId: String(tx.id) },
       });
     }
   };
@@ -310,7 +321,7 @@ export default function HomeScreen() {
           <ReportButton
             onPress={() =>
               router.push({
-                pathname: '/report',
+                pathname: '/statistics',
                 params: { monthKey: selectedMonthKey },
               })
             }
@@ -363,7 +374,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     borderTopWidth: 1,
-    borderColor: '#263247',
+    borderColor: '#C0C0C080',
     justifyContent: 'space-between',
     marginBottom: 10,
     marginTop: 10,
@@ -372,7 +383,7 @@ const styles = StyleSheet.create({
   },
   sectionLeft: { flex: 1, alignItems: 'flex-start' },
   sectionTitle: {
-    fontSize: 24,
+    fontSize: 20,
     lineHeight: 26,
     fontWeight: '700',
     color: '#F8FAFC',
