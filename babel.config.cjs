@@ -9,17 +9,20 @@ module.exports = function (api) {
       superIsCallableConstructor: true,
     },
     plugins: [
+      require('react-native-worklets/plugin'),
       [
         'module-resolver',
         {
           root: ['.'],
-          alias: {
-            '@/components': './src/components',
-            '@/screens':    './src/screens',
-            '@/services':   './src/services',
-            '@/theme':      './src/theme',
-            '@/types':      './src/types',
-          },
+        alias: {
+          '@/components': './src/components',
+          '@/screens': './src/screens',
+          '@/services': './src/services',
+          '@/theme': './src/theme',
+          '@/types': './src/types',
+          '@/contexts': './src/contexts',
+          '@/utils': './src/utils',
+        },
         },
       ],
     ],

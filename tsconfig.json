@@ -25,6 +25,12 @@
       ],
       "@/types/*": [
         "src/types/*"
+      ],
+      "@/contexts/*": [
+        "src/contexts/*"
+      ],
+      "@/utils/*": [
+        "src/utils/*"
       ]
     }
   },
