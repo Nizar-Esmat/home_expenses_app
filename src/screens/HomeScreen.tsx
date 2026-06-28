@@ -61,18 +61,11 @@ export default function HomeScreen() {
     accs: Account[],
     homeIds: number[] | undefined,
   ): Account[] => {
-    const cash = accs.find((a) => a.type === 'cash') ?? null;
     const selected = (homeIds ?? [])
       .map((id) => accs.find((a) => a.id === id && a.isArchived === 0))
       .filter((a): a is Account => Boolean(a))
-      .filter((a) => a.type !== 'cash');
-    const selectedUnique: Account[] = [];
-    for (const acc of selected) {
-      if (!selectedUnique.find((s) => s.id === acc.id))
-        selectedUnique.push(acc);
-    }
-    const list = [...(cash ? [cash] : []), ...selectedUnique].slice(0, 3);
-    return list;
+      .slice(0, 3);
+    return selected;
   };
 
   const getHiddenCount = (totalCount: number, shownCount: number): number => {
@@ -175,14 +168,14 @@ export default function HomeScreen() {
 
   if (loading) {
     return (
-      <View style={[styles.screen, { backgroundColor: '#0B1220' }]}>
+      <View style={[styles.screen, { backgroundColor: colors.background }]}>
         <LoadingSkeleton />
       </View>
     );
   }
 
   return (
-    <View style={[styles.screen, { backgroundColor: '#0B1220' }]}>
+    <View style={[styles.screen, { backgroundColor: colors.background }]}>
       <ScrollView
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}

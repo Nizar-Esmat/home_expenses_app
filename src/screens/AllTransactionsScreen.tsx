@@ -557,11 +557,16 @@ export default function AllTransactionsScreen() {
     }
 
     if (activeFilters.selectedAccounts.size > 0) {
-      result = result.filter(
-        (t) =>
-          t.accountId === null ||
-          activeFilters.selectedAccounts.has(t.accountId),
-      );
+      result = result.filter((t) => {
+        if (t.type !== 'transfer') {
+          return t.accountId === null || activeFilters.selectedAccounts.has(t.accountId);
+        }
+        return (
+          (t.fromAccountId && activeFilters.selectedAccounts.has(t.fromAccountId)) ||
+          (t.toAccountId && activeFilters.selectedAccounts.has(t.toAccountId)) ||
+          (t.feeAccountId && activeFilters.selectedAccounts.has(t.feeAccountId))
+        );
+      });
     }
 
     if (activeFilters.dateFrom || activeFilters.dateTo) {

@@ -58,9 +58,9 @@ export default function AccountsScreen() {
     setCurrency(settings.currency ?? 'EGP');
     const validIds = (settings.homeAccountIds ?? [])
       .filter((id) =>
-        all.some((a) => a.id === id && a.isArchived === 0 && a.type !== 'cash'),
+        all.some((a) => a.id === id && a.isArchived === 0),
       )
-      .slice(0, 2);
+      .slice(0, 3);
     setHomeAccountIds(validIds);
     if ((settings.homeAccountIds ?? []).join(',') !== validIds.join(',')) {
       saveSettings({ homeAccountIds: validIds });
@@ -146,7 +146,6 @@ export default function AccountsScreen() {
   };
 
   const handleToggleHome = async (acc: Account) => {
-    if (acc.type === 'cash') return;
     const isPinned = homeAccountIds.includes(acc.id);
     if (acc.isArchived === 1 && !isPinned) return;
     if (isPinned) {
@@ -157,10 +156,9 @@ export default function AccountsScreen() {
     }
     const activePinnedIds = homeAccountIds.filter((id) =>
       accounts.some(
-        (a) => a.id === id && a.isArchived === 0 && a.type !== 'cash',
-      ),
+        (a) => a.id === id && a.isArchived === 0),
     );
-    if (activePinnedIds.length < 2) {
+    if (activePinnedIds.length < 3) {
       const updated = [...activePinnedIds, acc.id];
       setHomeAccountIds(updated);
       await saveSettings({ homeAccountIds: updated });
@@ -174,7 +172,7 @@ export default function AccountsScreen() {
     showDialog({
       title: 'Replace Home Account',
       message:
-        'You can show only 2 accounts on Home (cash is always included). Choose one to replace.',
+        'You can show up to 3 accounts on Home. Choose one to replace.',
       icon: '🏷️',
       type: 'info',
       buttons: [
@@ -282,10 +280,8 @@ export default function AccountsScreen() {
 
         {isExpanded && (
           <View style={styles.actionStrip}>
-            {/* Show on Home — non-cash, non-default only */}
-            {acc.isDefault === 0 &&
-              acc.type !== 'cash' &&
-              (acc.isArchived === 0 || isPinnedHome) && (
+            {/* Show on Home */}
+            {(acc.isArchived === 0 || isPinnedHome) && (
                 <TouchableOpacity
                   style={[
                     styles.pill,

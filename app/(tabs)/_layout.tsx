@@ -1,6 +1,7 @@
 import { Tabs, usePathname, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/theme/ThemeContext';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MonthProvider } from '@/contexts/MonthContext';
 import { setTabSlideDirection } from '@/utils/tabAnimation';
 import {
@@ -41,6 +42,7 @@ function getIndexFromPathname(path: string): number {
 function FloatingTabBar() {
   const { colors, isDark } = useTheme();
   const pathname = usePathname();
+  const insets = useSafeAreaInsets();
 
   const tabBarBg = isDark ? '#0A0A0A' : '#FFFFFF';
   const selectedBg = isDark ? colors.primary + '30' : colors.primary + '20';
@@ -48,7 +50,7 @@ function FloatingTabBar() {
   const activeIndex = getIndexFromPathname(pathname);
 
   return (
-    <View style={styles.wrapper}>
+      <View style={[styles.wrapper, { bottom: 16 + insets.bottom }]}>
       <View style={[styles.tabBar, { backgroundColor: tabBarBg }]}>
         {TAB_ITEMS.map((item, index) => {
           const isActive = activeIndex === index;

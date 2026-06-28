@@ -127,6 +127,9 @@ export interface HomeTransaction {
   note: string | null;
   createdAt: string;
   accountId: number | null;
+  fromAccountId?: number | null;
+  toAccountId?: number | null;
+  feeAccountId?: number | null;
   accountName: string;
   accountIcon: string | null;
   accountColor?: string | null;
