@@ -8,6 +8,7 @@ interface Props {
   loan: Loan;
   currency: string;
   onPay: () => void;
+  onEdit: () => void;
   onDelete: () => void;
   expanded?: boolean;
   onToggle: () => void;
@@ -33,7 +34,7 @@ const STATUS_LABEL: Record<string, string> = {
   SETTLED: 'Settled',
 };
 
-export default function LoanTile({ loan, currency, onPay, onDelete, expanded, onToggle }: Props) {
+export default function LoanTile({ loan, currency, onPay, onEdit, onDelete, expanded, onToggle }: Props) {
   const { colors } = useTheme();
   const outstanding = loan.amount - loan.paidAmount;
   const isBorrowed = loan.type === 'BORROWED';
@@ -119,6 +120,13 @@ export default function LoanTile({ loan, currency, onPay, onDelete, expanded, on
               </TouchableOpacity>
             )}
             <TouchableOpacity
+              style={[styles.editBtn, { borderColor: colors.border }]}
+              onPress={onEdit}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="pencil-outline" size={15} color={colors.textSecondary} />
+            </TouchableOpacity>
+            <TouchableOpacity
               style={[styles.deleteBtn, { borderColor: '#EF444440' }]}
               onPress={onDelete}
               activeOpacity={0.8}
@@ -169,6 +177,10 @@ const styles = StyleSheet.create({
     gap: 6, paddingVertical: 10, borderRadius: 10,
   },
   payBtnText: { color: '#fff', fontSize: 14, fontWeight: '700' },
+  editBtn: {
+    width: 40, height: 40, borderRadius: 10, borderWidth: 1,
+    alignItems: 'center', justifyContent: 'center',
+  },
   deleteBtn: {
     width: 40, height: 40, borderRadius: 10, borderWidth: 1,
     alignItems: 'center', justifyContent: 'center',

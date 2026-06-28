@@ -193,6 +193,42 @@ export async function addRepayment(loanId: number, input: AddRepaymentInput): Pr
   await recalculateBalance(input.accountId);
 }
 
+export interface UpdateLoanInput {
+  type: LoanType;
+  contactName: string;
+  amount: number;
+  accountId: number;
+  note?: string | null;
+  loanDate: string;
+}
+
+export async function updateLoan(id: number, input: UpdateLoanInput): Promise<void> {
+  const db = await getDb();
+  const existing = await db.getFirstAsync<{ accountId: number; paidAmountMinor: number }>(
+    'SELECT accountId, paidAmountMinor FROM loans WHERE id = ? AND deletedAt IS NULL',
+    [id],
+  );
+  if (!existing) throw new Error('Loan not found.');
+
+  const now = nowIso();
+  const newAmountMinor = toMinorUnits(input.amount);
+  const newStatus: LoanStatus =
+    existing.paidAmountMinor >= newAmountMinor
+      ? 'SETTLED'
+      : existing.paidAmountMinor > 0
+      ? 'PARTIAL'
+      : 'PENDING';
+
+  await db.runAsync(
+    `UPDATE loans SET type = ?, contactName = ?, amountMinor = ?, accountId = ?, note = ?, loanDate = ?, status = ?, updatedAt = ? WHERE id = ?`,
+    [input.type, input.contactName.trim(), newAmountMinor, input.accountId, input.note ?? null, input.loanDate, newStatus, now, id],
+  );
+
+  for (const accId of new Set([existing.accountId, input.accountId])) {
+    await recalculateBalance(accId);
+  }
+}
+
 export async function softDeleteLoan(id: number): Promise<void> {
   const db = await getDb();
   const loan = await db.getFirstAsync<{ accountId: number }>(

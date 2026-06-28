@@ -55,6 +55,10 @@ export default function LoansScreen() {
     router.push({ pathname: '/add-loan', params: { loanId: String(loan.id) } });
   };
 
+  const handleEdit = (loan: Loan) => {
+    router.push({ pathname: '/add-loan', params: { editLoanId: String(loan.id) } });
+  };
+
   const borrowedTotal = loans
     .filter((l) => l.type === 'BORROWED' && l.status !== 'SETTLED')
     .reduce((s, l) => s + (l.amount - l.paidAmount), 0);
@@ -156,6 +160,7 @@ export default function LoansScreen() {
                 }
               }}
               onPay={() => handlePay(loan)}
+              onEdit={() => handleEdit(loan)}
               onDelete={() => handleDelete(loan)}
             />
           ))

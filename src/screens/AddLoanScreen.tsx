@@ -6,7 +6,7 @@ import {
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/theme/ThemeContext';
-import { getActiveAccounts, getLoans, addLoan, addRepayment } from '@/services/database';
+import { getAccounts, getLoans, getLoanById, addLoan, addRepayment, updateLoan } from '@/services/database';
 import { Account, Loan, LoanType } from '@/types';
 import { ACCOUNT_TYPE_LABELS } from '@/components/AccountPicker';
 import AppInput from '@/components/AppInput';
@@ -19,9 +19,11 @@ type Mode = 'loan' | 'repayment';
 export default function AddLoanScreen() {
   const { colors } = useTheme();
   const router = useRouter();
-  const { loanId: loanIdParam } = useLocalSearchParams<{ loanId?: string }>();
+  const { loanId: loanIdParam, editLoanId: editLoanIdParam } = useLocalSearchParams<{ loanId?: string; editLoanId?: string }>();
   const { showDialog } = useAppDialog();
 
+  const isEditing = !!editLoanIdParam;
+  const [editingLoanId, setEditingLoanId] = useState<number | null>(null);
   const [mode, setMode] = useState<Mode>(loanIdParam ? 'repayment' : 'loan');
 
   // Shared
@@ -48,12 +50,28 @@ export default function AddLoanScreen() {
   useEffect(() => {
     const init = async () => {
       const [accts, loans] = await Promise.all([
-        getActiveAccounts(),
+        getAccounts(),
         getLoans('ACTIVE'),
       ]);
-      setAccounts(accts);
-      setAccount(accts[0] ?? null);
+      setAccounts(accts.filter((a) => a.isArchived === 0));
       setActiveLoans(loans);
+
+      if (editLoanIdParam) {
+        const loan = await getLoanById(Number(editLoanIdParam));
+        if (loan) {
+          setEditingLoanId(loan.id);
+          setLoanType(loan.type);
+          setContactName(loan.contactName);
+          setAmount(String(loan.amount));
+          setNote(loan.note ?? '');
+          setDate(new Date(loan.loanDate));
+          setUseCustomDate(true);
+          const acc = accts.find((a) => a.id === loan.accountId) ?? accts[0] ?? null;
+          setAccount(acc);
+        }
+      } else {
+        setAccount(accts.filter((a) => a.isArchived === 0)[0] ?? null);
+      }
 
       if (loanIdParam) {
         const pre = loans.find((l) => l.id === Number(loanIdParam));
@@ -65,7 +83,7 @@ export default function AddLoanScreen() {
       }
     };
     init();
-  }, [loanIdParam]);
+  }, [loanIdParam, editLoanIdParam]);
 
   const switchMode = (m: Mode) => {
     setMode(m);
@@ -99,14 +117,25 @@ export default function AddLoanScreen() {
       setLoading(true);
       try {
         const loanDate = useCustomDate ? date.toISOString() : new Date().toISOString();
-        await addLoan({
-          type: loanType,
-          contactName: contactName.trim(),
-          amount: v,
-          accountId: account.id,
-          note: note.trim() || null,
-          loanDate,
-        });
+        if (editingLoanId !== null) {
+          await updateLoan(editingLoanId, {
+            type: loanType,
+            contactName: contactName.trim(),
+            amount: v,
+            accountId: account.id,
+            note: note.trim() || null,
+            loanDate,
+          });
+        } else {
+          await addLoan({
+            type: loanType,
+            contactName: contactName.trim(),
+            amount: v,
+            accountId: account.id,
+            note: note.trim() || null,
+            loanDate,
+          });
+        }
         router.back();
       } catch {
         showDialog({
@@ -162,14 +191,14 @@ export default function AddLoanScreen() {
           <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
         </TouchableOpacity>
         <Text style={[styles.title, { color: colors.textPrimary }]}>
-          {mode === 'loan' ? 'New Loan' : 'Add Repayment'}
+          {isEditing ? 'Edit Loan' : mode === 'loan' ? 'New Loan' : 'Add Repayment'}
         </Text>
         <View style={{ width: 24 }} />
       </View>
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-        {/* Mode toggle */}
-        <View style={[styles.modeToggle, { backgroundColor: colors.inputFill, borderColor: colors.border }]}>
+        {/* Mode toggle — hidden in edit mode */}
+        {!isEditing && <View style={[styles.modeToggle, { backgroundColor: colors.inputFill, borderColor: colors.border }]}>
           <TouchableOpacity
             style={[styles.modeBtn, mode === 'loan' && { backgroundColor: colors.primary }]}
             onPress={() => switchMode('loan')}
@@ -186,7 +215,7 @@ export default function AddLoanScreen() {
             <Ionicons name="return-down-back-outline" size={16} color={mode === 'repayment' ? '#fff' : colors.textSecondary} />
             <Text style={[styles.modeBtnText, { color: mode === 'repayment' ? '#fff' : colors.textSecondary }]}>Repayment</Text>
           </TouchableOpacity>
-        </View>
+        </View>}
 
         {mode === 'loan' ? (
           <>
@@ -359,7 +388,7 @@ export default function AddLoanScreen() {
         />
 
         <AppButton
-          label={mode === 'loan' ? 'Save Loan' : 'Save Repayment'}
+          label={isEditing ? 'Save Changes' : mode === 'loan' ? 'Save Loan' : 'Save Repayment'}
           onPress={validateAndSave}
           loading={loading}
         />
