@@ -54,7 +54,7 @@ export async function getRecentTransactions(
   const hasMonthFilter = monthKey !== undefined && monthKey !== 'ALL';
 
   const sql = `
-    SELECT id, type, category, emoji, amount, feeAmount, note, createdAt, accountId, accountName, accountIcon, accountColor FROM (
+    SELECT id, type, category, emoji, amount, feeAmount, note, createdAt, accountId, fromAccountId, toAccountId, feeAccountId, accountName, accountIcon, accountColor FROM (
       SELECT
         t.id,
         'expense' AS type,
@@ -65,6 +65,9 @@ export async function getRecentTransactions(
         t.note,
         t.transactionDate AS createdAt,
         t.accountId,
+        NULL AS fromAccountId,
+        NULL AS toAccountId,
+        NULL AS feeAccountId,
         COALESCE(a.name, 'Deleted account') AS accountName,
         a.icon AS accountIcon,
         a.color AS accountColor
@@ -84,6 +87,9 @@ export async function getRecentTransactions(
         t.note,
         t.transactionDate AS createdAt,
         t.accountId,
+        NULL AS fromAccountId,
+        NULL AS toAccountId,
+        NULL AS feeAccountId,
         COALESCE(a.name, 'Deleted account') AS accountName,
         a.icon AS accountIcon,
         a.color AS accountColor
@@ -103,6 +109,9 @@ export async function getRecentTransactions(
         tr.note,
         tr.transferDate AS createdAt,
         NULL AS accountId,
+        tr.fromAccountId,
+        tr.toAccountId,
+        tr.feeAccountId,
         COALESCE(fromAcc.name, '?') || ' ➛ ' || COALESCE(toAcc.name, '?') AS accountName,
         NULL AS accountIcon,
         NULL AS accountColor
@@ -125,7 +134,7 @@ export async function getTransactionsByDate(dateKey: string): Promise<HomeTransa
   const db = await getDb();
 
   const sql = `
-  SELECT id, type, category, emoji, amount, feeAmount, note, createdAt, accountId, accountName, accountIcon, accountColor FROM (
+  SELECT id, type, category, emoji, amount, feeAmount, note, createdAt, accountId, fromAccountId, toAccountId, feeAccountId, accountName, accountIcon, accountColor FROM (
     SELECT
       t.id,
       'expense' AS type,
@@ -136,6 +145,9 @@ export async function getTransactionsByDate(dateKey: string): Promise<HomeTransa
       t.note,
       t.transactionDate AS createdAt,
       t.accountId,
+      NULL AS fromAccountId,
+      NULL AS toAccountId,
+      NULL AS feeAccountId,
       COALESCE(a.name, 'Deleted account') AS accountName,
       a.icon AS accountIcon,
       a.color AS accountColor
@@ -155,6 +167,9 @@ export async function getTransactionsByDate(dateKey: string): Promise<HomeTransa
       t.note,
       t.transactionDate AS createdAt,
       t.accountId,
+      NULL AS fromAccountId,
+      NULL AS toAccountId,
+      NULL AS feeAccountId,
       COALESCE(a.name, 'Deleted account') AS accountName,
       a.icon AS accountIcon,
       a.color AS accountColor
@@ -174,6 +189,9 @@ export async function getTransactionsByDate(dateKey: string): Promise<HomeTransa
       tr.note,
       tr.transferDate AS createdAt,
       NULL AS accountId,
+      tr.fromAccountId,
+      tr.toAccountId,
+      tr.feeAccountId,
       COALESCE(fromAcc.name, '?') || ' → ' || COALESCE(toAcc.name, '?') AS accountName,
       NULL AS accountIcon,
       NULL AS accountColor
@@ -256,7 +274,7 @@ export async function getTransactions(
   const hasMonthFilter = monthKey !== undefined && monthKey !== 'ALL';
 
   const sql = `
-  SELECT id, type, category, emoji, amount, feeAmount, note, createdAt, accountId, accountName, accountIcon, accountColor FROM (
+  SELECT id, type, category, emoji, amount, feeAmount, note, createdAt, accountId, fromAccountId, toAccountId, feeAccountId, accountName, accountIcon, accountColor FROM (
   SELECT
   t.id,
   'expense' AS type,
@@ -267,6 +285,9 @@ export async function getTransactions(
   t.note,
   t.transactionDate AS createdAt,
   t.accountId,
+  NULL AS fromAccountId,
+  NULL AS toAccountId,
+  NULL AS feeAccountId,
   COALESCE(a.name, 'Deleted account') AS accountName,
   a.icon AS accountIcon,
   a.color AS accountColor
@@ -286,6 +307,9 @@ export async function getTransactions(
   t.note,
   t.transactionDate AS createdAt,
   t.accountId,
+  NULL AS fromAccountId,
+  NULL AS toAccountId,
+  NULL AS feeAccountId,
   COALESCE(a.name, 'Deleted account') AS accountName,
   a.icon AS accountIcon,
   a.color AS accountColor
@@ -305,6 +329,9 @@ export async function getTransactions(
   tr.note,
   tr.transferDate AS createdAt,
   NULL AS accountId,
+  tr.fromAccountId,
+  tr.toAccountId,
+  tr.feeAccountId,
   COALESCE(fromAcc.name, '?') || ' → ' || COALESCE(toAcc.name, '?') AS accountName,
   NULL AS accountIcon,
   NULL AS accountColor
