@@ -119,7 +119,7 @@ export interface Settings {
 
 export interface HomeTransaction {
   id: number;
-  type: 'expense' | 'income' | 'transfer';
+  type: 'expense' | 'income' | 'transfer' | 'loan' | 'loan_repayment';
   category: string;
   emoji: string;
   amount: number;
@@ -134,6 +134,38 @@ export interface HomeTransaction {
   accountIcon: string | null;
   accountColor?: string | null;
   subExpenses?: SubExpense[];
+  loanId?: number | null;
+  contactName?: string | null;
+}
+
+export type LoanType = 'BORROWED' | 'LENT';
+export type LoanStatus = 'PENDING' | 'PARTIAL' | 'SETTLED';
+
+export interface Loan {
+  id: number;
+  type: LoanType;
+  contactName: string;
+  amount: number;
+  currencyCode: string;
+  accountId: number;
+  accountName?: string;
+  note: string | null;
+  loanDate: string;
+  paidAmount: number;
+  status: LoanStatus;
+  repayments?: LoanRepayment[];
+  createdAt: string;
+}
+
+export interface LoanRepayment {
+  id: number;
+  loanId: number;
+  amount: number;
+  accountId: number;
+  accountName?: string;
+  note: string | null;
+  repaymentDate: string;
+  createdAt: string;
 }
 
 export interface MonthSummary {

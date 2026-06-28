@@ -23,6 +23,9 @@ import {
   getRecentTransactions,
   getIncomeTotalAll,
   getExpenseTotalAll,
+  getOutstandingLoanSummary,
+  softDeleteLoan,
+  softDeleteRepayment,
 } from '@/services/database';
 import {
   currentMonthKey,
@@ -33,6 +36,7 @@ import { Account, HomeTransaction, Settings } from '@/types';
 import BalanceCard from '@/components/BalanceCard';
 import AccountsPreviewCard from '@/components/AccountsPreviewCard';
 import MonthlySummaryCard from '@/components/MonthlySummaryCard';
+import LoansSummaryCard from '@/components/LoansSummaryCard';
 import ReportButton from '@/components/ReportButton';
 import RecentTransactionsSection from '@/components/RecentTransactionsSection';
 import FloatingAddButton from '@/components/FloatingAddButton';
@@ -56,6 +60,7 @@ export default function HomeScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [periodTotals, setPeriodTotals] = useState({ income: 0, spent: 0 });
+  const [loanSummary, setLoanSummary] = useState({ totalBorrowed: 0, totalLent: 0 });
 
   const resolveHomeAccounts = (
     accs: Account[],
@@ -91,11 +96,13 @@ export default function HomeScreen() {
         getAvailableMonthKeys(),
         recalculateAccountBalances().then(() => getActiveAccounts()),
         totalsPromise,
+        getOutstandingLoanSummary(),
       ])
-        .then(([txs, sets, monthKeys, accs, totals]) => {
+        .then(([txs, sets, monthKeys, accs, totals, loanSum]) => {
           setTransactions(txs);
           setSettings(sets);
           setPeriodTotals({ income: totals[0], spent: totals[1] });
+          setLoanSummary(loanSum);
           const mergedMonths = Array.from(
             new Set([
               'ALL',
@@ -144,6 +151,10 @@ export default function HomeScreen() {
       deleteIncome(tx.id).then(() => load(selectedMonthKey));
     } else if (tx.type === 'transfer') {
       deleteTransfer(tx.id).then(() => load(selectedMonthKey));
+    } else if (tx.type === 'loan') {
+      softDeleteLoan(tx.id).then(() => load(selectedMonthKey));
+    } else if (tx.type === 'loan_repayment') {
+      softDeleteRepayment(tx.id).then(() => load(selectedMonthKey));
     }
   };
 
@@ -163,6 +174,8 @@ export default function HomeScreen() {
         pathname: '/transfer',
         params: { transferId: String(tx.id) },
       });
+    } else if (tx.type === 'loan' || tx.type === 'loan_repayment') {
+      router.push('/loans');
     }
   };
 
@@ -326,6 +339,15 @@ export default function HomeScreen() {
           spent={formatCurrency(totalSpent, settings?.currency)}
           net={formatCurrency(periodNet, settings?.currency)}
         />
+
+        {(loanSummary.totalBorrowed > 0 || loanSummary.totalLent > 0) && (
+          <LoansSummaryCard
+            totalBorrowed={loanSummary.totalBorrowed}
+            totalLent={loanSummary.totalLent}
+            currency={settings?.currency ?? 'EGP'}
+            onPress={() => router.push('/loans')}
+          />
+        )}
 
         {/* Recent Transactions */}
         <View style={{ marginTop: 24 }}>

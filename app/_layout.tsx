@@ -27,6 +27,8 @@ function RootLayoutNav() {
           <Stack.Screen name="add-account" />
           <Stack.Screen name="transfer" />
           <Stack.Screen name="transfers" />
+          <Stack.Screen name="loans" />
+          <Stack.Screen name="add-loan" options={{ presentation: 'modal' }} />
         </Stack>
       </View>
     </DialogProvider>

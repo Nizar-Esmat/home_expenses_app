@@ -148,8 +148,19 @@ export async function getIncomesByMonth(monthKey: string): Promise<Income[]> {
 export async function getIncomeTotalByMonth(monthKey: string): Promise<number> {
   const db = await getDb();
   const row = await db.getFirstAsync<{ total: number }>(
-    `SELECT COALESCE(SUM(amountMinor), 0) / 100.0 AS total FROM transactions WHERE type = 'INCOME' AND deletedAt IS NULL AND ${tzMonthKey('transactionDate')} = ?`,
-    [monthKey],
+    `SELECT (
+      (SELECT COALESCE(SUM(amountMinor), 0) FROM transactions
+       WHERE type = 'INCOME' AND deletedAt IS NULL AND ${tzMonthKey('transactionDate')} = ?) +
+      (SELECT COALESCE(SUM(l.amountMinor), 0) FROM loans l
+       WHERE l.type = 'BORROWED' AND l.deletedAt IS NULL AND ${tzMonthKey('l.loanDate')} = ?) +
+      (SELECT COALESCE(SUM(lr.amountMinor), 0) FROM loan_repayments lr JOIN loans l ON l.id = lr.loanId
+       WHERE l.type = 'LENT' AND lr.deletedAt IS NULL AND l.deletedAt IS NULL
+         AND ${tzMonthKey('lr.repaymentDate')} = ? AND ${tzMonthKey('l.loanDate')} != ?) -
+      (SELECT COALESCE(SUM(lr.amountMinor), 0) FROM loan_repayments lr JOIN loans l ON l.id = lr.loanId
+       WHERE l.type = 'BORROWED' AND lr.deletedAt IS NULL AND l.deletedAt IS NULL
+         AND ${tzMonthKey('lr.repaymentDate')} = ? AND ${tzMonthKey('l.loanDate')} = ?)
+    ) / 100.0 AS total`,
+    [monthKey, monthKey, monthKey, monthKey, monthKey, monthKey],
   );
   return row?.total ?? 0;
 }
@@ -176,7 +187,16 @@ export async function getAllIncomes(): Promise<Income[]> {
 export async function getIncomeTotalAll(): Promise<number> {
   const db = await getDb();
   const row = await db.getFirstAsync<{ total: number }>(
-    "SELECT COALESCE(SUM(amountMinor), 0) / 100.0 AS total FROM transactions WHERE type = 'INCOME' AND deletedAt IS NULL",
+    `SELECT (
+      (SELECT COALESCE(SUM(amountMinor), 0) FROM transactions WHERE type = 'INCOME' AND deletedAt IS NULL) +
+      (SELECT COALESCE(SUM(amountMinor), 0) FROM loans WHERE type = 'BORROWED' AND deletedAt IS NULL) +
+      (SELECT COALESCE(SUM(lr.amountMinor), 0) FROM loan_repayments lr JOIN loans l ON l.id = lr.loanId
+       WHERE l.type = 'LENT' AND lr.deletedAt IS NULL AND l.deletedAt IS NULL
+         AND ${tzMonthKey('lr.repaymentDate')} != ${tzMonthKey('l.loanDate')}) -
+      (SELECT COALESCE(SUM(lr.amountMinor), 0) FROM loan_repayments lr JOIN loans l ON l.id = lr.loanId
+       WHERE l.type = 'BORROWED' AND lr.deletedAt IS NULL AND l.deletedAt IS NULL
+         AND ${tzMonthKey('lr.repaymentDate')} = ${tzMonthKey('l.loanDate')})
+    ) / 100.0 AS total`,
   );
   return row?.total ?? 0;
 }

@@ -7,3 +7,4 @@ export * from './backup';
 export * from './accounts';
 export * from './transfers';
 export * from './homeTransactions';
+export * from './loans';

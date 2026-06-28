@@ -2,7 +2,7 @@ import * as SQLite from 'expo-sqlite';
 import { DEFAULT_CATEGORY_COLORS } from '@/services/constants';
 import { nowIso } from './helpers';
 
-const SCHEMA_VERSION = 3;
+const SCHEMA_VERSION = 4;
 const DEFAULT_CURRENCY = 'EGP';
 
 let _db: SQLite.SQLiteDatabase | null = null;
@@ -128,6 +128,41 @@ async function createSchema(db: SQLite.SQLiteDatabase): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_transfers_from_date ON transfers(fromAccountId, transferDate);
     CREATE INDEX IF NOT EXISTS idx_transfers_to_date ON transfers(toAccountId, transferDate);
     CREATE INDEX IF NOT EXISTS idx_transfers_date ON transfers(transferDate);
+
+    CREATE TABLE IF NOT EXISTS loans (
+      id               INTEGER PRIMARY KEY AUTOINCREMENT,
+      type             TEXT    NOT NULL CHECK(type IN ('BORROWED','LENT')),
+      contactName      TEXT    NOT NULL,
+      amountMinor      INTEGER NOT NULL,
+      currencyCode     TEXT    NOT NULL DEFAULT '${DEFAULT_CURRENCY}',
+      accountId        INTEGER NOT NULL,
+      note             TEXT,
+      loanDate         TEXT    NOT NULL,
+      paidAmountMinor  INTEGER NOT NULL DEFAULT 0,
+      status           TEXT    NOT NULL DEFAULT 'PENDING' CHECK(status IN ('PENDING','PARTIAL','SETTLED')),
+      createdAt        TEXT    NOT NULL,
+      updatedAt        TEXT,
+      deletedAt        TEXT,
+      FOREIGN KEY(accountId) REFERENCES accounts(id)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_loans_status ON loans(status);
+    CREATE INDEX IF NOT EXISTS idx_loans_date ON loans(loanDate);
+
+    CREATE TABLE IF NOT EXISTS loan_repayments (
+      id             INTEGER PRIMARY KEY AUTOINCREMENT,
+      loanId         INTEGER NOT NULL,
+      amountMinor    INTEGER NOT NULL,
+      accountId      INTEGER NOT NULL,
+      note           TEXT,
+      repaymentDate  TEXT    NOT NULL,
+      createdAt      TEXT    NOT NULL,
+      deletedAt      TEXT,
+      FOREIGN KEY(loanId) REFERENCES loans(id),
+      FOREIGN KEY(accountId) REFERENCES accounts(id)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_loan_repayments_loan ON loan_repayments(loanId);
   `);
 }
 
@@ -144,6 +179,8 @@ async function runMigrations(db: SQLite.SQLiteDatabase): Promise<void> {
 
 async function freshResetFinancialSchema(db: SQLite.SQLiteDatabase): Promise<void> {
   await db.execAsync(`
+    DROP TABLE IF EXISTS loan_repayments;
+    DROP TABLE IF EXISTS loans;
     DROP TABLE IF EXISTS transaction_items;
     DROP TABLE IF EXISTS transactions;
     DROP TABLE IF EXISTS transfers;

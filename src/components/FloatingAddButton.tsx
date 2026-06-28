@@ -27,41 +27,31 @@ export default function FloatingAddButton({ bottomOffset = 92 }: Props) {
           <>
             <TouchableOpacity
               style={[styles.fabMini, { backgroundColor: colors.success }]}
-              onPress={() => {
-                setOpen(false);
-                router.push('/add-income');
-              }}
+              onPress={() => { setOpen(false); router.push('/add-income'); }}
             >
               <Ionicons name='trending-up-outline' size={20} color='#FFFFFF' />
               <Text style={styles.fabText}> Income</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.fabMini, { backgroundColor: colors.danger }]}
-              onPress={() => {
-                setOpen(false);
-                router.push('/add-expense');
-              }}
+              onPress={() => { setOpen(false); router.push('/add-expense'); }}
             >
-              <Ionicons
-                name='trending-down-outline'
-                size={20}
-                color='#FFFFFF'
-              />
+              <Ionicons name='trending-down-outline' size={20} color='#FFFFFF' />
               <Text style={styles.fabText}> Expense</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.fabMini, { backgroundColor: colors.primary }]}
-              onPress={() => {
-                setOpen(false);
-                router.push('/transfer');
-              }}
+              onPress={() => { setOpen(false); router.push('/transfer'); }}
             >
-              <Ionicons
-                name='swap-horizontal-outline'
-                size={20}
-                color='#FFFFFF'
-              />
+              <Ionicons name='swap-horizontal-outline' size={20} color='#FFFFFF' />
               <Text style={styles.fabText}> Transfer</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.fabMini, { backgroundColor: '#F59E0B' }]}
+              onPress={() => { setOpen(false); router.push('/add-loan'); }}
+            >
+              <Ionicons name='cash-outline' size={20} color='#FFFFFF' />
+              <Text style={styles.fabText}> Loan</Text>
             </TouchableOpacity>
           </>
         )}

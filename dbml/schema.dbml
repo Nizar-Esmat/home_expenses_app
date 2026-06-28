@@ -130,3 +130,52 @@ Ref: transaction_items.categoryId > categories.id
 Ref: transfers.fromAccountId > accounts.id
 Ref: transfers.toAccountId > accounts.id
 Ref: transfers.feeAccountId > accounts.id
+
+Table loans {
+  id integer [pk]
+
+  type text [not null] // BORROWED | LENT
+  contactName text [not null]
+
+  amountMinor integer [not null]
+  currencyCode varchar(3) [not null, default: 'EGP']
+
+  accountId integer [not null]
+
+  note text
+  loanDate timestamp [not null]
+
+  paidAmountMinor integer [not null, default: 0]
+  status text [not null, default: 'PENDING'] // PENDING | PARTIAL | SETTLED
+
+  createdAt timestamp [not null]
+  updatedAt timestamp
+  deletedAt timestamp
+
+  Indexes {
+    (status)
+    (loanDate)
+  }
+}
+
+Table loan_repayments {
+  id integer [pk]
+
+  loanId integer [not null]
+  amountMinor integer [not null]
+  accountId integer [not null]
+
+  note text
+  repaymentDate timestamp [not null]
+
+  createdAt timestamp [not null]
+  deletedAt timestamp
+
+  Indexes {
+    (loanId)
+  }
+}
+
+Ref: loans.accountId > accounts.id
+Ref: loan_repayments.loanId > loans.id
+Ref: loan_repayments.accountId > accounts.id

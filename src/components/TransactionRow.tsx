@@ -30,13 +30,31 @@ export default function TransactionRow({
 }: Props) {
   const [expanded, setExpanded] = useState(false);
   const isTransfer = tx.type === 'transfer';
+  const isLoan = tx.type === 'loan';
+  const isLoanRepayment = tx.type === 'loan_repayment';
   const feeValue = tx.feeAmount ?? 0;
   const subs = tx.subExpenses ?? [];
-  const amountColor = tx.type === 'expense' ? '#EF4444' : '#10B981';
+
+  let amountColor = '#10B981';
+  if (tx.type === 'expense') amountColor = '#EF4444';
+  else if (isLoanRepayment) {
+    // BORROWED repayment = you pay back (red), LENT repayment = you receive (green)
+    // category starts with "Repaid" for BORROWED repayments
+    amountColor = tx.category.startsWith('Repaid') ? '#EF4444' : '#10B981';
+  } else if (isLoan) {
+    // BORROWED loan = money in (green), LENT loan = money out (red)
+    amountColor = tx.category.startsWith('Loan from') ? '#10B981' : '#EF4444';
+  }
 
   const transferParts = isTransfer ? (tx.accountName ?? '').split(/\s*[→➛]\s*/) : [];
   const fromName = transferParts[0] ?? '?';
   const toName = transferParts[1] ?? '?';
+
+  const loanSign = (() => {
+    if (isLoan) return tx.category.startsWith('Loan from') ? '+' : '−';
+    if (isLoanRepayment) return tx.category.startsWith('Repaid') ? '−' : '+';
+    return '';
+  })();
 
   return (
     <>
@@ -47,9 +65,7 @@ export default function TransactionRow({
           </View>
 
           <View style={styles.info}>
-            {/* Layer 1: note + parenthesized amount (transfer with note),
-                          amount only (transfer without note),
-                          or note (others) */}
+            {/* Layer 1 */}
             {isTransfer ? (
               tx.note ? (
                 <Text style={styles.l1Text} numberOfLines={1}>
@@ -61,12 +77,11 @@ export default function TransactionRow({
                   {fmtAmt(tx.amount, currency)}
                 </Text>
               )
-            ) : (
-              tx.note ? (
-                <Text style={styles.l1Text} numberOfLines={1}>{tx.note}</Text>
-              ) : null
-            )}
-            {/* Layer 2: from→to chips (transfer) or category · account pill (others) */}
+            ) : tx.note ? (
+              <Text style={styles.l1Text} numberOfLines={1}>{tx.note}</Text>
+            ) : null}
+
+            {/* Layer 2 */}
             {isTransfer ? (
               <View style={styles.l2Row}>
                 <Text style={styles.l2CatText}>Transfer ·</Text>
@@ -76,6 +91,15 @@ export default function TransactionRow({
                 <Ionicons name="arrow-forward" size={10} color="#AAB2C0" />
                 <View style={styles.toChip}>
                   <Text style={styles.toChipText} numberOfLines={1}>{toName}</Text>
+                </View>
+              </View>
+            ) : (isLoan || isLoanRepayment) ? (
+              <View style={styles.l2Row}>
+                <Text style={styles.l2CatText} numberOfLines={1}>{tx.category} ·</Text>
+                <View style={[styles.loanBadge, { backgroundColor: isLoanRepayment ? '#6B728022' : '#F59E0B22' }]}>
+                  <Text style={[styles.loanBadgeText, { color: isLoanRepayment ? '#9CA3AF' : '#F59E0B' }]}>
+                    {isLoanRepayment ? 'REPAYMENT' : 'LOAN'}
+                  </Text>
                 </View>
               </View>
             ) : (
@@ -98,7 +122,8 @@ export default function TransactionRow({
                 ) : null}
               </View>
             )}
-            {/* Layer 3: Date · Time */}
+
+            {/* Layer 3: Date */}
             <Text style={styles.l3Text}>{formatDate(tx.createdAt)}</Text>
           </View>
 
@@ -109,6 +134,10 @@ export default function TransactionRow({
                 {'−'}{fmtAmt(feeValue, currency)}
               </Text>
             ) : null
+          ) : (isLoan || isLoanRepayment) ? (
+            <Text style={[styles.amount, { color: amountColor }]} numberOfLines={1} adjustsFontSizeToFit>
+              {loanSign}{fmtAmt(tx.amount, currency)}
+            </Text>
           ) : (
             <Text
               style={[styles.amount, { color: amountColor }]}
@@ -272,4 +301,16 @@ const styles = StyleSheet.create({
   subAmount: { fontSize: 13, fontWeight: '600', color: '#EF4444' },
 
   divider: { height: 1, marginHorizontal: 16, backgroundColor: '#263247' },
+
+  loanBadge: {
+    borderRadius: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    flexShrink: 0,
+  },
+  loanBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
 });

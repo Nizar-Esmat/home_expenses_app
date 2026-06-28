@@ -38,7 +38,11 @@ const DELTA_SQL = `
     ), 0) FROM transactions WHERE accountId = ? AND deletedAt IS NULL) +
     (SELECT COALESCE(SUM(amountMinor), 0) FROM transfers WHERE toAccountId = ? AND deletedAt IS NULL) -
     (SELECT COALESCE(SUM(amountMinor), 0) FROM transfers WHERE fromAccountId = ? AND deletedAt IS NULL) -
-    (SELECT COALESCE(SUM(feeAmountMinor), 0) FROM transfers WHERE COALESCE(feeAccountId, fromAccountId) = ? AND deletedAt IS NULL)
+    (SELECT COALESCE(SUM(feeAmountMinor), 0) FROM transfers WHERE COALESCE(feeAccountId, fromAccountId) = ? AND deletedAt IS NULL) +
+    (SELECT COALESCE(SUM(amountMinor), 0) FROM loans WHERE type = 'BORROWED' AND accountId = ? AND deletedAt IS NULL) -
+    (SELECT COALESCE(SUM(amountMinor), 0) FROM loans WHERE type = 'LENT' AND accountId = ? AND deletedAt IS NULL) -
+    (SELECT COALESCE(SUM(lr.amountMinor), 0) FROM loan_repayments lr JOIN loans l ON l.id = lr.loanId WHERE l.type = 'BORROWED' AND lr.accountId = ? AND lr.deletedAt IS NULL AND l.deletedAt IS NULL) +
+    (SELECT COALESCE(SUM(lr.amountMinor), 0) FROM loan_repayments lr JOIN loans l ON l.id = lr.loanId WHERE l.type = 'LENT' AND lr.accountId = ? AND lr.deletedAt IS NULL AND l.deletedAt IS NULL)
   AS txDeltaMinor
 `;
 
@@ -70,10 +74,8 @@ export async function recalculateBalance(accountId: number): Promise<void> {
   if (!acc) return;
 
   const txRow = await db.getFirstAsync<{ txDeltaMinor: number }>(DELTA_SQL, [
-    accountId,
-    accountId,
-    accountId,
-    accountId,
+    accountId, accountId, accountId, accountId,
+    accountId, accountId, accountId, accountId,
   ]);
   const newBalanceMinor = acc.openingBalanceMinor + (txRow?.txDeltaMinor ?? 0);
   await db.runAsync(
@@ -189,7 +191,7 @@ export interface UpdateAccountInput {
 
 export async function updateAccount(id: number, input: UpdateAccountInput): Promise<void> {
   const db = await getDb();
-  const txRow = await db.getFirstAsync<{ txDeltaMinor: number }>(DELTA_SQL, [id, id, id, id]);
+  const txRow = await db.getFirstAsync<{ txDeltaMinor: number }>(DELTA_SQL, [id, id, id, id, id, id, id, id]);
   const currentBalanceMinor = toMinorUnits(input.currentBalance);
   const openingBalanceMinor = currentBalanceMinor - (txRow?.txDeltaMinor ?? 0);
 
