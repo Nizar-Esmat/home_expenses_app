@@ -1,5 +1,12 @@
-import { Settings } from '@/types';
+import { Settings, ReminderSettings } from '@/types';
 import { getDb } from './client';
+
+export const DEFAULT_REMINDER_SETTINGS: ReminderSettings = {
+  enabled: false,
+  mode: 'daily',
+  dailyTime: '20:00',
+  intervalHours: 2,
+};
 
 export interface SettingsRow {
   key: string;
@@ -29,6 +36,16 @@ export async function getSettings(): Promise<Settings> {
       homeAccountIds = undefined;
     }
   }
+
+  let reminder: ReminderSettings = DEFAULT_REMINDER_SETTINGS;
+  if (map['reminder']) {
+    try {
+      reminder = { ...DEFAULT_REMINDER_SETTINGS, ...JSON.parse(map['reminder']) };
+    } catch {
+      reminder = DEFAULT_REMINDER_SETTINGS;
+    }
+  }
+
   return {
     currency: map['currency'] ?? 'EGP',
     themeMode: (map['themeMode'] as Settings['themeMode']) ?? 'dark',
@@ -37,7 +54,17 @@ export async function getSettings(): Promise<Settings> {
     homeAccountIds: Array.isArray(homeAccountIds)
       ? homeAccountIds.map((id: unknown) => Number(id)).filter((id: number) => Number.isFinite(id))
       : undefined,
+    reminder,
   };
+}
+
+export async function getReminderSettings(): Promise<ReminderSettings> {
+  const settings = await getSettings();
+  return settings.reminder ?? DEFAULT_REMINDER_SETTINGS;
+}
+
+export async function saveReminderSettings(reminder: ReminderSettings): Promise<void> {
+  await saveSetting('reminder', JSON.stringify(reminder));
 }
 
 export async function saveSettings(settings: Partial<Settings>): Promise<void> {

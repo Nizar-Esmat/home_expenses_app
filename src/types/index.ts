@@ -108,6 +108,15 @@ export interface Transfer {
   deletedAt?: string | null;
 }
 
+export type ReminderMode = 'daily' | 'interval';
+
+export interface ReminderSettings {
+  enabled: boolean;
+  mode: ReminderMode;
+  dailyTime: string;      // HH:mm 24-hour format, e.g. "20:00"
+  intervalHours: number;  // e.g. 2, 3, 4, 6, 8, 12
+}
+
 export interface Settings {
   currency: string;
   themeMode: 'dark' | 'light' | 'system';
@@ -115,6 +124,7 @@ export interface Settings {
   customCategories: string[];
   customCategoryEmojis: Record<string, string>;
   homeAccountIds?: number[];
+  reminder?: ReminderSettings;
 }
 
 export interface HomeTransaction {
