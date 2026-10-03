@@ -13,7 +13,7 @@ export default function InsightCard({ icon, label, value }: Props) {
 
   return (
     <View style={[styles.card, { borderColor: colors.border }]}>
-      <Text style={[styles.icon, { color: colors.text }]}>{icon}</Text>
+      <Text style={[styles.icon, { color: colors.textPrimary }]}>{icon}</Text>
       <Text style={[styles.value]} numberOfLines={1} adjustsFontSizeToFit>
         {value}
       </Text>

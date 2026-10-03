@@ -89,7 +89,7 @@ export default function SkeletonBlock({
   const altColor = isDark ? '#252B3D' : '#DEE2E8';
 
   return (
-    <View style={[styles.container, { height, width: widthProp, borderRadius }, style]}>
+    <View style={[styles.container, { height, width: widthProp as import('react-native').DimensionValue, borderRadius }, style]}>
       {/* Checkered mesh background (2x2 checkerboard) */}
       <View style={styles.meshContainer}>
         <View style={[styles.tile, { backgroundColor: baseColor }]} />

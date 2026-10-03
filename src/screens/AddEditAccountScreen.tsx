@@ -80,6 +80,7 @@ export default function AddEditAccountScreen() {
         await updateAccount(editAccount.id, {
           name: name.trim(),
           type,
+          currentBalance: editAccount.currentBalance,
           icon,
           color,
         });
