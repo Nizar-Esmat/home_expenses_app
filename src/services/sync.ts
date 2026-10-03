@@ -9,8 +9,8 @@ import {
 } from '@/services/database';
 import { getDb } from '@/services/database/client';
 
-const BACKUP_VERSION = 3;
-const SUPPORTED_VERSIONS = [3];
+const BACKUP_VERSION = 4;
+const SUPPORTED_VERSIONS = [3, 4];
 
 interface BackupPayload {
   schemaVersion: number;
@@ -71,6 +71,12 @@ function validatePayload(raw: unknown): BackupPayload {
   }
   if (!Array.isArray(data.settings)) {
     throw new Error('Invalid settings in backup.');
+  }
+  if (data.loans && !Array.isArray(data.loans)) {
+    throw new Error('Invalid loans in backup.');
+  }
+  if (data.loanRepayments && !Array.isArray(data.loanRepayments)) {
+    throw new Error('Invalid loan repayments in backup.');
   }
 
   return payload as BackupPayload;

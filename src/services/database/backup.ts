@@ -46,6 +46,33 @@ interface BackupTransfer {
   deletedAt: string | null;
 }
 
+interface BackupLoan {
+  id: number;
+  type: 'BORROWED' | 'LENT';
+  contactName: string;
+  amountMinor: number;
+  currencyCode: string;
+  accountId: number;
+  note: string | null;
+  loanDate: string;
+  paidAmountMinor: number;
+  status: 'PENDING' | 'PARTIAL' | 'SETTLED';
+  createdAt: string;
+  updatedAt: string | null;
+  deletedAt: string | null;
+}
+
+interface BackupLoanRepayment {
+  id: number;
+  loanId: number;
+  amountMinor: number;
+  accountId: number;
+  note: string | null;
+  repaymentDate: string;
+  createdAt: string;
+  deletedAt: string | null;
+}
+
 export interface DatabaseBackupData {
   accounts: BackupAccount[];
   categories: BackupCategory[];
@@ -53,6 +80,8 @@ export interface DatabaseBackupData {
   transactionItems: TransactionItem[];
   transfers: BackupTransfer[];
   settings: SettingsRow[];
+  loans?: BackupLoan[];
+  loanRepayments?: BackupLoanRepayment[];
 }
 
 export interface MergeBackupSummary {
@@ -66,11 +95,13 @@ export interface MergeBackupSummary {
   accountsAdded: number;
   transfersAdded: number;
   transfersSkipped: number;
+  loansAdded?: number;
+  loansSkipped?: number;
 }
 
 export async function exportDatabaseBackupData(): Promise<DatabaseBackupData> {
   const db = await getDb();
-  const [accounts, categories, transactions, transactionItems, transfers, settings] =
+  const [accounts, categories, transactions, transactionItems, transfers, settings, loans, loanRepayments] =
     await Promise.all([
       db.getAllAsync<BackupAccount>('SELECT * FROM accounts ORDER BY createdAt ASC, id ASC'),
       db.getAllAsync<BackupCategory>('SELECT * FROM categories ORDER BY type ASC, sortOrder ASC, id ASC'),
@@ -78,9 +109,11 @@ export async function exportDatabaseBackupData(): Promise<DatabaseBackupData> {
       db.getAllAsync<TransactionItem>('SELECT * FROM transaction_items ORDER BY transactionId ASC, sortOrder ASC'),
       db.getAllAsync<BackupTransfer>('SELECT * FROM transfers ORDER BY transferDate DESC, id DESC'),
       db.getAllAsync<SettingsRow>('SELECT key, value FROM settings'),
+      db.getAllAsync<BackupLoan>('SELECT * FROM loans ORDER BY loanDate DESC, id DESC'),
+      db.getAllAsync<BackupLoanRepayment>('SELECT * FROM loan_repayments ORDER BY repaymentDate DESC, id DESC'),
     ]);
 
-  return { accounts, categories, transactions, transactionItems, transfers, settings };
+  return { accounts, categories, transactions, transactionItems, transfers, settings, loans, loanRepayments };
 }
 
 export async function mergeBackupIntoDatabase(data: DatabaseBackupData): Promise<MergeBackupSummary> {
@@ -305,6 +338,90 @@ export async function mergeBackupIntoDatabase(data: DatabaseBackupData): Promise
         [row.key, row.value ?? ''],
       );
       summary.settingsMerged += 1;
+    }
+
+    const loanIdRemap = new Map<number, number>();
+    if (data.loans && Array.isArray(data.loans)) {
+      const existingLoans = await db.getAllAsync<{ id: number; contactName: string; amountMinor: number; loanDate: string; type: string }>(
+        'SELECT id, contactName, amountMinor, loanDate, type FROM loans',
+      );
+      const loanFingerprints = new Set(
+        existingLoans.map((l) => `${l.loanDate}|${l.amountMinor}|${l.type}|${l.contactName.trim().toLowerCase()}`),
+      );
+
+      for (const loan of data.loans) {
+        if (!loan?.loanDate || typeof loan.amountMinor !== 'number' || !loan.type) continue;
+        const fp = `${loan.loanDate}|${loan.amountMinor}|${loan.type}|${(loan.contactName ?? '').trim().toLowerCase()}`;
+        if (loanFingerprints.has(fp)) {
+          const existing = existingLoans.find(
+            (l) => `${l.loanDate}|${l.amountMinor}|${l.type}|${l.contactName.trim().toLowerCase()}` === fp,
+          );
+          if (existing) loanIdRemap.set(loan.id, existing.id);
+          summary.loansSkipped = (summary.loansSkipped ?? 0) + 1;
+          continue;
+        }
+
+        const accountId = accountIdRemap.get(loan.accountId) ?? loan.accountId ?? fallbackAccount?.id;
+        if (!accountId) continue;
+
+        const result = await db.runAsync(
+          `INSERT INTO loans
+             (type, contactName, amountMinor, currencyCode, accountId, note, loanDate, paidAmountMinor, status, createdAt, updatedAt, deletedAt)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            loan.type,
+            loan.contactName,
+            loan.amountMinor,
+            loan.currencyCode ?? 'EGP',
+            accountId,
+            loan.note ?? null,
+            loan.loanDate,
+            loan.paidAmountMinor ?? 0,
+            loan.status ?? 'PENDING',
+            loan.createdAt ?? loan.loanDate,
+            loan.updatedAt ?? null,
+            loan.deletedAt ?? null,
+          ],
+        );
+        loanIdRemap.set(loan.id, result.lastInsertRowId);
+        loanFingerprints.add(fp);
+        summary.loansAdded = (summary.loansAdded ?? 0) + 1;
+      }
+    }
+
+    if (data.loanRepayments && Array.isArray(data.loanRepayments)) {
+      const existingRepayments = await db.getAllAsync<{ loanId: number; amountMinor: number; repaymentDate: string }>(
+        'SELECT loanId, amountMinor, repaymentDate FROM loan_repayments',
+      );
+      const repFingerprints = new Set(
+        existingRepayments.map((r) => `${r.repaymentDate}|${r.amountMinor}|${r.loanId}`),
+      );
+
+      for (const rep of data.loanRepayments) {
+        if (!rep?.repaymentDate || typeof rep.amountMinor !== 'number') continue;
+        const remappedLoanId = loanIdRemap.get(rep.loanId) ?? rep.loanId;
+        const remappedAccountId = accountIdRemap.get(rep.accountId) ?? rep.accountId ?? fallbackAccount?.id;
+        if (!remappedLoanId || !remappedAccountId) continue;
+
+        const fp = `${rep.repaymentDate}|${rep.amountMinor}|${remappedLoanId}`;
+        if (repFingerprints.has(fp)) continue;
+
+        await db.runAsync(
+          `INSERT INTO loan_repayments
+             (loanId, amountMinor, accountId, note, repaymentDate, createdAt, deletedAt)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          [
+            remappedLoanId,
+            rep.amountMinor,
+            remappedAccountId,
+            rep.note ?? null,
+            rep.repaymentDate,
+            rep.createdAt ?? rep.repaymentDate,
+            rep.deletedAt ?? null,
+          ],
+        );
+        repFingerprints.add(fp);
+      }
     }
   });
 
