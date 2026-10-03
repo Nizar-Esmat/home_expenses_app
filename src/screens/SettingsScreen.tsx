@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,9 +7,11 @@ import {
   StyleSheet,
   Switch,
   ActivityIndicator,
+  Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { useTheme } from '@/theme/ThemeContext';
 import {
   COLOR_PALETTES,
@@ -23,11 +25,39 @@ import {
   pickAndImportBackupMerge,
 } from '@/services/sync';
 import { useAppDialog } from '@/components/AppDialog';
+import { ReminderSettings } from '@/types';
+import {
+  getReminderSettings,
+  saveReminderSettings,
+  scheduleExpenseReminder,
+  cancelExpenseReminder,
+  requestNotificationPermissions,
+  sendTestNotification,
+  isNotificationSupported,
+  DEFAULT_REMINDER_SETTINGS,
+} from '@/services/notifications';
 
 const PALETTES = Object.keys(COLOR_PALETTES) as ColorPaletteName[];
+const INTERVAL_PRESETS = [1, 2, 3, 4, 6, 8, 12];
 
 function capitalize(s: string) {
   return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+function formatDisplayTime(timeStr: string): string {
+  const parts = (timeStr || '20:00').split(':');
+  const h = parseInt(parts[0] || '20', 10);
+  const m = parseInt(parts[1] || '0', 10);
+  const d = new Date();
+  d.setHours(h, m, 0, 0);
+  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
+function getTimePickerDate(timeStr: string): Date {
+  const parts = (timeStr || '20:00').split(':');
+  const d = new Date();
+  d.setHours(parseInt(parts[0] || '20', 10), parseInt(parts[1] || '0', 10), 0, 0);
+  return d;
 }
 
 export default function SettingsScreen() {
@@ -41,6 +71,152 @@ export default function SettingsScreen() {
   const [syncingAction, setSyncingAction] = useState<
     'export_json' | 'export_db' | 'import' | null
   >(null);
+
+  const [reminderSettings, setReminderSettings] = useState<ReminderSettings>(
+    DEFAULT_REMINDER_SETTINGS,
+  );
+  const [showTimePicker, setShowTimePicker] = useState(false);
+  const [isSendingTest, setIsSendingTest] = useState(false);
+
+  useEffect(() => {
+    let isMounted = true;
+    getReminderSettings().then((res) => {
+      if (isMounted) {
+        setReminderSettings(res);
+      }
+    });
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const handleToggleReminder = async (enabled: boolean) => {
+    if (enabled) {
+      if (!isNotificationSupported()) {
+        showDialog({
+          title: 'Rebuild Required',
+          message:
+            'Notifications require native code. Please rebuild your development build using:\n\nnpx expo run:android\n\n(Note: expo-notifications is not supported in Expo Go on Android).',
+          icon: '🔔',
+          type: 'warning',
+          buttons: [{ text: 'OK', style: 'default' }],
+        });
+        return;
+      }
+      const granted = await requestNotificationPermissions();
+      if (!granted) {
+        showDialog({
+          title: 'Permission Required',
+          message:
+            'Please enable notifications for BudgetBuddy in your device settings to receive expense reminders.',
+          icon: '🔔',
+          type: 'warning',
+          buttons: [{ text: 'OK', style: 'default' }],
+        });
+        return;
+      }
+      const updated: ReminderSettings = { ...reminderSettings, enabled: true };
+      setReminderSettings(updated);
+      await saveReminderSettings(updated);
+      await scheduleExpenseReminder(updated);
+    } else {
+      const updated: ReminderSettings = { ...reminderSettings, enabled: false };
+      setReminderSettings(updated);
+      await saveReminderSettings(updated);
+      await cancelExpenseReminder();
+    }
+  };
+
+  const handleChangeMode = async (mode: 'daily' | 'interval') => {
+    const updated: ReminderSettings = { ...reminderSettings, mode };
+    setReminderSettings(updated);
+    await saveReminderSettings(updated);
+    if (updated.enabled) {
+      await scheduleExpenseReminder(updated);
+    }
+  };
+
+  const handleTimeChange = async (
+    _event: DateTimePickerEvent,
+    selectedDate?: Date,
+  ) => {
+    setShowTimePicker(false);
+    if (selectedDate) {
+      const h = String(selectedDate.getHours()).padStart(2, '0');
+      const m = String(selectedDate.getMinutes()).padStart(2, '0');
+      const timeStr = `${h}:${m}`;
+      const updated: ReminderSettings = {
+        ...reminderSettings,
+        dailyTime: timeStr,
+      };
+      setReminderSettings(updated);
+      await saveReminderSettings(updated);
+      if (updated.enabled) {
+        await scheduleExpenseReminder(updated);
+      }
+    }
+  };
+
+  const handleChangeInterval = async (hours: number) => {
+    const updated: ReminderSettings = {
+      ...reminderSettings,
+      intervalHours: hours,
+    };
+    setReminderSettings(updated);
+    await saveReminderSettings(updated);
+    if (updated.enabled) {
+      await scheduleExpenseReminder(updated);
+    }
+  };
+
+  const handleSendTest = async () => {
+    if (isSendingTest) return;
+    if (!isNotificationSupported()) {
+      showDialog({
+        title: 'Rebuild Required',
+        message:
+          'Notifications require native code. Please rebuild your development build using:\n\nnpx expo run:android\n\n(Note: expo-notifications is not supported in Expo Go on Android).',
+        icon: '🔔',
+        type: 'warning',
+        buttons: [{ text: 'OK', style: 'default' }],
+      });
+      return;
+    }
+    setIsSendingTest(true);
+    try {
+      const sent = await sendTestNotification();
+      if (sent) {
+        showDialog({
+          title: 'Test Reminder Sent',
+          message:
+            'A test notification will arrive in 2 seconds. Tap it to test opening the Add Expense modal.',
+          icon: '🔔',
+          type: 'success',
+          buttons: [{ text: 'OK', style: 'default' }],
+        });
+      } else {
+        showDialog({
+          title: 'Permission Denied',
+          message:
+            'Notification permission is needed to receive reminders. Please enable it in device settings.',
+          icon: '⚠️',
+          type: 'warning',
+          buttons: [{ text: 'OK', style: 'default' }],
+        });
+      }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Failed to send test reminder.';
+      showDialog({
+        title: 'Error',
+        message: msg,
+        icon: '❌',
+        type: 'danger',
+        buttons: [{ text: 'OK', style: 'default' }],
+      });
+    } finally {
+      setIsSendingTest(false);
+    }
+  };
 
   const startJsonExport = async () => {
     if (syncingAction) return;
@@ -271,6 +447,314 @@ export default function SettingsScreen() {
               );
             })}
           </View>
+        </View>
+
+        {/* ── Reminders & Notifications ─────────────────── */}
+
+        <Text
+          style={[
+            styles.sectionLabel,
+            { color: colors.textSecondary, marginTop: 24 },
+          ]}
+        >
+          Reminders & Notifications
+        </Text>
+        <View style={[styles.card, { backgroundColor: colors.card }]}>
+          {/* Main Toggle */}
+          <View style={styles.navRow}>
+            <View style={styles.navRowLeft}>
+              <View
+                style={[
+                  styles.navIcon,
+                  { backgroundColor: colors.primary + '33' },
+                ]}
+              >
+                <Ionicons
+                  name='alarm-outline'
+                  size={16}
+                  color={colors.primary}
+                />
+              </View>
+              <View>
+                <Text style={[styles.navLabel, { color: colors.textPrimary }]}>
+                  Expense Reminders
+                </Text>
+                <Text style={[styles.navSub, { color: colors.textSecondary }]}>
+                  Notify me to record daily expenses
+                </Text>
+              </View>
+            </View>
+            <Switch
+              value={reminderSettings.enabled}
+              onValueChange={handleToggleReminder}
+              trackColor={{ false: colors.border, true: colors.primary }}
+              thumbColor={colors.background}
+            />
+          </View>
+
+          {reminderSettings.enabled && (
+            <>
+              <View
+                style={[styles.divider, { backgroundColor: colors.border }]}
+              />
+
+              <View style={styles.reminderContent}>
+                <Text
+                  style={[
+                    styles.fieldLabelNoPadding,
+                    { color: colors.textSecondary },
+                  ]}
+                >
+                  Schedule Mode
+                </Text>
+
+                <View
+                  style={[
+                    styles.modeSelector,
+                    {
+                      backgroundColor: colors.inputFill,
+                      borderColor: colors.border,
+                    },
+                  ]}
+                >
+                  <TouchableOpacity
+                    style={[
+                      styles.modeTab,
+                      reminderSettings.mode === 'daily' && {
+                        backgroundColor: colors.card,
+                        borderColor: colors.border,
+                        borderWidth: 1,
+                      },
+                    ]}
+                    onPress={() => handleChangeMode('daily')}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons
+                      name='time-outline'
+                      size={15}
+                      color={
+                        reminderSettings.mode === 'daily'
+                          ? colors.primary
+                          : colors.textSecondary
+                      }
+                    />
+                    <Text
+                      style={[
+                        styles.modeTabText,
+                        {
+                          color:
+                            reminderSettings.mode === 'daily'
+                              ? colors.textPrimary
+                              : colors.textSecondary,
+                          fontWeight:
+                            reminderSettings.mode === 'daily' ? '700' : '500',
+                        },
+                      ]}
+                    >
+                      Daily Time
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[
+                      styles.modeTab,
+                      reminderSettings.mode === 'interval' && {
+                        backgroundColor: colors.card,
+                        borderColor: colors.border,
+                        borderWidth: 1,
+                      },
+                    ]}
+                    onPress={() => handleChangeMode('interval')}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons
+                      name='repeat-outline'
+                      size={15}
+                      color={
+                        reminderSettings.mode === 'interval'
+                          ? colors.primary
+                          : colors.textSecondary
+                      }
+                    />
+                    <Text
+                      style={[
+                        styles.modeTabText,
+                        {
+                          color:
+                            reminderSettings.mode === 'interval'
+                              ? colors.textPrimary
+                              : colors.textSecondary,
+                          fontWeight:
+                            reminderSettings.mode === 'interval' ? '700' : '500',
+                        },
+                      ]}
+                    >
+                      Repeating Interval
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+
+                {reminderSettings.mode === 'daily' ? (
+                  <View style={styles.optionSection}>
+                    <Text
+                      style={[
+                        styles.fieldLabelNoPadding,
+                        { color: colors.textSecondary },
+                      ]}
+                    >
+                      Reminder Time
+                    </Text>
+                    <TouchableOpacity
+                      style={[
+                        styles.timePickerButton,
+                        {
+                          backgroundColor: colors.inputFill,
+                          borderColor: colors.border,
+                        },
+                      ]}
+                      onPress={() => setShowTimePicker(true)}
+                      activeOpacity={0.7}
+                    >
+                      <View style={styles.timePickerLeft}>
+                        <Ionicons
+                          name='time'
+                          size={18}
+                          color={colors.primary}
+                        />
+                        <Text
+                          style={[
+                            styles.timePickerText,
+                            { color: colors.textPrimary },
+                          ]}
+                        >
+                          {formatDisplayTime(reminderSettings.dailyTime)}
+                        </Text>
+                      </View>
+                      <View
+                        style={[
+                          styles.changeBadge,
+                          { backgroundColor: colors.primary + '22' },
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.changeBadgeText,
+                            { color: colors.primary },
+                          ]}
+                        >
+                          Change
+                        </Text>
+                      </View>
+                    </TouchableOpacity>
+
+                    {showTimePicker && (
+                      <DateTimePicker
+                        value={getTimePickerDate(reminderSettings.dailyTime)}
+                        mode='time'
+                        display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                        onChange={handleTimeChange}
+                      />
+                    )}
+                  </View>
+                ) : (
+                  <View style={styles.optionSection}>
+                    <Text
+                      style={[
+                        styles.fieldLabelNoPadding,
+                        { color: colors.textSecondary },
+                      ]}
+                    >
+                      Repeat Frequency
+                    </Text>
+                    <View style={styles.intervalGrid}>
+                      {INTERVAL_PRESETS.map((hrs) => {
+                        const isSelected =
+                          reminderSettings.intervalHours === hrs;
+                        return (
+                          <TouchableOpacity
+                            key={hrs}
+                            style={[
+                              styles.intervalChip,
+                              {
+                                backgroundColor: isSelected
+                                  ? colors.primary
+                                  : colors.inputFill,
+                                borderColor: isSelected
+                                  ? colors.primary
+                                  : colors.border,
+                              },
+                            ]}
+                            onPress={() => handleChangeInterval(hrs)}
+                            activeOpacity={0.7}
+                          >
+                            <Text
+                              style={[
+                                styles.intervalChipText,
+                                {
+                                  color: isSelected
+                                    ? '#FFFFFF'
+                                    : colors.textPrimary,
+                                  fontWeight: isSelected ? '700' : '500',
+                                },
+                              ]}
+                            >
+                              {`Every ${hrs}h`}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  </View>
+                )}
+
+                <View style={styles.testContainer}>
+                  <TouchableOpacity
+                    style={[
+                      styles.testButton,
+                      {
+                        backgroundColor: colors.inputFill,
+                        borderColor: colors.border,
+                      },
+                    ]}
+                    onPress={handleSendTest}
+                    disabled={isSendingTest}
+                    activeOpacity={0.7}
+                  >
+                    {isSendingTest ? (
+                      <ActivityIndicator
+                        size='small'
+                        color={colors.primary}
+                      />
+                    ) : (
+                      <>
+                        <Ionicons
+                          name='paper-plane-outline'
+                          size={15}
+                          color={colors.primary}
+                        />
+                        <Text
+                          style={[
+                            styles.testButtonText,
+                            { color: colors.primary },
+                          ]}
+                        >
+                          Send Test Notification (2s)
+                        </Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                  <Text
+                    style={[
+                      styles.testHint,
+                      { color: colors.textSecondary },
+                    ]}
+                  >
+                    Tapping the notification will immediately open Add Expense
+                  </Text>
+                </View>
+              </View>
+            </>
+          )}
         </View>
 
         {/* ── Categories ─────────────────────────────────── */}
@@ -559,6 +1043,102 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '500',
     marginTop: 4,
+    textAlign: 'center',
+  },
+
+  reminderContent: {
+    padding: 14,
+  },
+  fieldLabelNoPadding: {
+    fontSize: 12,
+    fontWeight: '600',
+    marginBottom: 8,
+    letterSpacing: 0.3,
+  },
+  modeSelector: {
+    flexDirection: 'row',
+    borderRadius: 10,
+    borderWidth: 1,
+    padding: 3,
+    marginBottom: 14,
+  },
+  modeTab: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
+    borderRadius: 8,
+    gap: 6,
+  },
+  modeTabText: {
+    fontSize: 13,
+  },
+  optionSection: {
+    marginBottom: 14,
+  },
+  timePickerButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  timePickerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  timePickerText: {
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  changeBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  changeBadgeText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  intervalGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  intervalChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  intervalChipText: {
+    fontSize: 13,
+  },
+  testContainer: {
+    marginTop: 6,
+    alignItems: 'center',
+  },
+  testButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
+    paddingVertical: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    gap: 8,
+  },
+  testButtonText: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  testHint: {
+    fontSize: 11,
+    marginTop: 6,
     textAlign: 'center',
   },
 });
