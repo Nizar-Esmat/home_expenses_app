@@ -31,7 +31,14 @@
         }
       ],
       "expo-asset",
-      "expo-font"
+      "expo-font",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#408A71"
+        }
+      ]
     ],
     "scheme": "budgetbuddy",
     "experiments": {
