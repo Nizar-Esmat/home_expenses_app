@@ -10,6 +10,8 @@ npm-debug.*
 *.orig.*
 web-build/
 *.db
+budgetbuddy-backup-*.json
+*.json.bak
 
 # Generated native projects (use `expo prebuild` to regenerate)
 android/
