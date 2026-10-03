@@ -1,5 +1,6 @@
+import React, { useEffect } from 'react';
 import { View, ActivityIndicator } from 'react-native';
-import { Stack } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useFonts } from 'expo-font';
@@ -7,14 +8,36 @@ import { Ionicons } from '@expo/vector-icons';
 import { ThemeProvider, useTheme } from '@/theme/ThemeContext';
 import { StatusBar } from 'expo-status-bar';
 import { DialogProvider } from '@/components/AppDialog';
+import {
+  initNotifications,
+  syncReminderSchedule,
+  addNotificationResponseListener,
+} from '@/services/notifications';
 
 function RootLayoutNav() {
   const { colors, isDark } = useTheme();
+  const router = useRouter();
+
+  useEffect(() => {
+    initNotifications();
+    syncReminderSchedule();
+
+    const unsubscribe = addNotificationResponseListener((action) => {
+      if (action === 'add-expense') {
+        router.push('/add-expense');
+      }
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, [router]);
+
   return (
     <DialogProvider>
       <StatusBar style={isDark ? 'light' : 'dark'} />
       <View style={{ flex: 1, backgroundColor: colors.background }}>
-        <Stack detachInactiveScreens={false} screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.background } }}>
+        <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.background } }}>
           <Stack.Screen name="(tabs)" />
           <Stack.Screen name="add-expense" options={{ presentation: 'modal' }} />
           <Stack.Screen name="add-income" options={{ presentation: 'modal' }} />
