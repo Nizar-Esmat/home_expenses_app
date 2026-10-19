@@ -16,12 +16,20 @@ export default function BalanceCard({
 }: Props) {
   const { colors } = useTheme();
   return (
-    <View style={styles.card}>
-      <Text style={styles.label}>Total Balance</Text>
-      <Text style={styles.amount}>
+    <View
+      style={styles.card}
+      accessible={true}
+      accessibilityRole="summary"
+      accessibilityLabel={`Total balance: ${formatCurrency(totalBalance, currency)}, across all ${accountCount} account${accountCount !== 1 ? 's' : ''}`}
+    >
+      <Text style={[styles.label, { color: colors.textSecondary }]}>Total Balance</Text>
+      <Text
+        style={[styles.amount, { color: colors.textPrimary }]}
+        accessibilityRole="header"
+      >
         {formatCurrency(totalBalance, currency)}
       </Text>
-      <Text style={styles.subtitle}>
+      <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
         Across all {accountCount} account{accountCount !== 1 ? 's' : ''}
       </Text>
     </View>
@@ -37,20 +45,18 @@ const styles = StyleSheet.create({
     fontSize: 16,
     lineHeight: 20,
     fontWeight: '600',
-    color: '#AAB2C0',
   },
   amount: {
     fontSize: 34,
     lineHeight: 50,
     fontWeight: '800',
-    color: '#F8FAFC',
     marginTop: 2,
   },
   subtitle: {
     fontSize: 14,
     lineHeight: 20,
     fontWeight: '400',
-    color: '#AAB2C0',
     marginTop: 2,
   },
 });
+

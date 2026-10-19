@@ -1,84 +1,93 @@
 export const COLOR_PALETTES = {
   grey: {
-    primary: '#6B7280',
-    primaryDark: '#9CA3AF',
-    subtle: '#FFFFFF',
-    subtleDark: '#374151',
-    darkBg: '#111827',
-    inputFill: '#FFFFFF',
-    inputFillDark: '#070808',
+    primary: '#18181B',       // Clean charcoal zinc
+    primaryDark: '#E4E4E7',   // Radiant platinum zinc
+    subtle: '#F4F4F5',
+    subtleDark: '#27272A',
+    darkBg: '#09090B',       // Pure neutral obsidian canvas (0 blue)
+    cardDark: '#18181B',     // Elevated neutral surface (0 blue)
+    inputFill: '#F4F4F5',
+    inputFillDark: '#141416',
   },
   green: {
     primary: '#059669',
-    primaryDark: '#408A71',
+    primaryDark: '#10B981',   // High-energy mint emerald (replaces muddy #408A71)
     subtle: '#ECFDF5',
     subtleDark: '#064E3B',
-    darkBg: '#0A1F1A',
+    darkBg: '#09090B',
+    cardDark: '#141916',
     inputFill: '#F0FDF4',
-    inputFillDark: '#051612',
+    inputFillDark: '#101412',
   },
   blue: {
     primary: '#2563EB',
     primaryDark: '#3B82F6',
     subtle: '#EFF6FF',
     subtleDark: '#1E3A8A',
-    darkBg: '#0A1428',
+    darkBg: '#09090B',
+    cardDark: '#121722',
     inputFill: '#F8FAFC',
-    inputFillDark: '#050A14',
+    inputFillDark: '#0D111A',
   },
   purple: {
     primary: '#9333EA',
     primaryDark: '#A855F7',
     subtle: '#F5F3FF',
     subtleDark: '#581C87',
-    darkBg: '#140A1F',
+    darkBg: '#09090B',
+    cardDark: '#171322',
     inputFill: '#FAFAFE',
-    inputFillDark: '#0A050F',
+    inputFillDark: '#110D1A',
   },
   orange: {
     primary: '#EA580C',
     primaryDark: '#F97316',
     subtle: '#FFF7ED',
     subtleDark: '#7C2D12',
-    darkBg: '#1A0F08',
+    darkBg: '#09090B',
+    cardDark: '#191512',
     inputFill: '#FFFBF5',
-    inputFillDark: '#0A0604',
+    inputFillDark: '#14100D',
   },
   red: {
-    primary: '#DC2626',
-    primaryDark: '#EF4444',
-    subtle: '#FEF2F2',
-    subtleDark: '#7F1D1D',
-    darkBg: '#1A0A0A',
-    inputFill: '#FEFafa',
-    inputFillDark: '#0A0505',
+    primary: '#E11D48',       // Rose crimson (distinct from danger #EF4444)
+    primaryDark: '#FB7185',
+    subtle: '#FFF1F2',
+    subtleDark: '#881337',
+    darkBg: '#09090B',
+    cardDark: '#1A1315',
+    inputFill: '#FFF1F2',
+    inputFillDark: '#140D0F',
   },
   teal: {
     primary: '#0D9488',
     primaryDark: '#14B8A6',
     subtle: '#F0FDFA',
     subtleDark: '#134E4A',
-    darkBg: '#081A18',
-    inputFill: '#F5FDFB',
-    inputFillDark: '#030B0A',
+    darkBg: '#09090B',
+    cardDark: '#121818',
+    inputFill: '#F0FDFA',
+    inputFillDark: '#0E1414',
   },
   pink: {
     primary: '#DB2777',
-    primaryDark: '#EC4899',
+    primaryDark: '#F472B6',
     subtle: '#FDF2F8',
     subtleDark: '#831843',
-    darkBg: '#1A0714',
+    darkBg: '#09090B',
+    cardDark: '#1A1218',
     inputFill: '#FEF7FC',
-    inputFillDark: '#0A0308',
+    inputFillDark: '#140D12',
   },
   yellow: {
-    primary: '#CA8A04',
-    primaryDark: '#EAB308',
+    primary: '#D97706',       // Amber gold with WCAG AA light-mode contrast
+    primaryDark: '#FBBF24',   // Warm radiant gold
     subtle: '#FEFCE8',
     subtleDark: '#713F12',
-    darkBg: '#141204',
-    inputFill: '#FFFEF5',
-    inputFillDark: '#0A0A02',
+    darkBg: '#09090B',
+    cardDark: '#181610',
+    inputFill: '#FFFBEB',
+    inputFillDark: '#14120D',
   },
 };
 
@@ -88,6 +97,7 @@ export const NEUTRAL_LIGHT = {
   surface: '#FFFFFF',
   card: '#F8FAFC',
   primary: '',
+  onPrimary: '#FFFFFF',
   highlight: '#1E293B',
   border: '#E2E8F0',
   inputFill: '#F1F5F9',
@@ -101,15 +111,16 @@ export const NEUTRAL_LIGHT = {
 };
 
 export const NEUTRAL_DARK = {
-  background: '#000000',
-  surface: '#111111',
-  card: '#0A0A0A',
+  background: '#09090B',
+  surface: '#141416',
+  card: '#18181B',
   primary: '',
+  onPrimary: '#FFFFFF',
   highlight: '#FFFFFF',
-  border: '#262626',
-  inputFill: '#171717',
+  border: '#27272A',
+  inputFill: '#141416',
   textPrimary: '#FFFFFF',
-  textSecondary: '#A3A3A3',
+  textSecondary: '#A1A1AA',
   danger: '#EF4444',
   warning: '#F59E0B',
   success: '#10B981',
@@ -120,31 +131,31 @@ export const NEUTRAL_DARK = {
 export type ColorPaletteName = keyof typeof COLOR_PALETTES;
 
 export const PALETTE_COLORS: Record<ColorPaletteName, string> = {
-  grey: '#6B7280',
+  grey: '#18181B',
   green: '#059669',
   blue: '#2563EB',
   purple: '#9333EA',
   orange: '#EA580C',
-  red: '#DC2626',
+  red: '#E11D48',
   teal: '#0D9488',
   pink: '#DB2777',
-  yellow: '#CA8A04',
+  yellow: '#D97706',
 };
 
 export const PALETTE_COLORS_DARK: Record<ColorPaletteName, string> = {
-  grey: '#9CA3AF',
-  green: '#408A71',
+  grey: '#E4E4E7',
+  green: '#10B981',
   blue: '#3B82F6',
   purple: '#A855F7',
   orange: '#F97316',
-  red: '#EF4444',
+  red: '#FB7185',
   teal: '#14B8A6',
-  pink: '#EC4899',
-  yellow: '#EAB308',
+  pink: '#F472B6',
+  yellow: '#FBBF24',
 };
 
 // ── Fallback ───────────────────────────────────
-export const dark = { ...NEUTRAL_DARK, primary: '#408A71' };
+export const dark = { ...NEUTRAL_DARK, primary: '#10B981' };
 export const light = { ...NEUTRAL_LIGHT, primary: '#059669' };
 
 export type ColorScheme = typeof light;

@@ -18,6 +18,7 @@ import {
   recalculateAccountBalances,
   getSettings,
   saveSettings,
+  resolvePinnedAccountIds,
 } from '@/services/database';
 import { Account } from '@/types';
 import { useAppDialog } from '@/components/AppDialog';
@@ -56,14 +57,13 @@ export default function AccountsScreen() {
     const [all, settings] = await Promise.all([getAccounts(), getSettings()]);
     setAccounts(all);
     setCurrency(settings.currency ?? 'EGP');
-    const validIds = (settings.homeAccountIds ?? [])
-      .filter((id) =>
-        all.some((a) => a.id === id && a.isArchived === 0),
-      )
-      .slice(0, 3);
-    setHomeAccountIds(validIds);
-    if ((settings.homeAccountIds ?? []).join(',') !== validIds.join(',')) {
-      saveSettings({ homeAccountIds: validIds });
+    const resolvedIds = resolvePinnedAccountIds(all, settings.homeAccountIds);
+    setHomeAccountIds(resolvedIds);
+    if (
+      settings.homeAccountIds === undefined ||
+      (settings.homeAccountIds ?? []).join(',') !== resolvedIds.join(',')
+    ) {
+      saveSettings({ homeAccountIds: resolvedIds });
     }
   }, []);
 
@@ -329,6 +329,9 @@ export default function AccountsScreen() {
                   params: { accountId: String(acc.id) },
                 })
               }
+              hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
+              accessibilityRole="button"
+              accessibilityLabel={`Edit ${acc.name}`}
             >
               <Ionicons
                 name='pencil-outline'
@@ -350,6 +353,9 @@ export default function AccountsScreen() {
                 },
               ]}
               onPress={() => handleArchive(acc)}
+              hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
+              accessibilityRole="button"
+              accessibilityLabel={`${acc.isArchived === 1 ? 'Unarchive' : 'Archive'} ${acc.name}`}
             >
               <Ionicons
                 name={acc.isArchived === 1 ? 'eye-outline' : 'archive-outline'}
@@ -372,6 +378,9 @@ export default function AccountsScreen() {
                   },
                 ]}
                 onPress={() => handleDelete(acc)}
+                hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
+                accessibilityRole="button"
+                accessibilityLabel={`Delete ${acc.name}`}
               >
                 <Ionicons
                   name='trash-outline'
@@ -405,13 +414,19 @@ export default function AccountsScreen() {
     <View style={[styles.screen, { backgroundColor: colors.background }]}>
       {/* Header */}
       <View style={[styles.header, { borderBottomColor: colors.border }]}>
-        <TouchableOpacity onPress={() => router.back()}>
+        <TouchableOpacity
+          onPress={() => router.back()}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          style={styles.backBtn}
+          accessibilityRole="button"
+          accessibilityLabel="Go back"
+        >
           <Ionicons name='arrow-back' size={24} color={colors.textPrimary} />
         </TouchableOpacity>
-        <Text style={[styles.title, { color: colors.textPrimary }]}>
+        <Text style={[styles.title, { color: colors.textPrimary }]} accessibilityRole="header">
           Accounts
         </Text>
-        <View style={{ width: 24 }} />
+        <View style={{ width: 44 }} />
       </View>
 
       <ScrollView
@@ -428,35 +443,35 @@ export default function AccountsScreen() {
             })
             .split('.');
           return (
-            <View style={[styles.summaryCard]}>
+            <View style={[styles.summaryCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
               <View style={styles.summaryTopRow}>
-                <Text style={styles.summaryLabel}>Total Balance</Text>
+                <Text style={[styles.summaryLabel, { color: colors.textSecondary }]}>Total Balance</Text>
               </View>
 
               <View style={styles.summaryAmountRow}>
-                <Text style={styles.summaryCurrency}>{currency}</Text>
-                <Text style={styles.summaryAmount}>{intPart}</Text>
+                <Text style={[styles.summaryCurrency, { color: colors.primary }]}>{currency}</Text>
+                <Text style={[styles.summaryAmount, { color: colors.textPrimary }]}>{intPart}</Text>
                 {!isWhole && (
-                  <Text style={styles.summaryDecimals}>.{decPart}</Text>
+                  <Text style={[styles.summaryDecimals, { color: colors.textSecondary }]}>.{decPart}</Text>
                 )}
               </View>
 
               <View style={styles.summaryStatsRow}>
-                <View style={styles.summaryStat}>
+                <View style={[styles.summaryStat, { backgroundColor: colors.inputFill, borderColor: colors.border }]}>
                   <Ionicons
                     name='checkmark-circle'
-                    size={10}
-                    color='#00fc0d56'
+                    size={13}
+                    color={colors.success}
                   />
-                  <Text style={styles.summaryStatText}>
+                  <Text style={[styles.summaryStatText, { color: colors.textSecondary }]}>
                     {active.length} active account
                     {active.length !== 1 ? 's' : ''}
                   </Text>
                 </View>
                 {archived.length > 0 && (
-                  <View style={styles.summaryStat}>
-                    <Ionicons name='remove-circle' size={10} color='#f7a000' />
-                    <Text style={styles.summaryStatText}>
+                  <View style={[styles.summaryStat, { backgroundColor: colors.inputFill, borderColor: colors.border }]}>
+                    <Ionicons name='remove-circle' size={13} color={colors.warning} />
+                    <Text style={[styles.summaryStatText, { color: colors.textSecondary }]}>
                       {archived.length} archived
                     </Text>
                   </View>
@@ -501,8 +516,10 @@ export default function AccountsScreen() {
         style={[styles.fab, { backgroundColor: colors.primary }]}
         onPress={() => router.push('/add-account')}
         activeOpacity={0.8}
+        accessibilityRole="button"
+        accessibilityLabel="Add account"
       >
-        <Ionicons name='add' size={28} color='#FFFFFF' />
+        <Ionicons name='add' size={28} color={colors.onPrimary} />
       </TouchableOpacity>
     </View>
   );
@@ -514,40 +531,24 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     borderBottomWidth: 1,
+  },
+  backBtn: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   title: { fontSize: 18, fontWeight: '700' },
   content: { padding: 20 },
 
   summaryCard: {
     borderWidth: 1,
-    borderColor: '#C0C0C020',
-    backgroundColor: '#1E293B',
-    position: 'relative',
     borderRadius: 20,
     padding: 24,
     marginBottom: 16,
-    overflow: 'hidden',
-  },
-  summaryCircle1: {
-    position: 'absolute',
-    width: 180,
-    height: 180,
-    borderRadius: 90,
-    backgroundColor: 'rgba(255,255,255,0.07)',
-    top: -50,
-    right: -40,
-  },
-  summaryCircle2: {
-    position: 'absolute',
-    width: 110,
-    height: 110,
-    borderRadius: 55,
-    backgroundColor: 'rgba(255,255,255,0.05)',
-    bottom: -30,
-    right: 60,
   },
   summaryTopRow: {
     flexDirection: 'row',
@@ -556,7 +557,6 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   summaryLabel: {
-    color: 'rgba(255,255,255,0.7)',
     fontSize: 13,
     fontWeight: '600',
     letterSpacing: 0.5,
@@ -566,7 +566,6 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 10,
-    backgroundColor: 'rgba(255,255,255,0.15)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -577,45 +576,38 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   summaryCurrency: {
-    color: 'rgba(255,255,255,0.75)',
     fontSize: 18,
     fontWeight: '700',
     marginBottom: 4,
   },
   summaryAmount: {
-    color: '#fff',
     fontSize: 38,
     fontWeight: '800',
     lineHeight: 42,
   },
   summaryDecimals: {
-    color: 'rgba(255,255,255,0.6)',
     fontSize: 22,
     fontWeight: '700',
     marginBottom: 2,
   },
   summaryDivider: {
     height: 1,
-    backgroundColor: 'rgba(255,255,255,0.15)',
     marginBottom: 12,
   },
   summaryStatsRow: {
     flexDirection: 'row',
-    gap: 16,
+    gap: 12,
   },
   summaryStat: {
-    borderWidth: 0.5,
-    borderColor: '#ffffff0e',
-    backgroundColor: '#75757541',
-    borderRadius: 3,
-    paddingHorizontal: 4,
-    paddingVertical: 2,
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
+    gap: 6,
   },
   summaryStatText: {
-    color: 'rgba(255,255,255,0.65)',
     fontSize: 12,
     fontWeight: '500',
   },
@@ -683,13 +675,13 @@ const styles = StyleSheet.create({
   pill: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: 13,
-    paddingVertical: 6,
-    borderRadius: 8,
-    borderWidth: 0.5,
+    gap: 6,
+    paddingHorizontal: 14,
+    minHeight: 44,
+    borderRadius: 10,
+    borderWidth: 1,
   },
-  pillLabel: { fontSize: 13, fontWeight: '500' },
+  pillLabel: { fontSize: 13, fontWeight: '600' },
 
   // Divider between rows
   rowDivider: {

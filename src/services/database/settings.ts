@@ -49,6 +49,7 @@ export async function getSettings(): Promise<Settings> {
   return {
     currency: map['currency'] ?? 'EGP',
     themeMode: (map['themeMode'] as Settings['themeMode']) ?? 'dark',
+    colorPalette: map['colorPalette'] ?? 'grey',
     customCategories: map['customCategories'] ? JSON.parse(map['customCategories']) : [],
     customCategoryEmojis: map['customCategoryEmojis'] ? JSON.parse(map['customCategoryEmojis']) : {},
     homeAccountIds: Array.isArray(homeAccountIds)

@@ -69,7 +69,7 @@ export default function TransferTile({
             {formatDate(transfer.createdAt)}
           </Text>
           {transfer.note ? (
-            <Text style={[styles.note, { color: colors.textSecondary }]} numberOfLines={1}> 
+            <Text style={[styles.note, { color: colors.textSecondary, textAlign: 'auto' }]} numberOfLines={1}> 
               {transfer.note}
             </Text>
           ) : null}
@@ -84,8 +84,14 @@ export default function TransferTile({
           <Text style={[styles.amount, { color: colors.primary }]}> 
             {formatCurrency(transfer.amount, currency)}
           </Text>
-          <TouchableOpacity onPress={confirmDelete} style={styles.deleteBtn}> 
-            <Ionicons name="trash-outline" size={18} color={colors.danger} />
+          <TouchableOpacity
+            onPress={confirmDelete}
+            style={styles.deleteBtn}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            accessibilityRole="button"
+            accessibilityLabel={`Delete transfer of ${formatCurrency(transfer.amount, currency)}`}
+          > 
+            <Ionicons name="trash-outline" size={20} color={colors.danger} />
           </TouchableOpacity>
         </View>
       </View>
@@ -115,7 +121,13 @@ const styles = StyleSheet.create({
   date: { fontSize: 12, marginTop: 2 },
   note: { fontSize: 12, marginTop: 2 },
   fee: { fontSize: 12, marginTop: 2, fontWeight: '500' },
-  right: { alignItems: 'flex-end', marginLeft: 10 },
-  amount: { fontSize: 14, fontWeight: '700', marginBottom: 6 },
-  deleteBtn: { padding: 2 },
+  right: { alignItems: 'flex-end', marginLeft: 10, justifyContent: 'center' },
+  amount: { fontSize: 14, fontWeight: '700', marginBottom: 2 },
+  deleteBtn: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 10,
+  },
 });

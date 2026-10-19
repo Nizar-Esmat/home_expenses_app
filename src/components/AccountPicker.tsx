@@ -4,7 +4,6 @@ import {
   Text,
   TouchableOpacity,
   StyleSheet,
-  ScrollView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/theme/ThemeContext';
@@ -39,14 +38,11 @@ export default function AccountPicker({
   const { colors } = useTheme();
 
   return (
-    <View style={styles.wrapper}>
+    <View style={styles.wrapper} accessibilityRole="radiogroup" accessibilityLabel="Select account">
       <Text style={[styles.label, { color: colors.textSecondary }]}>
         Account
       </Text>
-      <ScrollView
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.scrollContent}
-      >
+      <View style={styles.grid}>
         {accounts.map((acc) => {
           const selected = selectedAccount?.id === acc.id;
           const accent = acc.color ?? colors.primary;
@@ -62,12 +58,15 @@ export default function AccountPicker({
               ]}
               onPress={() => onSelect(acc)}
               activeOpacity={0.75}
+              accessibilityRole="radio"
+              accessibilityState={{ selected }}
+              accessibilityLabel={`${acc.name} account`}
             >
               <Text style={styles.cardIcon}>{acc.icon ?? '💳'}</Text>
               <Text
                 style={[
                   styles.cardName,
-                  { color: selected ? accent : colors.textPrimary },
+                  { color: selected ? accent : colors.textPrimary, textAlign: 'auto' },
                 ]}
                 numberOfLines={1}
                 ellipsizeMode='tail'
@@ -77,7 +76,7 @@ export default function AccountPicker({
             </TouchableOpacity>
           );
         })}
-      </ScrollView>
+      </View>
     </View>
   );
 }
@@ -89,31 +88,28 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     marginBottom: 10,
   },
-  scrollContent: {
+  grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    paddingHorizontal: 2,
     gap: 10,
     width: '100%',
   },
   card: {
-    // let the card size to its content instead of fixed width
     alignSelf: 'flex-start',
     flexDirection: 'row',
     alignItems: 'center',
+    minHeight: 44,
     gap: 6,
-    paddingHorizontal: 12,
+    paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: 14,
     borderWidth: 1.5,
-    flexShrink: 0,
   },
   cardIcon: { fontSize: 20 },
   cardName: {
     fontSize: 15,
     fontWeight: '700',
-    marginBottom: 2,
-    marginLeft: 8,
+    marginLeft: 6,
     flexShrink: 1,
   },
 });

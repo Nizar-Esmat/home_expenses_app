@@ -22,11 +22,6 @@ function fmtAmt(amount: number, currency: string): string {
   })}`;
 }
 
-const STATUS_COLOR: Record<string, string> = {
-  PENDING: '#F59E0B',
-  PARTIAL: '#3B82F6',
-  SETTLED: '#10B981',
-};
 
 const STATUS_LABEL: Record<string, string> = {
   PENDING: 'Pending',
@@ -38,26 +33,32 @@ export default function LoanTile({ loan, currency, onPay, onEdit, onDelete, expa
   const { colors } = useTheme();
   const outstanding = loan.amount - loan.paidAmount;
   const isBorrowed = loan.type === 'BORROWED';
-  const statusColor = STATUS_COLOR[loan.status] ?? '#6B7280';
+  const statusColor = loan.status === 'SETTLED' ? colors.success : loan.status === 'PARTIAL' ? colors.primary : colors.warning;
   const isSettled = loan.status === 'SETTLED';
 
   return (
     <View style={[styles.container, { backgroundColor: colors.card, borderColor: colors.border }]}>
-      <TouchableOpacity activeOpacity={0.75} onPress={onToggle} style={styles.main}>
-        <View style={[styles.iconBadge, { backgroundColor: isBorrowed ? '#10B98118' : '#EF444418' }]}>
+      <TouchableOpacity
+        activeOpacity={0.75}
+        onPress={onToggle}
+        style={styles.main}
+        accessibilityRole="button"
+        accessibilityLabel={`Loan with ${loan.contactName}, ${isBorrowed ? 'borrowed' : 'lent'} ${fmtAmt(loan.amount, currency)}, ${isSettled ? 'settled' : `${fmtAmt(outstanding, currency)} left`}`}
+      >
+        <View style={[styles.iconBadge, { backgroundColor: isBorrowed ? colors.successBg : colors.dangerBg }]}>
           <Text style={styles.iconEmoji}>{isBorrowed ? '📥' : '📤'}</Text>
         </View>
 
         <View style={styles.info}>
           <View style={styles.topRow}>
-            <Text style={[styles.contact, { color: colors.textPrimary }]} numberOfLines={1}>
+            <Text style={[styles.contact, { color: colors.textPrimary, textAlign: 'auto' }]} numberOfLines={1}>
               {loan.contactName}
             </Text>
             <View style={[styles.statusBadge, { backgroundColor: statusColor + '22' }]}>
               <Text style={[styles.statusText, { color: statusColor }]}>{STATUS_LABEL[loan.status]}</Text>
             </View>
           </View>
-          <Text style={[styles.typeLabel, { color: isBorrowed ? '#10B981' : '#EF4444' }]}>
+          <Text style={[styles.typeLabel, { color: isBorrowed ? colors.success : colors.danger }]}>
             {isBorrowed ? 'You borrowed' : 'You lent'} · {fmtAmt(loan.amount, currency)}
           </Text>
           {loan.paidAmount > 0 && (
@@ -68,7 +69,7 @@ export default function LoanTile({ loan, currency, onPay, onEdit, onDelete, expa
         </View>
 
         <View style={styles.rightCol}>
-          <Text style={[styles.outstanding, { color: isSettled ? '#10B981' : isBorrowed ? '#EF4444' : '#10B981' }]}>
+          <Text style={[styles.outstanding, { color: isSettled ? colors.success : isBorrowed ? colors.danger : colors.success }]}>
             {isSettled ? '✓' : fmtAmt(outstanding, currency)}
           </Text>
           <Text style={[styles.outstandingLabel, { color: colors.textSecondary }]}>
@@ -114,24 +115,32 @@ export default function LoanTile({ loan, currency, onPay, onEdit, onDelete, expa
                 style={[styles.payBtn, { backgroundColor: colors.primary }]}
                 onPress={onPay}
                 activeOpacity={0.8}
+                accessibilityRole="button"
+                accessibilityLabel="Add repayment"
               >
-                <Ionicons name="cash-outline" size={15} color="#fff" />
-                <Text style={styles.payBtnText}>Add Repayment</Text>
+                <Ionicons name="cash-outline" size={16} color={colors.onPrimary} />
+                <Text style={[styles.payBtnText, { color: colors.onPrimary }]}>Add Repayment</Text>
               </TouchableOpacity>
             )}
             <TouchableOpacity
               style={[styles.editBtn, { borderColor: colors.border }]}
               onPress={onEdit}
               activeOpacity={0.8}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              accessibilityRole="button"
+              accessibilityLabel={`Edit loan with ${loan.contactName}`}
             >
-              <Ionicons name="pencil-outline" size={15} color={colors.textSecondary} />
+              <Ionicons name="pencil-outline" size={16} color={colors.textSecondary} />
             </TouchableOpacity>
             <TouchableOpacity
-              style={[styles.deleteBtn, { borderColor: '#EF444440' }]}
+              style={[styles.deleteBtn, { borderColor: colors.danger + '40', backgroundColor: colors.dangerBg }]}
               onPress={onDelete}
               activeOpacity={0.8}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              accessibilityRole="button"
+              accessibilityLabel={`Delete loan with ${loan.contactName}`}
             >
-              <Ionicons name="trash-outline" size={15} color="#EF4444" />
+              <Ionicons name="trash-outline" size={16} color={colors.danger} />
             </TouchableOpacity>
           </View>
         </View>
@@ -174,15 +183,15 @@ const styles = StyleSheet.create({
   actionRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   payBtn: {
     flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: 6, paddingVertical: 10, borderRadius: 10,
+    gap: 6, minHeight: 44, paddingVertical: 10, borderRadius: 10,
   },
-  payBtnText: { color: '#fff', fontSize: 14, fontWeight: '700' },
+  payBtnText: { fontSize: 14, fontWeight: '700' },
   editBtn: {
-    width: 40, height: 40, borderRadius: 10, borderWidth: 1,
+    width: 44, height: 44, borderRadius: 10, borderWidth: 1,
     alignItems: 'center', justifyContent: 'center',
   },
   deleteBtn: {
-    width: 40, height: 40, borderRadius: 10, borderWidth: 1,
+    width: 44, height: 44, borderRadius: 10, borderWidth: 1,
     alignItems: 'center', justifyContent: 'center',
   },
 });

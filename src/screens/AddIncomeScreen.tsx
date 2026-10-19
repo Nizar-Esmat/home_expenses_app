@@ -19,6 +19,7 @@ import {
   updateIncome,
 } from '@/services/database';
 import { Account, Income, IncomeCategory } from '@/types';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AppInput from '@/components/AppInput';
 import AppButton from '@/components/AppButton';
 import DateTimeInput from '@/components/DateTimeInput';
@@ -28,6 +29,7 @@ import { useAppDialog } from '@/components/AppDialog';
 export default function AddIncomeScreen() {
   const { colors } = useTheme();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { incomeId } = useLocalSearchParams<{ incomeId?: string }>();
   const { showDialog } = useAppDialog();
 
@@ -145,17 +147,23 @@ export default function AddIncomeScreen() {
 
   return (
     <KeyboardAvoidingView
-      style={styles.screen}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      style={[styles.screen, { backgroundColor: colors.background }]}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <View style={[styles.header, { borderBottomColor: colors.border }]}>
-        <TouchableOpacity onPress={() => router.back()}>
+        <TouchableOpacity
+          onPress={() => router.back()}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          accessibilityRole="button"
+          accessibilityLabel="Go back"
+          style={styles.backBtn}
+        >
           <Ionicons name='arrow-back' size={24} color={colors.textPrimary} />
         </TouchableOpacity>
-        <Text style={[styles.title, { color: colors.textPrimary }]}>
+        <Text style={[styles.title, { color: colors.textPrimary }]} accessibilityRole="header">
           {editIncome ? 'Edit Income' : 'Add Income'}
         </Text>
-        <View style={{ width: 24 }} />
+        <View style={{ width: 44 }} />
       </View>
 
       <ScrollView
@@ -244,7 +252,7 @@ export default function AddIncomeScreen() {
           placeholder='e.g. Salary, Freelance, Bonus…'
           multiline
           numberOfLines={3}
-          style={{ textAlignVertical: 'center' }}
+          style={{ textAlignVertical: 'top', textAlign: 'auto', minHeight: 64 }}
         />
 
         {editIncome ? null : (
@@ -255,13 +263,25 @@ export default function AddIncomeScreen() {
             onUseCustomDateChange={setUseCustomDate}
           />
         )}
+        <View style={{ height: 16 }} />
+      </ScrollView>
 
+      <View
+        style={[
+          styles.pinnedFooter,
+          {
+            backgroundColor: colors.background,
+            borderTopColor: colors.border,
+            paddingBottom: Math.max(insets.bottom, 12),
+          },
+        ]}
+      >
         <AppButton
           label={editIncome ? 'Update Income' : 'Save Income'}
           onPress={save}
           loading={loading}
         />
-      </ScrollView>
+      </View>
     </KeyboardAvoidingView>
   );
 }
@@ -272,12 +292,28 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
     borderBottomWidth: 1,
+  },
+  backBtn: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   title: { fontSize: 18, fontWeight: '700' },
   content: { padding: 20 },
+  pinnedFooter: {
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -3 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+  },
   banner: {
     flexDirection: 'row',
     alignItems: 'center',

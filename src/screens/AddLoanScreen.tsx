@@ -16,11 +16,6 @@ import { useAppDialog } from '@/components/AppDialog';
 
 type Mode = 'loan' | 'repayment';
 
-const STATUS_COLOR: Record<string, string> = {
-  PENDING: '#F59E0B',
-  PARTIAL: '#3B82F6',
-  SETTLED: '#10B981',
-};
 const STATUS_LABEL: Record<string, string> = {
   PENDING: 'Pending',
   PARTIAL: 'Partial',
@@ -32,6 +27,12 @@ export default function AddLoanScreen() {
   const router = useRouter();
   const { loanId: loanIdParam, editLoanId: editLoanIdParam } = useLocalSearchParams<{ loanId?: string; editLoanId?: string }>();
   const { showDialog } = useAppDialog();
+
+  const statusColors: Record<string, string> = {
+    PENDING: colors.warning,
+    PARTIAL: colors.primary,
+    SETTLED: colors.success,
+  };
 
   const isEditing = !!editLoanIdParam;
   const [editingLoanId, setEditingLoanId] = useState<number | null>(null);
@@ -148,7 +149,10 @@ export default function AddLoanScreen() {
   const remainingBalance = selectedLoan ? selectedLoan.amount - selectedLoan.paidAmount : 0;
 
   return (
-    <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+    <KeyboardAvoidingView
+      style={[styles.screen, { backgroundColor: colors.background }]}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+    >
 
       {/* ── Header ───────────────────────────────── */}
       <View style={[styles.header, { borderBottomColor: colors.border }]}>
@@ -156,12 +160,15 @@ export default function AddLoanScreen() {
           onPress={() => router.back()}
           style={[styles.backBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
           activeOpacity={0.8}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          accessibilityRole="button"
+          accessibilityLabel="Go back"
         >
           <Ionicons name="arrow-back" size={20} color={colors.textPrimary} />
         </TouchableOpacity>
 
         <View style={styles.headerCenter}>
-          <Text style={[styles.title, { color: colors.textPrimary }]}>
+          <Text style={[styles.title, { color: colors.textPrimary }]} accessibilityRole="header">
             {isEditing ? 'Edit Loan' : mode === 'loan' ? 'New Loan' : 'Add Repayment'}
           </Text>
           {isEditing && (
@@ -169,7 +176,7 @@ export default function AddLoanScreen() {
           )}
         </View>
 
-        <View style={{ width: 36 }} />
+        <View style={{ width: 44 }} />
       </View>
 
       <ScrollView
@@ -179,18 +186,24 @@ export default function AddLoanScreen() {
       >
         {/* ── Mode Toggle ──────────────────────────── */}
         {!isEditing && (
-          <View style={[styles.modeToggle, { backgroundColor: colors.inputFill, borderColor: colors.border }]}>
+          <View
+            style={[styles.modeToggle, { backgroundColor: colors.inputFill, borderColor: colors.border }]}
+            accessibilityRole="tablist"
+          >
             <TouchableOpacity
               style={[styles.modeBtn, mode === 'loan' && { backgroundColor: colors.primary }]}
               onPress={() => switchMode('loan')}
               activeOpacity={0.8}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: mode === 'loan' }}
+              accessibilityLabel="New Loan"
             >
               <Ionicons
                 name={mode === 'loan' ? 'cash' : 'cash-outline'}
                 size={16}
-                color={mode === 'loan' ? '#fff' : colors.textSecondary}
+                color={mode === 'loan' ? colors.onPrimary : colors.textSecondary}
               />
-              <Text style={[styles.modeBtnText, { color: mode === 'loan' ? '#fff' : colors.textSecondary }]}>
+              <Text style={[styles.modeBtnText, { color: mode === 'loan' ? colors.onPrimary : colors.textSecondary }]}>
                 New Loan
               </Text>
             </TouchableOpacity>
@@ -198,13 +211,16 @@ export default function AddLoanScreen() {
               style={[styles.modeBtn, mode === 'repayment' && { backgroundColor: colors.primary }]}
               onPress={() => switchMode('repayment')}
               activeOpacity={0.8}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: mode === 'repayment' }}
+              accessibilityLabel="Repayment"
             >
               <Ionicons
                 name={mode === 'repayment' ? 'return-down-back' : 'return-down-back-outline'}
                 size={16}
-                color={mode === 'repayment' ? '#fff' : colors.textSecondary}
+                color={mode === 'repayment' ? colors.onPrimary : colors.textSecondary}
               />
-              <Text style={[styles.modeBtnText, { color: mode === 'repayment' ? '#fff' : colors.textSecondary }]}>
+              <Text style={[styles.modeBtnText, { color: mode === 'repayment' ? colors.onPrimary : colors.textSecondary }]}>
                 Repayment
               </Text>
             </TouchableOpacity>
@@ -215,7 +231,7 @@ export default function AddLoanScreen() {
         {mode === 'loan' ? (
           <>
             <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>LOAN TYPE</Text>
-            <View style={styles.typeRow}>
+            <View style={styles.typeRow} accessibilityRole="radiogroup" accessibilityLabel="Loan type">
 
               {/* BORROWED */}
               <TouchableOpacity
@@ -225,6 +241,9 @@ export default function AddLoanScreen() {
                 ]}
                 onPress={() => setLoanType('BORROWED')}
                 activeOpacity={0.8}
+                accessibilityRole="radio"
+                accessibilityState={{ selected: loanType === 'BORROWED' }}
+                accessibilityLabel="Borrowed: Someone lent you"
               >
                 <View style={[styles.typeAccentRail, { backgroundColor: loanType === 'BORROWED' ? colors.primary : 'transparent' }]} />
                 <View style={styles.typeBtnInner}>
@@ -237,7 +256,7 @@ export default function AddLoanScreen() {
                   <Text style={[styles.typeBtnDesc, { color: colors.textSecondary }]}>Someone lent you</Text>
                   {loanType === 'BORROWED' && (
                     <View style={[styles.typeCheck, { backgroundColor: colors.primary }]}>
-                      <Ionicons name="checkmark" size={10} color="#fff" />
+                      <Ionicons name="checkmark" size={10} color={colors.onPrimary} />
                     </View>
                   )}
                 </View>
@@ -251,6 +270,9 @@ export default function AddLoanScreen() {
                 ]}
                 onPress={() => setLoanType('LENT')}
                 activeOpacity={0.8}
+                accessibilityRole="radio"
+                accessibilityState={{ selected: loanType === 'LENT' }}
+                accessibilityLabel="Lent: You lent someone"
               >
                 <View style={[styles.typeAccentRail, { backgroundColor: loanType === 'LENT' ? colors.primary : 'transparent' }]} />
                 <View style={styles.typeBtnInner}>
@@ -263,7 +285,7 @@ export default function AddLoanScreen() {
                   <Text style={[styles.typeBtnDesc, { color: colors.textSecondary }]}>You lent someone</Text>
                   {loanType === 'LENT' && (
                     <View style={[styles.typeCheck, { backgroundColor: colors.primary }]}>
-                      <Ionicons name="checkmark" size={10} color="#fff" />
+                      <Ionicons name="checkmark" size={10} color={colors.onPrimary} />
                     </View>
                   )}
                 </View>
@@ -294,11 +316,11 @@ export default function AddLoanScreen() {
                 <View style={{ gap: 10 }}>
                   <View style={styles.loanPickerTop}>
                     <View style={styles.loanPickerLeft}>
-                      <View style={[styles.loanTypeIcon, { backgroundColor: selectedLoan.type === 'BORROWED' ? '#10B98118' : '#EF444418' }]}>
+                      <View style={[styles.loanTypeIcon, { backgroundColor: selectedLoan.type === 'BORROWED' ? colors.success + '18' : colors.danger + '18' }]}>
                         <Text style={{ fontSize: 18 }}>{selectedLoan.type === 'BORROWED' ? '📥' : '📤'}</Text>
                       </View>
                       <View>
-                        <Text style={[styles.loanPickerName, { color: colors.textPrimary }]}>
+                        <Text style={[styles.loanPickerName, { color: colors.textPrimary, textAlign: 'auto' }]}>
                           {selectedLoan.contactName}
                         </Text>
                         <Text style={[styles.loanPickerSub, { color: colors.textSecondary }]}>
@@ -307,8 +329,8 @@ export default function AddLoanScreen() {
                       </View>
                     </View>
                     <View style={styles.loanPickerRight}>
-                      <View style={[styles.statusBadge, { backgroundColor: (STATUS_COLOR[selectedLoan.status] ?? '#6B7280') + '22' }]}>
-                        <Text style={[styles.statusText, { color: STATUS_COLOR[selectedLoan.status] ?? '#6B7280' }]}>
+                      <View style={[styles.statusBadge, { backgroundColor: (statusColors[selectedLoan.status] ?? colors.textSecondary) + '22' }]}>
+                        <Text style={[styles.statusText, { color: statusColors[selectedLoan.status] ?? colors.textSecondary }]}>
                           {STATUS_LABEL[selectedLoan.status]}
                         </Text>
                       </View>
@@ -360,47 +382,49 @@ export default function AddLoanScreen() {
                     <Text style={[styles.dropdownEmpty, { color: colors.textSecondary }]}>No active loans</Text>
                   </View>
                 ) : (
-                  activeLoans.map((loan) => {
-                    const rem = loan.amount - loan.paidAmount;
-                    const isSelected = selectedLoan?.id === loan.id;
-                    const paidPct = Math.min(100, (loan.paidAmount / loan.amount) * 100);
-                    return (
-                      <TouchableOpacity
-                        key={loan.id}
-                        style={[
-                          styles.dropdownItem,
-                          { borderBottomColor: colors.border },
-                          isSelected && { backgroundColor: colors.primary + '10' },
-                        ]}
-                        onPress={() => {
-                          setSelectedLoan(loan);
-                          setAmount(String(rem));
-                          setShowLoanPicker(false);
-                          setAmountError('');
-                        }}
-                        activeOpacity={0.75}
-                      >
-                        <View style={[styles.loanTypeIcon, { backgroundColor: loan.type === 'BORROWED' ? '#10B98115' : '#EF444415' }]}>
-                          <Text style={{ fontSize: 16 }}>{loan.type === 'BORROWED' ? '📥' : '📤'}</Text>
-                        </View>
-                        <View style={styles.dropdownInfo}>
-                          <Text style={[styles.dropdownName, { color: colors.textPrimary }]}>{loan.contactName}</Text>
-                          <Text style={[styles.dropdownSub, { color: colors.textSecondary }]}>
-                            {loan.type === 'BORROWED' ? 'Borrowed' : 'Lent'} · Rem {rem.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                          </Text>
-                          <View style={[styles.dropdownProgress, { backgroundColor: colors.border }]}>
-                            <View
-                              style={[
-                                styles.dropdownProgressFill,
-                                { backgroundColor: colors.primary, width: `${paidPct}%` as `${number}%` },
-                              ]}
-                            />
+                  <ScrollView nestedScrollEnabled style={{ maxHeight: 220 }} showsVerticalScrollIndicator={false}>
+                    {activeLoans.map((loan) => {
+                      const rem = loan.amount - loan.paidAmount;
+                      const isSelected = selectedLoan?.id === loan.id;
+                      const paidPct = Math.min(100, (loan.paidAmount / loan.amount) * 100);
+                      return (
+                        <TouchableOpacity
+                          key={loan.id}
+                          style={[
+                            styles.dropdownItem,
+                            { borderBottomColor: colors.border },
+                            isSelected && { backgroundColor: colors.primary + '10' },
+                          ]}
+                          onPress={() => {
+                            setSelectedLoan(loan);
+                            setAmount(String(rem));
+                            setShowLoanPicker(false);
+                            setAmountError('');
+                          }}
+                          activeOpacity={0.75}
+                        >
+                          <View style={[styles.loanTypeIcon, { backgroundColor: loan.type === 'BORROWED' ? colors.success + '15' : colors.danger + '15' }]}>
+                            <Text style={{ fontSize: 16 }}>{loan.type === 'BORROWED' ? '📥' : '📤'}</Text>
                           </View>
-                        </View>
-                        {isSelected && <Ionicons name="checkmark-circle" size={20} color={colors.primary} />}
-                      </TouchableOpacity>
-                    );
-                  })
+                          <View style={styles.dropdownInfo}>
+                            <Text style={[styles.dropdownName, { color: colors.textPrimary, textAlign: 'auto' }]}>{loan.contactName}</Text>
+                            <Text style={[styles.dropdownSub, { color: colors.textSecondary }]}>
+                              {loan.type === 'BORROWED' ? 'Borrowed' : 'Lent'} · Rem {rem.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </Text>
+                            <View style={[styles.dropdownProgress, { backgroundColor: colors.border }]}>
+                              <View
+                                style={[
+                                  styles.dropdownProgressFill,
+                                  { backgroundColor: colors.primary, width: `${paidPct}%` as `${number}%` },
+                                ]}
+                              />
+                            </View>
+                          </View>
+                          {isSelected && <Ionicons name="checkmark-circle" size={20} color={colors.primary} />}
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </ScrollView>
                 )}
               </View>
             )}
@@ -417,14 +441,14 @@ export default function AddLoanScreen() {
                 <View style={[styles.summaryDivider, { backgroundColor: colors.border }]} />
                 <View style={styles.summaryCol}>
                   <Text style={[styles.summaryLabel, { color: colors.textSecondary }]}>Paid</Text>
-                  <Text style={[styles.summaryAmt, { color: '#10B981' }]}>
+                  <Text style={[styles.summaryAmt, { color: colors.success }]}>
                     {selectedLoan.paidAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </Text>
                 </View>
                 <View style={[styles.summaryDivider, { backgroundColor: colors.border }]} />
                 <View style={styles.summaryCol}>
                   <Text style={[styles.summaryLabel, { color: colors.textSecondary }]}>Remaining</Text>
-                  <Text style={[styles.summaryAmt, { color: '#EF4444' }]}>
+                  <Text style={[styles.summaryAmt, { color: colors.danger }]}>
                     {remainingBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </Text>
                 </View>
@@ -552,7 +576,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20, paddingVertical: 12, borderBottomWidth: 1,
   },
   backBtn: {
-    width: 36, height: 36, borderRadius: 10, borderWidth: 1,
+    width: 44, height: 44, borderRadius: 12, borderWidth: 1,
     alignItems: 'center', justifyContent: 'center',
   },
   headerCenter: { alignItems: 'center', flex: 1 },
@@ -568,7 +592,7 @@ const styles = StyleSheet.create({
   },
   modeBtn: {
     flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: 6, paddingVertical: 12, borderRadius: 12,
+    gap: 6, minHeight: 44, paddingVertical: 10, borderRadius: 12,
   },
   modeBtnText: { fontSize: 14, fontWeight: '700' },
 
@@ -639,7 +663,7 @@ const styles = StyleSheet.create({
   summaryDivider: { width: 1, height: 32, marginHorizontal: 4 },
 
   // ── Dropdown (shared)
-  dropdown: { borderWidth: 1, borderRadius: 14, overflow: 'hidden', marginBottom: 8 },
+  dropdown: { borderWidth: 1, borderRadius: 14, overflow: 'hidden', marginBottom: 12, maxHeight: 220 },
   dropdownItem: {
     flexDirection: 'row', alignItems: 'center',
     paddingHorizontal: 14, paddingVertical: 12, gap: 10, borderBottomWidth: 1,

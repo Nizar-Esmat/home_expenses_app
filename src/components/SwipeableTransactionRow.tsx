@@ -1,11 +1,12 @@
-import React, { useRef, useState, useCallback, useEffect } from 'react';
-import { View, StyleSheet, Animated, Dimensions } from 'react-native';
+import React, { useRef, useCallback } from 'react';
+import { StyleSheet, Animated, Dimensions, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Swipeable } from 'react-native-gesture-handler';
 import { useAppDialog } from '@/components/AppDialog';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const THRESHOLD = SCREEN_WIDTH * 0.3;
+const THRESHOLD = SCREEN_WIDTH * 0.35;
+const ACTION_WIDTH = 90;
 
 interface Props {
   onEdit: () => void;
@@ -19,52 +20,47 @@ export default function SwipeableTransactionRow({
   children,
 }: Props) {
   const swipeableRef = useRef<Swipeable>(null);
-  const [editTriggered, setEditTriggered] = useState(false);
   const { showDialog } = useAppDialog();
 
   const closeRow = useCallback(() => {
     swipeableRef.current?.close();
   }, []);
 
-  const handleSwipeableWillOpen = (direction: 'left' | 'right') => {
-    if (direction === 'left') {
-      showDialog({
-        title: 'Delete Transaction',
-        message: 'Are you sure you want to delete this transaction?',
-        type: 'danger',
-        buttons: [
-          { text: 'Cancel', style: 'cancel', onPress: closeRow },
-          {
-            text: 'Delete',
-            style: 'destructive',
-            onPress: () => {
-              onDelete();
-              closeRow();
-            },
+  const confirmDelete = useCallback(() => {
+    showDialog({
+      title: 'Delete Transaction',
+      message: 'Are you sure you want to delete this transaction?',
+      type: 'danger',
+      buttons: [
+        { text: 'Cancel', style: 'cancel', onPress: closeRow },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => {
+            onDelete();
+            closeRow();
           },
-        ],
-      });
-    } else {
-      setEditTriggered(true);
+        },
+      ],
+    });
+  }, [showDialog, onDelete, closeRow]);
+
+  const handleEditPress = useCallback(() => {
+    closeRow();
+    onEdit();
+  }, [closeRow, onEdit]);
+
+  const handleSwipeableWillOpen = (direction: 'left' | 'right') => {
+    // Standard mobile ergonomics:
+    // Swiping right-to-left (direction === 'right') reveals Delete action on the right
+    if (direction === 'right') {
+      confirmDelete();
     }
   };
 
-  const handleSwipeableClose = () => {
-    setEditTriggered(false);
-  };
-
-  useEffect(() => {
-    if (editTriggered) {
-      onEdit();
-      closeRow();
-    }
-  }, [editTriggered, onEdit, closeRow]);
-
-  const ACTION_WIDTH = 100;
-
+  // Revealed when swiping left-to-right (from left): EDIT (Non-destructive)
   const renderLeftActions = (
     progress: Animated.AnimatedInterpolation<number>,
-    _dragX: Animated.AnimatedInterpolation<number>,
   ) => {
     const translateX = progress.interpolate({
       inputRange: [0, 1],
@@ -73,17 +69,22 @@ export default function SwipeableTransactionRow({
     });
 
     return (
-      <Animated.View style={[styles.leftActionsContainer, { transform: [{ translateX }] }]}>
-        <View style={[styles.actionButton, styles.deleteAction]}>
-          <Ionicons name='trash-outline' size={28} color='#FFFFFF' />
-        </View>
+      <Animated.View style={[styles.actionsContainer, { transform: [{ translateX }] }]}>
+        <TouchableOpacity
+          style={[styles.actionButton, styles.editAction]}
+          onPress={handleEditPress}
+          accessibilityRole="button"
+          accessibilityLabel="Edit transaction"
+        >
+          <Ionicons name='pencil-outline' size={26} color='#FFFFFF' />
+        </TouchableOpacity>
       </Animated.View>
     );
   };
 
+  // Revealed when swiping right-to-left (from right): DELETE (Destructive)
   const renderRightActions = (
     progress: Animated.AnimatedInterpolation<number>,
-    _dragX: Animated.AnimatedInterpolation<number>,
   ) => {
     const translateX = progress.interpolate({
       inputRange: [0, 1],
@@ -92,10 +93,15 @@ export default function SwipeableTransactionRow({
     });
 
     return (
-      <Animated.View style={[styles.rightActionsContainer, { transform: [{ translateX }] }]}>
-        <View style={[styles.actionButton, styles.editAction]}>
-          <Ionicons name='pencil-outline' size={28} color='#FFFFFF' />
-        </View>
+      <Animated.View style={[styles.actionsContainer, { transform: [{ translateX }] }]}>
+        <TouchableOpacity
+          style={[styles.actionButton, styles.deleteAction]}
+          onPress={confirmDelete}
+          accessibilityRole="button"
+          accessibilityLabel="Delete transaction"
+        >
+          <Ionicons name='trash-outline' size={26} color='#FFFFFF' />
+        </TouchableOpacity>
       </Animated.View>
     );
   };
@@ -111,7 +117,6 @@ export default function SwipeableTransactionRow({
       leftThreshold={THRESHOLD}
       rightThreshold={THRESHOLD}
       onSwipeableWillOpen={handleSwipeableWillOpen}
-      onSwipeableClose={handleSwipeableClose}
     >
       {children}
     </Swipeable>
@@ -119,14 +124,8 @@ export default function SwipeableTransactionRow({
 }
 
 const styles = StyleSheet.create({
-  leftActionsContainer: {
-    width: 100,
-    height: '100%',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  rightActionsContainer: {
-    width: 100,
+  actionsContainer: {
+    width: ACTION_WIDTH,
     height: '100%',
     justifyContent: 'center',
     alignItems: 'center',
@@ -139,12 +138,12 @@ const styles = StyleSheet.create({
   },
   editAction: {
     backgroundColor: '#3B82F6',
-    borderTopRightRadius: 12,
-    borderBottomRightRadius: 12,
+    borderTopLeftRadius: 12,
+    borderBottomLeftRadius: 12,
   },
   deleteAction: {
     backgroundColor: '#DC2626',
-    borderTopLeftRadius: 12,
-    borderBottomLeftRadius: 12,
+    borderTopRightRadius: 12,
+    borderBottomRightRadius: 12,
   },
 });

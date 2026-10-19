@@ -135,7 +135,13 @@ export default function AllCategorySpendingScreen() {
   return (
     <View style={[styles.screen, { backgroundColor: colors.background }]}>
       <View style={[styles.header, { borderBottomColor: colors.border }]}>
-        <TouchableOpacity onPress={() => router.back()} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+        <TouchableOpacity
+          onPress={() => router.back()}
+          style={styles.backBtn}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          accessibilityRole="button"
+          accessibilityLabel="Go back"
+        >
           <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
         </TouchableOpacity>
         <Text style={[styles.title, { color: colors.textPrimary }]} numberOfLines={1}>
@@ -165,6 +171,9 @@ export default function AllCategorySpendingScreen() {
               activeOpacity={0.7}
               onPress={() => handleCategoryPress(cat.category)}
               style={styles.categoryTouchable}
+              accessibilityRole="button"
+              accessibilityLabel={`${cat.category}, ${formatCurrency(cat.total, currency)}, ${(cat.percentage * 100).toFixed(1)}% of spending`}
+              accessibilityState={{ expanded: expandedCategory === cat.category }}
             >
               <CategoryStatRow
                 category={cat.category}
@@ -177,7 +186,7 @@ export default function AllCategorySpendingScreen() {
               <Ionicons
                 name={expandedCategory === cat.category ? 'chevron-up' : 'chevron-down'}
                 size={16}
-                color="#AAB2C0"
+                color={colors.textSecondary}
                 style={styles.expandIcon}
               />
             </TouchableOpacity>
@@ -230,11 +239,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
     borderBottomWidth: 1,
   },
-  title: { fontSize: 20, fontWeight: '700', flex: 1, marginLeft: 12 },
+  backBtn: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  title: { fontSize: 20, fontWeight: '700', flex: 1, marginLeft: 8 },
   periodLabel: { fontSize: 13, fontWeight: '600' },
   content: { padding: 20 },
   totalCard: {

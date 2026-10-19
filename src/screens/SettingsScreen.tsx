@@ -66,7 +66,7 @@ export default function SettingsScreen() {
   const router = useRouter();
   const { showDialog } = useAppDialog();
 
-  const ringColor = isDark ? '#FFFFFF' : '#374151';
+  const ringColor = colors.textPrimary;
 
   const [syncingAction, setSyncingAction] = useState<
     'export_json' | 'export_db' | 'import' | null
@@ -80,11 +80,13 @@ export default function SettingsScreen() {
 
   useEffect(() => {
     let isMounted = true;
-    getReminderSettings().then((res) => {
-      if (isMounted) {
-        setReminderSettings(res);
-      }
-    });
+    getReminderSettings()
+      .then((res) => {
+        if (isMounted) {
+          setReminderSettings(res);
+        }
+      })
+      .catch(() => {});
     return () => {
       isMounted = false;
     };
@@ -399,6 +401,8 @@ export default function SettingsScreen() {
               onValueChange={toggleTheme}
               trackColor={{ false: colors.border, true: colors.primary }}
               thumbColor={colors.background}
+              accessibilityLabel="Toggle Dark Mode"
+              accessibilityRole="switch"
             />
           </View>
           <View style={[styles.divider, { backgroundColor: colors.border }]} />
@@ -409,12 +413,22 @@ export default function SettingsScreen() {
             {PALETTES.map((p) => {
               const selected = colorPalette === p;
               const color = isDark ? PALETTE_COLORS_DARK[p] : PALETTE_COLORS[p];
+              const checkmarkColor =
+                p === 'yellow' ||
+                (isDark && p === 'grey') ||
+                (!isDark && (p === 'orange' || p === 'green' || p === 'teal'))
+                  ? '#111827'
+                  : '#FFFFFF';
               return (
                 <TouchableOpacity
                   key={p}
                   style={styles.paletteItem}
                   onPress={() => changeColorPalette(p)}
                   activeOpacity={0.7}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  accessibilityRole="radio"
+                  accessibilityState={{ selected }}
+                  accessibilityLabel={`${capitalize(p)} palette`}
                 >
                   <View
                     style={[
@@ -427,7 +441,7 @@ export default function SettingsScreen() {
                       <View
                         style={[styles.checkmark, { backgroundColor: color }]}
                       >
-                        <Ionicons name='checkmark' size={14} color='#fff' />
+                        <Ionicons name='checkmark' size={14} color={checkmarkColor} />
                       </View>
                     )}
                   </View>
@@ -489,6 +503,8 @@ export default function SettingsScreen() {
               onValueChange={handleToggleReminder}
               trackColor={{ false: colors.border, true: colors.primary }}
               thumbColor={colors.background}
+              accessibilityLabel="Toggle Expense Reminders"
+              accessibilityRole="switch"
             />
           </View>
 
@@ -1021,12 +1037,13 @@ const styles = StyleSheet.create({
   },
   paletteItem: {
     alignItems: 'center',
-    width: 52,
+    width: 56,
+    paddingVertical: 4,
   },
   colorCircle: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     borderWidth: 2,
     borderColor: 'transparent',
     alignItems: 'center',

@@ -1,6 +1,6 @@
 import React, { useCallback, useState } from 'react';
 import {
-  View, Text, ScrollView, TouchableOpacity, StyleSheet,
+  View, Text, ScrollView, TouchableOpacity, StyleSheet, Modal,
 } from 'react-native';
 import TransfersSkeleton from '@/components/skeletons/TransfersSkeleton';
 import { useRouter, useFocusEffect } from 'expo-router';
@@ -91,11 +91,17 @@ export default function TransfersScreen() {
   return (
     <View style={[styles.screen, { backgroundColor: colors.background }]}> 
       <View style={[styles.header, { borderBottomColor: colors.border }]}> 
-        <TouchableOpacity onPress={() => router.back()}>
+        <TouchableOpacity
+          onPress={() => router.back()}
+          style={styles.backBtn}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          accessibilityRole="button"
+          accessibilityLabel="Go back"
+        >
           <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
         </TouchableOpacity>
         <Text style={[styles.title, { color: colors.textPrimary }]}>Transfers</Text>
-        <View style={{ width: 24 }} />
+        <View style={{ width: 44 }} />
       </View>
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}> 
@@ -103,6 +109,9 @@ export default function TransfersScreen() {
           <TouchableOpacity
             style={[styles.monthFilterBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
             onPress={() => setMonthMenuOpen((open) => !open)}
+            accessibilityRole="button"
+            accessibilityLabel={`Selected period: ${selectedMonthLabel}`}
+            accessibilityState={{ expanded: monthMenuOpen }}
           >
             <Text style={[styles.monthFilterText, { color: colors.textPrimary }]} numberOfLines={1}> 
               {selectedMonthLabel}
@@ -113,66 +122,6 @@ export default function TransfersScreen() {
               color={colors.textSecondary}
             />
           </TouchableOpacity>
-
-          {monthMenuOpen && (
-            <>
-              <TouchableOpacity
-                style={styles.monthMenuBackdrop}
-                activeOpacity={1}
-                onPress={() => setMonthMenuOpen(false)}
-              />
-              <View
-                style={[styles.monthMenu, { backgroundColor: colors.card, borderColor: colors.border }]}
-              >
-                <ScrollView nestedScrollEnabled style={styles.monthMenuList}>
-                  <TouchableOpacity
-                    style={[
-                      styles.monthMenuItem,
-                      selectedMonthKey === ALL_MONTHS_KEY && { backgroundColor: colors.primary + '20' },
-                    ]}
-                    onPress={() => {
-                      setMonthMenuOpen(false);
-                      setSelectedMonthKey(ALL_MONTHS_KEY);
-                      load(ALL_MONTHS_KEY);
-                    }}
-                  >
-                    <View style={styles.monthMenuItemContent}>
-                      <Ionicons name="calendar-outline" size={18} color={colors.textPrimary} />
-                      <Text style={[styles.monthMenuItemText, { color: colors.textPrimary }]}>All months</Text>
-                      {selectedMonthKey === ALL_MONTHS_KEY && (
-                        <Ionicons name="checkmark" size={18} color={colors.primary} />
-                      )}
-                    </View>
-                  </TouchableOpacity>
-
-                  {availableMonthKeys.map((key) => (
-                    <TouchableOpacity
-                      key={key}
-                      style={[
-                        styles.monthMenuItem,
-                        selectedMonthKey === key && { backgroundColor: colors.primary + '20' },
-                      ]}
-                      onPress={() => {
-                        setMonthMenuOpen(false);
-                        setSelectedMonthKey(key);
-                        load(key);
-                      }}
-                    >
-                      <View style={styles.monthMenuItemContent}>
-                        <Ionicons name="calendar-outline" size={18} color={colors.textPrimary} />
-                        <Text style={[styles.monthMenuItemText, { color: colors.textPrimary }]}> 
-                          {monthKeyToLabel(key)}
-                        </Text>
-                        {selectedMonthKey === key && (
-                          <Ionicons name="checkmark" size={18} color={colors.primary} />
-                        )}
-                      </View>
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
-              </View>
-            </>
-          )}
         </View>
 
         {visible.length === 0 ? (
@@ -201,6 +150,8 @@ export default function TransfersScreen() {
           <TouchableOpacity
             style={[styles.loadMoreBtn, { borderColor: colors.border }]}
             onPress={() => setVisibleCount((c) => Math.min(c + BATCH_SIZE, transfers.length))}
+            accessibilityRole="button"
+            accessibilityLabel="Load more transfers"
           >
             <Text style={[styles.loadMoreText, { color: colors.textSecondary }]}>Load more</Text>
           </TouchableOpacity>
@@ -208,6 +159,81 @@ export default function TransfersScreen() {
 
         <View style={{ height: 40 }} />
       </ScrollView>
+
+      {/* Month Selection Modal */}
+      <Modal
+        visible={monthMenuOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setMonthMenuOpen(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalBackdrop}
+          activeOpacity={1}
+          onPress={() => setMonthMenuOpen(false)}
+        >
+          <View
+            style={[styles.monthMenuModal, { backgroundColor: colors.card, borderColor: colors.border }]}
+          >
+            <ScrollView style={{ maxHeight: 280 }} showsVerticalScrollIndicator={false}>
+              <TouchableOpacity
+                style={[
+                  styles.monthMenuItem,
+                  selectedMonthKey === ALL_MONTHS_KEY && { backgroundColor: colors.primary + '20' },
+                ]}
+                onPress={() => {
+                  setMonthMenuOpen(false);
+                  setSelectedMonthKey(ALL_MONTHS_KEY);
+                  load(ALL_MONTHS_KEY);
+                }}
+                accessibilityRole="radio"
+                accessibilityState={{ selected: selectedMonthKey === ALL_MONTHS_KEY }}
+                accessibilityLabel="All months"
+              >
+                <View style={styles.monthMenuItemContent}>
+                  <Ionicons name="calendar-outline" size={18} color={colors.textPrimary} />
+                  <Text style={[styles.monthMenuItemText, { color: colors.textPrimary }]}>All months</Text>
+                  {selectedMonthKey === ALL_MONTHS_KEY && (
+                    <Ionicons name="checkmark" size={18} color={colors.primary} />
+                  )}
+                </View>
+              </TouchableOpacity>
+
+              {availableMonthKeys.map((key) => {
+                const isSelected = selectedMonthKey === key;
+                const label = monthKeyToLabel(key);
+                return (
+                  <TouchableOpacity
+                    key={key}
+                    style={[
+                      styles.monthMenuItem,
+                      isSelected && { backgroundColor: colors.primary + '20' },
+                    ]}
+                    onPress={() => {
+                      setMonthMenuOpen(false);
+                      setSelectedMonthKey(key);
+                      load(key);
+                    }}
+                    accessibilityRole="radio"
+                    accessibilityState={{ selected: isSelected }}
+                    accessibilityLabel={label}
+                  >
+                    <View style={styles.monthMenuItemContent}>
+                      <Ionicons name="calendar-outline" size={18} color={colors.textPrimary} />
+                      <Text style={[styles.monthMenuItemText, { color: colors.textPrimary }]}> 
+                        {label}
+                      </Text>
+                      {isSelected && (
+                        <Ionicons name="checkmark" size={18} color={colors.primary} />
+                      )}
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </View>
   );
 }
@@ -217,27 +243,50 @@ const styles = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: 1,
+    paddingHorizontal: 16, paddingVertical: 10, borderBottomWidth: 1,
+  },
+  backBtn: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   title: { fontSize: 18, fontWeight: '700' },
   content: { padding: 20 },
   filterRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 14 },
   monthFilterBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    borderWidth: 1, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 8, gap: 8,
+    borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, gap: 8,
     minWidth: 160,
+    minHeight: 44,
   },
   monthFilterText: { fontSize: 13, fontWeight: '600', flex: 1 },
-  monthMenuBackdrop: {
-    position: 'absolute', top: -2400, left: -2400, width: 4800, height: 4800, zIndex: 1,
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
   },
-  monthMenu: {
-    position: 'absolute', top: 42, left: 0, width: 200,
-    borderWidth: 1, borderRadius: 12, paddingVertical: 6, zIndex: 2, elevation: 6,
+  monthMenuModal: {
+    width: '100%',
+    maxWidth: 320,
+    borderWidth: 1,
+    borderRadius: 16,
+    paddingVertical: 10,
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
   },
-  monthMenuList: { maxHeight: 240 },
   monthMenuItem: {
-    paddingHorizontal: 12, paddingVertical: 10, marginHorizontal: 6, borderRadius: 8,
+    paddingHorizontal: 16,
+    minHeight: 44,
+    justifyContent: 'center',
+    marginHorizontal: 8,
+    marginVertical: 2,
+    borderRadius: 10,
   },
   monthMenuItemContent: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   monthMenuItemText: { fontSize: 14, fontWeight: '600', flex: 1 },
@@ -245,7 +294,12 @@ const styles = StyleSheet.create({
   emptyEmoji: { fontSize: 40, marginBottom: 10 },
   emptyText: { fontSize: 14 },
   loadMoreBtn: {
-    borderWidth: 1, borderRadius: 12, paddingVertical: 10, alignItems: 'center', marginTop: 8,
+    borderWidth: 1,
+    borderRadius: 12,
+    minHeight: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 8,
   },
   loadMoreText: { fontSize: 13, fontWeight: '600' },
 });

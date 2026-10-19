@@ -285,6 +285,8 @@ export default function StatisticsScreen() {
               style={styles.viewAllLink}
               onPress={handleViewAllTransactions}
               activeOpacity={0.8}
+              accessibilityRole="button"
+              accessibilityLabel="View all transactions"
             >
               <Text style={[styles.viewAllText, { color: colors.primary }]}>
                 View all transactions →
@@ -304,6 +306,8 @@ const styles = StyleSheet.create({
   content: { padding: 20 },
   viewAllLink: {
     alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 44,
     paddingVertical: 14,
     marginTop: 8,
   },

@@ -77,7 +77,7 @@ export function DialogProvider({ children }: { children: React.ReactNode }) {
 
   const typeAccent: Record<string, { bg: string; border: string }> = {
     danger:  { bg: colors.danger  + '20', border: colors.danger  },
-    warning: { bg: '#F59E0B20',           border: '#F59E0B'       },
+    warning: { bg: colors.warning + '20', border: colors.warning },
     success: { bg: colors.success + '20', border: colors.success  },
     info:    { bg: colors.primary + '20', border: colors.primary  },
   };
@@ -149,6 +149,8 @@ export function DialogProvider({ children }: { children: React.ReactNode }) {
                     key={i}
                     onPress={() => handlePress(btn)}
                     activeOpacity={0.72}
+                    accessibilityRole="button"
+                    accessibilityLabel={btn.text}
                     style={[
                       styles.btn,
                       !isStack && buttons.length === 2 && styles.btnHalf,
@@ -163,7 +165,7 @@ export function DialogProvider({ children }: { children: React.ReactNode }) {
                         styles.btnText,
                         isCancel  && { color: colors.textSecondary, fontWeight: '600' },
                         isDanger  && { color: colors.danger,        fontWeight: '700' },
-                        isPrimary && { color: '#fff',               fontWeight: '700' },
+                        isPrimary && { color: colors.onPrimary,     fontWeight: '700' },
                       ]}
                     >
                       {btn.text}
@@ -250,6 +252,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   btn: {
+    minHeight: 44,
     paddingVertical: 13,
     paddingHorizontal: 16,
     borderRadius: 13,

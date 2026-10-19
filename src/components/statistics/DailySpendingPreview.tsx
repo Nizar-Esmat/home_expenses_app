@@ -36,13 +36,16 @@ export default function DailySpendingPreview({
 
   return (
     <View style={styles.section}>
-      <View style={styles.sectionHeader}>
-        <Text style={styles.title}>Daily Spending</Text>
+      <View style={[styles.sectionHeader, { borderColor: colors.border }]}>
+        <Text style={[styles.title, { color: colors.textPrimary }]}>Daily Spending</Text>
         {summary.allDays.length > 5 && onViewAll && (
           <TouchableOpacity
             onPress={onViewAll}
             activeOpacity={0.7}
             style={styles.viewAllBtn}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            accessibilityRole="button"
+            accessibilityLabel="View all daily spending"
           >
             <Text style={[styles.viewAllText, { color: colors.primary }]}>
               View all
@@ -55,10 +58,10 @@ export default function DailySpendingPreview({
       {highestDay && (
         <View style={styles.statRow}>
           <View style={styles.statLeft}>
-            <Ionicons name='trending-up' size={18} color='#EF4444' />
-            <Text style={styles.statLabel}>Highest day</Text>
+            <Ionicons name='trending-up' size={18} color={colors.danger} />
+            <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Highest day</Text>
           </View>
-          <Text style={styles.statValue}>
+          <Text style={[styles.statValue, { color: colors.textPrimary }]}>
             {formatDayShort(highestDay.dateKey)} ·{' '}
             {formatCurrency(highestDay.total, currency)}
           </Text>
@@ -67,13 +70,13 @@ export default function DailySpendingPreview({
 
       <View style={styles.statRow}>
         <View style={styles.statLeft}>
-          <Ionicons name='calculator' size={18} color='#AAB2C0' />
-          <Text style={styles.statLabel}>Average daily spend</Text>
+          <Ionicons name='calculator' size={18} color={colors.textSecondary} />
+          <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Average daily spend</Text>
         </View>
-        <Text style={styles.statValue}>{avgFormatted}</Text>
+        <Text style={[styles.statValue, { color: colors.textPrimary }]}>{avgFormatted}</Text>
       </View>
 
-      <View style={styles.divider} />
+      <View style={[styles.divider, { backgroundColor: colors.border }]} />
 
       {topDays.map((item, index) => (
         <DailySpendingRow
@@ -99,13 +102,11 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: 12,
     borderTopWidth: 1,
-    borderColor: '#C0C0C080',
     paddingTop: 12,
   },
   title: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#F8FAFC',
   },
   statRow: {
     flexDirection: 'row',
@@ -121,16 +122,13 @@ const styles = StyleSheet.create({
   statLabel: {
     fontSize: 14,
     fontWeight: '400',
-    color: '#AAB2C0',
   },
   statValue: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#F8FAFC',
   },
   divider: {
     height: 1,
-    backgroundColor: '#263247',
     marginVertical: 10,
   },
   viewAllBtn: {

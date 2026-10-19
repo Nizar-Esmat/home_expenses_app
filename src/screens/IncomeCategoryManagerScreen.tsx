@@ -42,7 +42,6 @@ export default function IncomeCategoryManagerScreen() {
   const { showDialog } = useAppDialog();
 
   const [categories, setCategories] = useState<IncomeCategory[]>([]);
-  const [usageCounts, setUsageCounts] = useState<Record<string, number>>({});
   const [modalVisible, setModalVisible] = useState(false);
   const [form, setForm] = useState<FormState>(INITIAL_FORM);
 
@@ -138,7 +137,13 @@ export default function IncomeCategoryManagerScreen() {
     <View style={[styles.screen, { backgroundColor: colors.background }]}>
 
       <View style={[styles.header, { borderBottomColor: colors.border }]}>
-        <TouchableOpacity onPress={() => router.back()} hitSlop={{ top:8,bottom:8,left:8,right:8 }}>
+        <TouchableOpacity
+          onPress={() => router.back()}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          style={styles.backBtn}
+          accessibilityRole="button"
+          accessibilityLabel="Go back"
+        >
           <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
         </TouchableOpacity>
         <View style={styles.headerText}>
@@ -181,8 +186,10 @@ export default function IncomeCategoryManagerScreen() {
       <TouchableOpacity
         style={[styles.fab, { backgroundColor: colors.primary }]}
         onPress={openAdd}
+        accessibilityRole="button"
+        accessibilityLabel="Add income category"
       >
-        <Ionicons name="add" size={28} color={colors.background} />
+        <Ionicons name="add" size={28} color={colors.onPrimary} />
       </TouchableOpacity>
 
       <Modal visible={modalVisible} transparent animationType="slide" onRequestClose={closeModal}>
@@ -255,10 +262,16 @@ function IncomeCategoryForm({ form, setField, onSave, onClose, colors }: FormPro
       <View style={[styles.handle, { backgroundColor: colors.border }]} />
 
       <View style={styles.sheetHeader}>
-        <Text style={[styles.sheetTitle, { color: colors.textPrimary }]}>
+        <Text style={[styles.sheetTitle, { color: colors.textPrimary }]} accessibilityRole="header">
           {form.mode === 'add' ? 'New Category' : 'Edit Category'}
         </Text>
-        <TouchableOpacity onPress={onClose}>
+        <TouchableOpacity
+          onPress={onClose}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          style={styles.closeBtn}
+          accessibilityRole="button"
+          accessibilityLabel="Close"
+        >
           <Ionicons name="close" size={22} color={colors.textSecondary} />
         </TouchableOpacity>
       </View>
@@ -268,7 +281,7 @@ function IncomeCategoryForm({ form, setField, onSave, onClose, colors }: FormPro
           <Text style={styles.previewEmoji}>{form.emoji}</Text>
         </View>
         <View style={styles.previewInfo}>
-          <Text style={[styles.previewName, { color: colors.textPrimary }]}>
+          <Text style={[styles.previewName, { color: colors.textPrimary, textAlign: 'auto' }]}>
             {form.name || 'Category Name'}
           </Text>
           {isBuiltIn && (
@@ -283,7 +296,15 @@ function IncomeCategoryForm({ form, setField, onSave, onClose, colors }: FormPro
         <View style={styles.field}>
           <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>Name</Text>
           <TextInput
-            style={[styles.textInput, { color: colors.textPrimary, backgroundColor: colors.inputFill, borderColor: form.nameError ? colors.danger : colors.border }]}
+            style={[
+              styles.textInput,
+              {
+                color: colors.textPrimary,
+                backgroundColor: colors.inputFill,
+                borderColor: form.nameError ? colors.danger : colors.border,
+                textAlign: 'auto',
+              },
+            ]}
             placeholder="e.g. Salary, Freelance…"
             placeholderTextColor={colors.textSecondary}
             value={form.name}
@@ -293,6 +314,7 @@ function IncomeCategoryForm({ form, setField, onSave, onClose, colors }: FormPro
             }}
             autoCapitalize="words"
             maxLength={24}
+            accessibilityLabel="Category name"
           />
           {!!form.nameError && (
             <Text style={[styles.errorText, { color: colors.danger }]}>{form.nameError}</Text>
@@ -302,22 +324,29 @@ function IncomeCategoryForm({ form, setField, onSave, onClose, colors }: FormPro
 
       <View style={styles.field}>
         <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>Accent Color</Text>
-        <View style={styles.colorRow}>
-          {INCOME_CATEGORY_COLORS.map((c) => (
-            <TouchableOpacity
-              key={c}
-              onPress={() => setField('color', c)}
-              style={[
-                styles.colorSwatch,
-                { backgroundColor: c },
-                form.color === c && styles.colorSelected,
-              ]}
-            >
-              {form.color === c && (
-                <Ionicons name="checkmark" size={14} color="#fff" />
-              )}
-            </TouchableOpacity>
-          ))}
+        <View style={styles.colorRow} accessibilityRole="radiogroup" accessibilityLabel="Accent color">
+          {INCOME_CATEGORY_COLORS.map((c) => {
+            const isSelected = form.color === c;
+            return (
+              <TouchableOpacity
+                key={c}
+                onPress={() => setField('color', c)}
+                style={[
+                  styles.colorSwatch,
+                  { backgroundColor: c },
+                  isSelected && { borderWidth: 2.5, borderColor: colors.textPrimary },
+                ]}
+                hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
+                accessibilityRole="radio"
+                accessibilityState={{ selected: isSelected }}
+                accessibilityLabel={`Color ${c}`}
+              >
+                {isSelected && (
+                  <Ionicons name="checkmark" size={18} color="#FFFFFF" />
+                )}
+              </TouchableOpacity>
+            );
+          })}
         </View>
         <Text style={[styles.colorHex, { color: colors.textSecondary }]}>
           {form.color}
@@ -333,49 +362,66 @@ function IncomeCategoryForm({ form, setField, onSave, onClose, colors }: FormPro
           style={styles.groupTabScroll}
           contentContainerStyle={styles.groupTabContent}
         >
-          {EMOJI_GROUPS.map((g, i) => (
-            <TouchableOpacity
-              key={g.label}
-              onPress={() => setField('emojiGroup', i)}
-              style={[
-                styles.groupTab,
-                { backgroundColor: form.emojiGroup === i ? colors.primary : colors.inputFill },
-              ]}
-            >
-              <Text style={styles.groupTabEmoji}>{g.icon}</Text>
-              <Text style={[
-                styles.groupTabLabel,
-                { color: form.emojiGroup === i ? colors.background : colors.textSecondary },
-              ]}>
-                {g.label}
-              </Text>
-            </TouchableOpacity>
-          ))}
+          {EMOJI_GROUPS.map((g, i) => {
+            const isSelected = form.emojiGroup === i;
+            return (
+              <TouchableOpacity
+                key={g.label}
+                onPress={() => setField('emojiGroup', i)}
+                style={[
+                  styles.groupTab,
+                  { backgroundColor: isSelected ? colors.primary : colors.inputFill },
+                ]}
+                accessibilityRole="tab"
+                accessibilityState={{ selected: isSelected }}
+                accessibilityLabel={g.label}
+              >
+                <Text style={styles.groupTabEmoji}>{g.icon}</Text>
+                <Text style={[
+                  styles.groupTabLabel,
+                  { color: isSelected ? colors.onPrimary : colors.textSecondary },
+                ]}>
+                  {g.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
         </ScrollView>
 
         <View style={styles.emojiGrid}>
-          {currentGroup.emojis.map((em) => (
-            <TouchableOpacity
-              key={em}
-              onPress={() => setField('emoji', em)}
-              style={[
-                styles.emojiCell,
-                form.emoji === em && styles.emojiCellSelected,
-                form.emoji === em && { borderColor: colors.primary },
-              ]}
-            >
-              <Text style={styles.emojiCellText}>{em}</Text>
-            </TouchableOpacity>
-          ))}
+          {currentGroup.emojis.map((em) => {
+            const isSelected = form.emoji === em;
+            return (
+              <TouchableOpacity
+                key={em}
+                onPress={() => setField('emoji', em)}
+                style={[
+                  styles.emojiCell,
+                  isSelected && styles.emojiCellSelected,
+                  isSelected && { borderColor: colors.primary },
+                ]}
+                accessibilityRole="button"
+                accessibilityLabel={`Emoji ${em}`}
+              >
+                <Text style={styles.emojiCellText}>{em}</Text>
+              </TouchableOpacity>
+            );
+          })}
         </View>
       </View>
 
       <TouchableOpacity
-        style={[styles.saveBtn, { backgroundColor: form.saving ? colors.border : colors.primary }]}
+        style={[
+          styles.saveBtn,
+          { backgroundColor: form.saving ? colors.border : colors.primary },
+          form.saving && { opacity: 0.5 },
+        ]}
         onPress={onSave}
         disabled={form.saving}
+        accessibilityRole="button"
+        accessibilityLabel={form.mode === 'add' ? 'Create Category' : 'Save Changes'}
       >
-        <Text style={[styles.saveBtnText, { color: colors.background }]}>
+        <Text style={[styles.saveBtnText, { color: colors.onPrimary }]}>
           {form.saving ? 'Saving…' : form.mode === 'add' ? 'Create Category' : 'Save Changes'}
         </Text>
       </TouchableOpacity>
@@ -389,9 +435,21 @@ const styles = StyleSheet.create({
   screen: { flex: 1 },
   header: {
     flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1,
+    paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1,
   },
-  headerText: { flex: 1, marginLeft: 12 },
+  backBtn: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  closeBtn: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerText: { flex: 1, marginLeft: 8 },
   headerTitle: { fontSize: 20, fontWeight: '800' },
   headerSub: { fontSize: 12, marginTop: 2 },
 
@@ -419,7 +477,7 @@ const styles = StyleSheet.create({
   modalOverlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: '#00000055' },
   sheet: { borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 20, paddingBottom: 20, maxHeight: '90%' },
   handle: { width: 40, height: 4, borderRadius: 2, alignSelf: 'center', marginTop: 12, marginBottom: 8 },
-  sheetHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 },
+  sheetHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 },
   sheetTitle: { fontSize: 18, fontWeight: '700' },
   previewRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 20 },
   previewBadge: { width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center', marginRight: 14 },
@@ -432,32 +490,31 @@ const styles = StyleSheet.create({
   textInput: {
     borderWidth: 1.5, borderRadius: 12,
     paddingHorizontal: 14, paddingVertical: 12,
-    fontSize: 15,
+    fontSize: 16,
   },
   errorText: { fontSize: 12, marginTop: 4 },
   colorRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   colorSwatch: {
-    width: 36, height: 36, borderRadius: 18,
+    width: 44, height: 44, borderRadius: 22,
     alignItems: 'center', justifyContent: 'center',
   },
-  colorSelected: { borderWidth: 3, borderColor: '#fff' },
   colorHex: { fontSize: 11, marginTop: 8, letterSpacing: 0.5 },
   groupTabScroll: { marginBottom: 12 },
   groupTabContent: { gap: 8, paddingBottom: 4 },
   groupTab: {
     flexDirection: 'row', alignItems: 'center', gap: 4,
-    paddingHorizontal: 12, paddingVertical: 7, borderRadius: 20,
+    paddingHorizontal: 14, minHeight: 44, borderRadius: 22,
   },
   groupTabEmoji: { fontSize: 14 },
   groupTabLabel: { fontSize: 12, fontWeight: '600' },
   emojiGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 4 },
   emojiCell: {
-    width: '13%', aspectRatio: 1, alignItems: 'center', justifyContent: 'center', borderRadius: 10,
+    width: '13%', aspectRatio: 1, minHeight: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 10,
   },
   emojiCellSelected: {
     borderWidth: 2, backgroundColor: '#00000015',
   },
   emojiCellText: { fontSize: 24 },
-  saveBtn: { borderRadius: 14, paddingVertical: 16, alignItems: 'center', marginTop: 8 },
+  saveBtn: { borderRadius: 14, minHeight: 48, paddingVertical: 14, alignItems: 'center', justifyContent: 'center', marginTop: 8 },
   saveBtnText: { fontSize: 16, fontWeight: '700' },
 });

@@ -261,3 +261,43 @@ export async function recalculateAccountBalances(): Promise<void> {
     await recalculateBalance(acc.id);
   }
 }
+
+// ── Pinned Accounts Helpers ────────────────────────────────────
+
+/**
+ * Resolves account IDs to display on the Home screen.
+ * - If savedHomeAccountIds is undefined: defaults to the active Cash / default account.
+ * - If savedHomeAccountIds is an array (even empty []): respects user's explicit preference.
+ */
+export function resolvePinnedAccountIds(
+  accounts: Account[],
+  savedHomeAccountIds?: number[],
+): number[] {
+  const activeAccounts = accounts.filter((a) => a.isArchived === 0);
+
+  if (savedHomeAccountIds === undefined) {
+    const defaultAccount =
+      activeAccounts.find((a) => a.isDefault === 1) ??
+      activeAccounts.find((a) => a.type === 'cash') ??
+      activeAccounts[0];
+    return defaultAccount ? [defaultAccount.id] : [];
+  }
+
+  return savedHomeAccountIds
+    .filter((id) => activeAccounts.some((a) => a.id === id))
+    .slice(0, 3);
+}
+
+/**
+ * Resolves Account objects to display on the Home screen based on savedHomeAccountIds.
+ */
+export function resolveHomeAccounts(
+  accounts: Account[],
+  savedHomeAccountIds?: number[],
+): Account[] {
+  const pinnedIds = resolvePinnedAccountIds(accounts, savedHomeAccountIds);
+  return pinnedIds
+    .map((id) => accounts.find((a) => a.id === id && a.isArchived === 0))
+    .filter((a): a is Account => Boolean(a));
+}
+

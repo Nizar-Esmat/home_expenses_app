@@ -96,6 +96,8 @@ export default function ExpenseTile({
             onPress={onEdit}
             style={styles.action}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            accessibilityRole="button"
+            accessibilityLabel={`Edit expense ${expense.category}`}
           >
             <Ionicons
               name='pencil-outline'
@@ -107,6 +109,8 @@ export default function ExpenseTile({
             onPress={confirmDelete}
             style={styles.action}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            accessibilityRole="button"
+            accessibilityLabel={`Delete expense ${expense.category}`}
           >
             <Ionicons name='trash-outline' size={18} color={colors.danger} />
           </TouchableOpacity>
@@ -119,11 +123,14 @@ export default function ExpenseTile({
           <TouchableOpacity
             style={styles.subToggle}
             onPress={() => setExpanded((e) => !e)}
-            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            accessibilityRole="button"
+            accessibilityLabel={expanded ? `Collapse ${subs.length} sub-items` : `Expand ${subs.length} sub-items`}
+            accessibilityState={{ expanded }}
           >
             <Ionicons
               name={expanded ? 'chevron-up' : 'chevron-down'}
-              size={13}
+              size={14}
               color={colors.textSecondary}
             />
             <Text
@@ -175,8 +182,8 @@ const styles = StyleSheet.create({
   },
   emoji: { fontSize: 22 },
   info: { flex: 1 },
-  category: { fontSize: 15, fontWeight: '600' },
-  note: { fontSize: 13, marginTop: 2 },
+  category: { fontSize: 15, fontWeight: '600', textAlign: 'auto' },
+  note: { fontSize: 13, marginTop: 2, textAlign: 'auto' },
   date: { fontSize: 12, marginTop: 2 },
   accountChip: {
     flexDirection: 'row',
@@ -185,10 +192,15 @@ const styles = StyleSheet.create({
     marginTop: 3,
   },
   accountChipIcon: { fontSize: 11 },
-  accountChipText: { fontSize: 11 },
-  price: { fontSize: 15, fontWeight: '700', marginRight: 8 },
-  actions: { flexDirection: 'row' },
-  action: { padding: 4, marginLeft: 4 },
+  accountChipText: { fontSize: 11, textAlign: 'auto' },
+  price: { fontSize: 15, fontWeight: '700', marginRight: 4 },
+  actions: { flexDirection: 'row', alignItems: 'center' },
+  action: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   subSection: {
     borderTopWidth: 1,
     paddingHorizontal: 14,
@@ -200,7 +212,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 4,
     alignSelf: 'flex-start',
-    marginBottom: 2,
+    minHeight: 44,
+    paddingVertical: 8,
   },
   subToggleText: { fontSize: 12, fontWeight: '600' },
   subRow: {
@@ -210,6 +223,6 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     paddingLeft: 17,
   },
-  subTitle: { flex: 1, fontSize: 13, marginRight: 8 },
+  subTitle: { flex: 1, fontSize: 13, marginRight: 8, textAlign: 'auto' },
   subAmount: { fontSize: 13, fontWeight: '600' },
 });

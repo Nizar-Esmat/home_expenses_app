@@ -24,9 +24,16 @@ export default function BiggestExpensesPreview({ expenses, totalCount, currency,
   return (
     <View style={styles.section}>
       <View style={styles.sectionHeader}>
-        <Text style={styles.title}>Biggest Expenses</Text>
+        <Text style={[styles.title, { color: colors.textPrimary }]}>Biggest Expenses</Text>
         {totalCount > 5 && onViewAll && (
-          <TouchableOpacity style={styles.viewAllBtn} onPress={onViewAll} activeOpacity={0.7}>
+          <TouchableOpacity
+            style={styles.viewAllBtn}
+            onPress={onViewAll}
+            activeOpacity={0.7}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            accessibilityRole="button"
+            accessibilityLabel="View all biggest expenses"
+          >
             <Text style={[styles.viewAllText, { color: colors.primary }]}>View all</Text>
             <Ionicons name="chevron-forward" size={16} color={colors.primary} />
           </TouchableOpacity>
@@ -76,7 +83,6 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#F8FAFC',
   },
   viewAllBtn: {
     flexDirection: 'row',

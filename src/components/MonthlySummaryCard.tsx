@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
+import { useTheme } from '@/theme/ThemeContext';
 
 interface Props {
   income: string;
@@ -14,6 +15,8 @@ export default function MonthlySummaryCard({
   net,
   currency = 'EGP',
 }: Props) {
+  const { colors } = useTheme();
+
   const parseAmount = (val: string): number => {
     const clean = val.replace(/[^0-9.-]/g, '');
     return parseFloat(clean) || 0;
@@ -25,6 +28,12 @@ export default function MonthlySummaryCard({
 
   const isNetPositive = netNum > 0;
   const isNetNegative = netNum < 0;
+
+  const netColor = isNetPositive
+    ? colors.success
+    : isNetNegative
+      ? colors.danger
+      : colors.textPrimary;
 
   const netText = `${isNetPositive ? '+' : ''}${currency} ${Math.abs(
     netNum,
@@ -47,47 +56,41 @@ export default function MonthlySummaryCard({
   })}`;
 
   return (
-    <View style={styles.card}>
+    <View
+      style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}
+      accessible={true}
+      accessibilityRole="summary"
+      accessibilityLabel={`Monthly summary: Net savings ${netText}, Income ${incomeText}, Spent ${spentText}`}
+    >
       {/* Top section - Net savings */}
       <View style={styles.netSection}>
-        <Text style={styles.netLabel}>Net savings</Text>
-        <Text
-          style={[
-            styles.netAmount,
-            {
-              color: isNetPositive
-                ? '#4ade80'
-                : isNetNegative
-                  ? '#f87171'
-                  : '#F8FAFC',
-            },
-          ]}
-        >
+        <Text style={[styles.netLabel, { color: colors.textSecondary }]}>Net savings</Text>
+        <Text style={[styles.netAmount, { color: netColor }]} accessibilityRole="header">
           {netText}
         </Text>
       </View>
 
       {/* Horizontal divider */}
-      <View style={styles.horizontalDivider} />
+      <View style={[styles.horizontalDivider, { backgroundColor: colors.border }]} />
 
       {/* Bottom section - Income & Spent */}
       <View style={styles.bottomSection}>
         <View style={styles.bottomRow}>
           {/* Left column - Income */}
           <View style={styles.column}>
-            <Text style={styles.columnLabel}>Income</Text>
-            <Text style={[styles.columnValue, { color: '#4ade80' }]}>
+            <Text style={[styles.columnLabel, { color: colors.textSecondary }]}>Income</Text>
+            <Text style={[styles.columnValue, { color: colors.success }]}>
               {incomeText}
             </Text>
           </View>
 
           {/* Vertical divider */}
-          <View style={styles.verticalDivider} />
+          <View style={[styles.verticalDivider, { backgroundColor: colors.border }]} />
 
           {/* Right column - Spent */}
           <View style={styles.column}>
-            <Text style={styles.columnLabel}>Spent</Text>
-            <Text style={[styles.columnValue, { color: '#f87171' }]}>
+            <Text style={[styles.columnLabel, { color: colors.textSecondary }]}>Spent</Text>
+            <Text style={[styles.columnValue, { color: colors.danger }]}>
               {spentText}
             </Text>
           </View>
@@ -97,13 +100,9 @@ export default function MonthlySummaryCard({
   );
 }
 
-const MUTED_TEXT = '#8a8f9d';
-const DIVIDER_COLOR = '#2e3350';
-
 const styles = StyleSheet.create({
   card: {
-    borderWidth: 0.5,
-    borderColor: DIVIDER_COLOR,
+    borderWidth: 1,
     borderRadius: 16,
     padding: 16,
   },
@@ -111,17 +110,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   netLabel: {
-    fontSize: 12,
-    color: MUTED_TEXT,
+    fontSize: 13,
+    fontWeight: '600',
     marginBottom: 4,
   },
   netAmount: {
     fontSize: 32,
     fontWeight: '800',
+    letterSpacing: -0.5,
   },
   horizontalDivider: {
-    height: 0.5,
-    backgroundColor: DIVIDER_COLOR,
+    height: 1,
     marginVertical: 12,
   },
   bottomSection: {
@@ -136,17 +135,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   columnLabel: {
-    fontSize: 11,
-    color: MUTED_TEXT,
+    fontSize: 12,
+    fontWeight: '500',
     marginBottom: 2,
   },
   columnValue: {
-    fontSize: 15,
-    fontWeight: '500',
+    fontSize: 16,
+    fontWeight: '700',
   },
   verticalDivider: {
-    width: 0.5,
-    backgroundColor: DIVIDER_COLOR,
+    width: 1,
     alignSelf: 'stretch',
     marginHorizontal: 8,
   },

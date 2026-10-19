@@ -136,7 +136,13 @@ export default function AllDailySpendingScreen() {
   return (
     <View style={[styles.screen, { backgroundColor: colors.background }]}>
       <View style={[styles.header, { borderBottomColor: colors.border }]}>
-        <TouchableOpacity onPress={() => router.back()} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+        <TouchableOpacity
+          onPress={() => router.back()}
+          style={styles.backBtn}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          accessibilityRole="button"
+          accessibilityLabel="Go back"
+        >
           <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
         </TouchableOpacity>
         <Text style={[styles.title, { color: colors.textPrimary }]} numberOfLines={1}>
@@ -154,7 +160,7 @@ export default function AllDailySpendingScreen() {
         {summary && summary.allDays.length > 0 && (
           <View style={[styles.statsRow, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <View style={styles.statItem}>
-              <Ionicons name="trending-up" size={16} color="#EF4444" />
+              <Ionicons name="trending-up" size={16} color={colors.danger} />
               <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Highest</Text>
               <Text style={[styles.statValue, { color: colors.textPrimary }]}>
                 {summary.highestDay
@@ -164,7 +170,7 @@ export default function AllDailySpendingScreen() {
             </View>
             <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
             <View style={styles.statItem}>
-              <Ionicons name="calculator" size={16} color="#AAB2C0" />
+              <Ionicons name="calculator" size={16} color={colors.textSecondary} />
               <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Average</Text>
               <Text style={[styles.statValue, { color: colors.textPrimary }]}>
                 {formatCurrencyCompact(summary.averageDailySpend, currency)}
@@ -187,6 +193,9 @@ export default function AllDailySpendingScreen() {
               activeOpacity={0.7}
               onPress={() => handleDayPress(day.dateKey)}
               style={styles.dayRowTouchable}
+              accessibilityRole="button"
+              accessibilityLabel={`${day.dateKey}, total spending ${day.total}`}
+              accessibilityState={{ expanded: expandedDay === day.dateKey }}
             >
               <DailySpendingRow
                 dateKey={day.dateKey}
@@ -198,7 +207,7 @@ export default function AllDailySpendingScreen() {
               <Ionicons
                 name={expandedDay === day.dateKey ? 'chevron-up' : 'chevron-down'}
                 size={16}
-                color="#AAB2C0"
+                color={colors.textSecondary}
                 style={styles.expandIcon}
               />
             </TouchableOpacity>
@@ -251,11 +260,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
     borderBottomWidth: 1,
   },
-  title: { fontSize: 20, fontWeight: '700', flex: 1, marginLeft: 12 },
+  backBtn: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  title: { fontSize: 20, fontWeight: '700', flex: 1, marginLeft: 8 },
   periodLabel: { fontSize: 13, fontWeight: '600' },
   content: { padding: 20 },
   statsRow: {

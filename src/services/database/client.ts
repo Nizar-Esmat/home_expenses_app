@@ -6,13 +6,25 @@ const SCHEMA_VERSION = 4;
 const DEFAULT_CURRENCY = 'EGP';
 
 let _db: SQLite.SQLiteDatabase | null = null;
+let _initPromise: Promise<SQLite.SQLiteDatabase> | null = null;
 
 export async function getDb(): Promise<SQLite.SQLiteDatabase> {
-  if (!_db) {
-    _db = await SQLite.openDatabaseAsync('budgetbuddy.db');
-    await initDb(_db);
+  if (_db) {
+    return _db;
   }
-  return _db;
+  if (!_initPromise) {
+    _initPromise = (async () => {
+      const db = await SQLite.openDatabaseAsync('budgetbuddy.db');
+      await initDb(db);
+      _db = db;
+      return db;
+    })().catch((err) => {
+      _initPromise = null;
+      _db = null;
+      throw err;
+    });
+  }
+  return _initPromise;
 }
 
 // ── Schema ────────────────────────────────────────────────────
@@ -24,7 +36,7 @@ async function initDb(db: SQLite.SQLiteDatabase): Promise<void> {
   await seedCategories(db);
   await seedIncomeCategories(db);
   await seedDefaultAccount(db);
-  await db.runAsync(`PRAGMA user_version = ${SCHEMA_VERSION}`);
+  await db.execAsync(`PRAGMA user_version = ${SCHEMA_VERSION};`);
 }
 
 async function createSchema(db: SQLite.SQLiteDatabase): Promise<void> {
@@ -271,10 +283,15 @@ async function seedDefaultAccount(db: SQLite.SQLiteDatabase): Promise<void> {
   if (count && count.n > 0) return;
 
   const now = nowIso();
-  await db.runAsync(
+  const res = await db.runAsync(
     `INSERT INTO accounts
        (name, type, currencyCode, openingBalanceMinor, currentBalanceMinor, icon, color, isPrimary, isArchived, createdAt, updatedAt)
      VALUES (?, ?, ?, 0, 0, ?, ?, 0, 0, ?, ?)`,
     ['Cash', 'CASH', DEFAULT_CURRENCY, '💵', '#10B981', now, now],
+  );
+
+  await db.runAsync(
+    "INSERT OR IGNORE INTO settings (key, value) VALUES ('homeAccountIds', ?)",
+    [JSON.stringify([res.lastInsertRowId])],
   );
 }

@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { HomeTransaction } from '@/types';
 import { formatDate } from '@/services/constants';
 import SwipeableTransactionRow from '@/components/SwipeableTransactionRow';
+import { useTheme } from '@/theme/ThemeContext';
 
 interface Props {
   tx: HomeTransaction;
@@ -28,6 +29,7 @@ export default function TransactionRow({
   onDelete,
   showDivider,
 }: Props) {
+  const { colors } = useTheme();
   const [expanded, setExpanded] = useState(false);
   const isTransfer = tx.type === 'transfer';
   const isLoan = tx.type === 'loan';
@@ -35,15 +37,14 @@ export default function TransactionRow({
   const feeValue = tx.feeAmount ?? 0;
   const subs = tx.subExpenses ?? [];
 
-  let amountColor = '#10B981';
-  if (tx.type === 'expense') amountColor = '#EF4444';
+  let amountColor = colors.success;
+  if (tx.type === 'expense') amountColor = colors.danger;
   else if (isLoanRepayment) {
     // BORROWED repayment = you pay back (red), LENT repayment = you receive (green)
-    // category starts with "Repaid" for BORROWED repayments
-    amountColor = tx.category.startsWith('Repaid') ? '#EF4444' : '#10B981';
+    amountColor = tx.category.startsWith('Repaid') ? colors.danger : colors.success;
   } else if (isLoan) {
     // BORROWED loan = money in (green), LENT loan = money out (red)
-    amountColor = tx.category.startsWith('Loan from') ? '#10B981' : '#EF4444';
+    amountColor = tx.category.startsWith('Loan from') ? colors.success : colors.danger;
   }
 
   const transferParts = isTransfer ? (tx.accountName ?? '').split(/\s*[→➛]\s*/) : [];
@@ -60,7 +61,7 @@ export default function TransactionRow({
     <>
       <SwipeableTransactionRow onEdit={onEdit} onDelete={onDelete}>
         <View style={styles.card}>
-          <View style={styles.badge}>
+          <View style={[styles.badge, { backgroundColor: colors.inputFill, borderColor: colors.border }]}>
             <Text style={styles.emoji}>{tx.emoji}</Text>
           </View>
 
@@ -68,34 +69,34 @@ export default function TransactionRow({
             {/* Layer 1 */}
             {isTransfer ? (
               tx.note ? (
-                <Text style={styles.l1Text} numberOfLines={1}>
+                <Text style={[styles.l1Text, { color: colors.textPrimary, textAlign: 'auto' }]} numberOfLines={1}>
                   {tx.note}
-                  <Text style={styles.transferAmtInline}> ({fmtAmt(tx.amount, currency)})</Text>
+                  <Text style={[styles.transferAmtInline, { color: colors.textSecondary }]}> ({fmtAmt(tx.amount, currency)})</Text>
                 </Text>
               ) : (
-                <Text style={styles.l1Text} numberOfLines={1}>
+                <Text style={[styles.l1Text, { color: colors.textPrimary }]} numberOfLines={1}>
                   {fmtAmt(tx.amount, currency)}
                 </Text>
               )
             ) : tx.note ? (
-              <Text style={styles.l1Text} numberOfLines={1}>{tx.note}</Text>
+              <Text style={[styles.l1Text, { color: colors.textPrimary, textAlign: 'auto' }]} numberOfLines={1}>{tx.note}</Text>
             ) : null}
 
             {/* Layer 2 */}
             {isTransfer ? (
               <View style={styles.l2Row}>
-                <Text style={styles.l2CatText}>Transfer ·</Text>
+                <Text style={[styles.l2CatText, { color: colors.textSecondary }]}>Transfer ·</Text>
                 <View style={styles.fromChip}>
                   <Text style={styles.fromChipText} numberOfLines={1}>{fromName}</Text>
                 </View>
-                <Ionicons name="arrow-forward" size={10} color="#AAB2C0" />
+                <Ionicons name="arrow-forward" size={10} color={colors.textSecondary} />
                 <View style={styles.toChip}>
                   <Text style={styles.toChipText} numberOfLines={1}>{toName}</Text>
                 </View>
               </View>
             ) : (isLoan || isLoanRepayment) ? (
               <View style={styles.l2Row}>
-                <Text style={styles.l2CatText} numberOfLines={1}>{tx.category} ·</Text>
+                <Text style={[styles.l2CatText, { color: colors.textSecondary }]} numberOfLines={1}>{tx.category} ·</Text>
                 <View style={[styles.loanBadge, { backgroundColor: isLoanRepayment ? '#6B728022' : '#F59E0B22' }]}>
                   <Text style={[styles.loanBadgeText, { color: isLoanRepayment ? '#9CA3AF' : '#F59E0B' }]}>
                     {isLoanRepayment ? 'REPAYMENT' : 'LOAN'}
@@ -104,7 +105,7 @@ export default function TransactionRow({
               </View>
             ) : (
               <View style={styles.l2Row}>
-                <Text style={styles.l2CatText} numberOfLines={1}>
+                <Text style={[styles.l2CatText, { color: colors.textSecondary, textAlign: 'auto' }]} numberOfLines={1}>
                   {tx.category}{tx.accountName ? ' ·' : ''}
                 </Text>
                 {tx.accountName ? (
@@ -124,13 +125,13 @@ export default function TransactionRow({
             )}
 
             {/* Layer 3: Date */}
-            <Text style={styles.l3Text}>{formatDate(tx.createdAt)}</Text>
+            <Text style={[styles.l3Text, { color: colors.textSecondary }]}>{formatDate(tx.createdAt)}</Text>
           </View>
 
           {/* Right column */}
           {isTransfer ? (
             feeValue > 0 ? (
-              <Text style={[styles.amount, { color: '#EF4444' }]} numberOfLines={1} adjustsFontSizeToFit>
+              <Text style={[styles.amount, { color: colors.danger }]} numberOfLines={1} adjustsFontSizeToFit>
                 {'−'}{fmtAmt(feeValue, currency)}
               </Text>
             ) : null
@@ -155,14 +156,16 @@ export default function TransactionRow({
             <TouchableOpacity
               style={styles.subToggle}
               onPress={() => setExpanded((e) => !e)}
-              hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              accessibilityRole="button"
+              accessibilityLabel={`${subs.length} sub item${subs.length !== 1 ? 's' : ''}, ${expanded ? 'expanded' : 'collapsed'}`}
             >
               <Ionicons
                 name={expanded ? 'chevron-forward' : 'chevron-down'}
                 size={13}
-                color='#AAB2C0'
+                color={colors.textSecondary}
               />
-              <Text style={styles.subToggleText}>
+              <Text style={[styles.subToggleText, { color: colors.textSecondary }]}>
                 {subs.length} item{subs.length !== 1 ? 's' : ''}
               </Text>
             </TouchableOpacity>
@@ -170,8 +173,8 @@ export default function TransactionRow({
             {expanded &&
               subs.map((sub, i) => (
                 <View key={i} style={styles.subRow}>
-                  <Text style={styles.subTitle} numberOfLines={1}>{sub.title}</Text>
-                  <Text style={styles.subAmount}>
+                  <Text style={[styles.subTitle, { color: colors.textPrimary, textAlign: 'auto' }]} numberOfLines={1}>{sub.title}</Text>
+                  <Text style={[styles.subAmount, { color: colors.danger }]}>
                     {'−'}{fmtAmt(sub.amount, currency)}
                   </Text>
                 </View>
@@ -179,7 +182,7 @@ export default function TransactionRow({
           </View>
         )}
       </SwipeableTransactionRow>
-      {showDivider && <View style={styles.divider} />}
+      {showDivider && <View style={[styles.divider, { backgroundColor: colors.border }]} />}
     </>
   );
 }
@@ -195,7 +198,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: '#1A1F2E',
+    borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
@@ -206,7 +209,6 @@ const styles = StyleSheet.create({
   l1Text: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#F8FAFC',
   },
   l2Row: {
     flexDirection: 'row',
@@ -217,7 +219,6 @@ const styles = StyleSheet.create({
   },
   l2CatText: {
     fontSize: 13,
-    color: '#AAB2C0',
     flexShrink: 1,
   },
   accountPill: {
@@ -233,19 +234,16 @@ const styles = StyleSheet.create({
   },
   l2Text: {
     fontSize: 13,
-    color: '#AAB2C0',
     marginTop: 3,
   },
   l3Text: {
     fontSize: 13,
-    color: '#6B7280',
     marginTop: 3,
   },
 
   transferAmtInline: {
     fontSize: 16,
     fontWeight: '400',
-    color: '#AAB2C0',
   },
 
   fromChip: {
@@ -286,21 +284,23 @@ const styles = StyleSheet.create({
   subToggle: {
     flexDirection: 'row',
     alignItems: 'center',
+    minHeight: 32,
+    paddingVertical: 4,
     gap: 4,
     alignSelf: 'flex-start',
     marginBottom: 2,
   },
-  subToggleText: { fontSize: 12, fontWeight: '600', color: '#AAB2C0' },
+  subToggleText: { fontSize: 12, fontWeight: '600' },
   subRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingVertical: 5,
   },
-  subTitle: { flex: 1, fontSize: 13, color: '#F8FAFC', marginRight: 8 },
-  subAmount: { fontSize: 13, fontWeight: '600', color: '#EF4444' },
+  subTitle: { flex: 1, fontSize: 13, marginRight: 8 },
+  subAmount: { fontSize: 13, fontWeight: '600' },
 
-  divider: { height: 1, marginHorizontal: 16, backgroundColor: '#263247' },
+  divider: { height: 1, marginHorizontal: 16 },
 
   loanBadge: {
     borderRadius: 4,

@@ -4,9 +4,8 @@ import { useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/theme/ThemeContext';
-import { getLoans, softDeleteLoan } from '@/services/database';
+import { getLoans, softDeleteLoan, getLoanById, getSettings } from '@/services/database';
 import { Loan } from '@/types';
-import { getSettings } from '@/services/database';
 import LoanTile from '@/components/LoanTile';
 import { useAppDialog } from '@/components/AppDialog';
 
@@ -76,11 +75,24 @@ export default function LoansScreen() {
     <View style={[styles.screen, { backgroundColor: colors.background }]}>
       {/* Header */}
       <View style={[styles.header, { borderBottomColor: colors.border }]}>
-        <TouchableOpacity onPress={() => router.back()}>
+        <TouchableOpacity
+          onPress={() => router.back()}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          style={styles.headerBtn}
+          accessibilityRole="button"
+          accessibilityLabel="Go back"
+        >
           <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
         </TouchableOpacity>
-        <Text style={[styles.title, { color: colors.textPrimary }]}>Loans</Text>
-        <TouchableOpacity onPress={() => router.push('/add-loan')} activeOpacity={0.8}>
+        <Text style={[styles.title, { color: colors.textPrimary }]} accessibilityRole="header">Loans</Text>
+        <TouchableOpacity
+          onPress={() => router.push('/add-loan')}
+          activeOpacity={0.8}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          style={styles.headerBtn}
+          accessibilityRole="button"
+          accessibilityLabel="Add loan"
+        >
           <Ionicons name="add-circle-outline" size={26} color={colors.primary} />
         </TouchableOpacity>
       </View>
@@ -89,29 +101,32 @@ export default function LoansScreen() {
       <View style={[styles.summaryBar, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
         <View style={styles.summaryCol}>
           <Text style={[styles.summaryLabel, { color: colors.textSecondary }]}>You owe</Text>
-          <Text style={[styles.summaryAmt, { color: borrowedTotal > 0 ? '#EF4444' : colors.textSecondary }]}>
+          <Text style={[styles.summaryAmt, { color: borrowedTotal > 0 ? colors.danger : colors.textSecondary }]}>
             {fmtAmt(borrowedTotal)}
           </Text>
         </View>
         <View style={[styles.summaryDivider, { backgroundColor: colors.border }]} />
         <View style={styles.summaryCol}>
           <Text style={[styles.summaryLabel, { color: colors.textSecondary }]}>Owed to you</Text>
-          <Text style={[styles.summaryAmt, { color: lentTotal > 0 ? '#10B981' : colors.textSecondary }]}>
+          <Text style={[styles.summaryAmt, { color: lentTotal > 0 ? colors.success : colors.textSecondary }]}>
             {fmtAmt(lentTotal)}
           </Text>
         </View>
       </View>
 
       {/* Tabs */}
-      <View style={[styles.tabs, { borderBottomColor: colors.border }]}>
+      <View style={[styles.tabs, { borderBottomColor: colors.border }]} accessibilityRole="tablist">
         {(['BORROWED', 'LENT'] as Tab[]).map((t) => (
           <TouchableOpacity
             key={t}
             style={[styles.tab, tab === t && { borderBottomColor: colors.primary, borderBottomWidth: 2 }]}
             onPress={() => setTab(t)}
             activeOpacity={0.8}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: tab === t }}
+            accessibilityLabel={t === 'BORROWED' ? 'You Owe' : 'Owed to You'}
           >
-            <Text style={[styles.tabText, { color: tab === t ? colors.primary : colors.textSecondary }]}>
+            <Text style={[styles.tabText, { color: tab === t ? colors.primary : colors.textSecondary, fontWeight: tab === t ? '700' : '500' }]}>
               {t === 'BORROWED' ? '📥 You Owe' : '📤 Owed to You'}
             </Text>
           </TouchableOpacity>
@@ -134,9 +149,11 @@ export default function LoansScreen() {
               style={[styles.emptyBtn, { backgroundColor: colors.primary }]}
               onPress={() => router.push('/add-loan')}
               activeOpacity={0.8}
+              accessibilityRole="button"
+              accessibilityLabel="Add loan"
             >
-              <Ionicons name="add" size={18} color="#fff" />
-              <Text style={styles.emptyBtnText}>Add Loan</Text>
+              <Ionicons name="add" size={18} color={colors.onPrimary} />
+              <Text style={[styles.emptyBtnText, { color: colors.onPrimary }]}>Add Loan</Text>
             </TouchableOpacity>
           </View>
         ) : (
@@ -151,7 +168,6 @@ export default function LoansScreen() {
                   setExpandedId(null);
                 } else {
                   // Load repayments for this loan
-                  const { getLoanById } = await import('@/services/database');
                   const full = await getLoanById(loan.id);
                   if (full) {
                     setLoans((prev) => prev.map((l) => l.id === full.id ? full : l));
@@ -175,7 +191,13 @@ const styles = StyleSheet.create({
   screen: { flex: 1 },
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: 1,
+    paddingHorizontal: 16, paddingVertical: 10, borderBottomWidth: 1,
+  },
+  headerBtn: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   title: { fontSize: 18, fontWeight: '700' },
   summaryBar: {
@@ -189,7 +211,7 @@ const styles = StyleSheet.create({
   tabs: {
     flexDirection: 'row', borderBottomWidth: 1,
   },
-  tab: { flex: 1, alignItems: 'center', paddingVertical: 12 },
+  tab: { flex: 1, alignItems: 'center', justifyContent: 'center', minHeight: 44, paddingVertical: 10 },
   tabText: { fontSize: 14, fontWeight: '700' },
   list: { padding: 16 },
   empty: { alignItems: 'center', paddingTop: 60, paddingHorizontal: 32 },
@@ -197,8 +219,8 @@ const styles = StyleSheet.create({
   emptyTitle: { fontSize: 18, fontWeight: '700', marginBottom: 8 },
   emptySubtitle: { fontSize: 14, textAlign: 'center', marginBottom: 24, lineHeight: 20 },
   emptyBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
-    paddingHorizontal: 24, paddingVertical: 12, borderRadius: 12,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
+    minHeight: 44, paddingHorizontal: 24, paddingVertical: 12, borderRadius: 12,
   },
-  emptyBtnText: { color: '#fff', fontSize: 15, fontWeight: '700' },
+  emptyBtnText: { fontSize: 15, fontWeight: '700' },
 });

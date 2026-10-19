@@ -939,15 +939,17 @@ export default function AllTransactionsScreen() {
   if (error) {
     return (
       <View style={[styles.center, { backgroundColor: colors.background }]}>
-        <Ionicons name='alert-circle-outline' size={48} color='#EF4444' />
-        <Text style={styles.errorTitle}>Couldn&apos;t load transactions</Text>
+        <Ionicons name='alert-circle-outline' size={48} color={colors.danger} />
+        <Text style={[styles.errorTitle, { color: colors.textPrimary }]}>Couldn&apos;t load transactions</Text>
         <TouchableOpacity
-          style={styles.retryBtn}
+          style={[styles.retryBtn, { backgroundColor: colors.primary }]}
           onPress={load}
           activeOpacity={0.8}
+          accessibilityRole="button"
+          accessibilityLabel="Retry loading transactions"
         >
-          <Ionicons name='refresh' size={18} color='#F8FAFC' />
-          <Text style={styles.retryText}>Retry</Text>
+          <Ionicons name='refresh' size={18} color={colors.onPrimary} />
+          <Text style={[styles.retryText, { color: colors.onPrimary }]}>Retry</Text>
         </TouchableOpacity>
       </View>
     );
@@ -955,10 +957,13 @@ export default function AllTransactionsScreen() {
 
   return (
     <View style={[styles.screen, { backgroundColor: colors.background }]}>
-      <View style={styles.header}>
+      <View style={[styles.header, { borderBottomColor: colors.border }]}>
         <TouchableOpacity
           onPress={() => router.back()}
+          style={styles.backBtn}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          accessibilityRole="button"
+          accessibilityLabel="Go back"
         >
           <Ionicons name='arrow-back' size={24} color={colors.textPrimary} />
         </TouchableOpacity>
@@ -969,14 +974,16 @@ export default function AllTransactionsScreen() {
           Transactions
         </Text>
         <TouchableOpacity
-          style={styles.periodPill}
+          style={[styles.periodPill, { backgroundColor: colors.inputFill, borderColor: colors.border }]}
           onPress={() => setShowMonthModal(true)}
           activeOpacity={0.8}
+          accessibilityRole="button"
+          accessibilityLabel={`Select period, currently ${periodLabel}`}
         >
-          <Text style={styles.periodPillText} numberOfLines={1}>
+          <Text style={[styles.periodPillText, { color: colors.textPrimary }]} numberOfLines={1}>
             {periodLabel}
           </Text>
-          <Ionicons name='chevron-down' size={14} color='#9CA3AF' />
+          <Ionicons name='chevron-down' size={14} color={colors.textSecondary} />
         </TouchableOpacity>
       </View>
 
@@ -1002,6 +1009,9 @@ export default function AllTransactionsScreen() {
           <TouchableOpacity
             style={styles.summaryHeader}
             onPress={() => setSummaryOpen(!summaryOpen)}
+            accessibilityRole="button"
+            accessibilityLabel={summaryOpen ? "Collapse summary" : "Expand summary"}
+            accessibilityState={{ expanded: summaryOpen }}
           >
             <Text style={[styles.summaryTitle, { color: colors.textPrimary }]}>
               Summary
@@ -1022,7 +1032,7 @@ export default function AllTransactionsScreen() {
                 >
                   Total Income
                 </Text>
-                <Text style={[styles.summaryAmount, { color: '#10B981' }]}>
+                <Text style={[styles.summaryAmount, { color: colors.success }]}>
                   {formatCurrency(summaryStats.totalIncome, settings?.currency)}
                 </Text>
                 <Text
@@ -1044,7 +1054,7 @@ export default function AllTransactionsScreen() {
                 >
                   Total Expenses
                 </Text>
-                <Text style={[styles.summaryAmount, { color: '#EF4444' }]}>
+                <Text style={[styles.summaryAmount, { color: colors.danger }]}>
                   {formatCurrency(
                     summaryStats.totalExpenses,
                     settings?.currency,
@@ -1068,12 +1078,15 @@ export default function AllTransactionsScreen() {
               backgroundColor: colors.inputFill,
               borderColor: colors.border,
               color: colors.textPrimary,
+              textAlign: 'auto',
+              writingDirection: 'auto',
             },
           ]}
           value={search}
           onChangeText={setSearch}
           placeholder='Search category or note'
           placeholderTextColor={colors.textSecondary}
+          accessibilityLabel='Search category or note'
         />
 
         <View style={styles.filterRow}>
@@ -1089,6 +1102,9 @@ export default function AllTransactionsScreen() {
                 },
               ]}
               onPress={() => setTypeFilter(f)}
+              accessibilityRole="button"
+              accessibilityLabel={f === 'all' ? 'Filter all' : f === 'income' ? 'Filter income' : f === 'expense' ? 'Filter expenses' : 'Filter transfers'}
+              accessibilityState={{ selected: typeFilter === f }}
             >
               <Text
                 style={[
@@ -1122,12 +1138,14 @@ export default function AllTransactionsScreen() {
             ]}
             onPress={openFilterSheet}
             activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel={activeFilterGroupsCount > 0 ? `Filters, ${activeFilterGroupsCount} active` : 'Filters'}
           >
             <Ionicons
               name='filter'
               size={14}
               color={
-                activeFilterGroupsCount > 0 ? '#FFFFFF' : colors.textSecondary
+                activeFilterGroupsCount > 0 ? colors.onPrimary : colors.textSecondary
               }
             />
             <Text
@@ -1136,7 +1154,7 @@ export default function AllTransactionsScreen() {
                 {
                   color:
                     activeFilterGroupsCount > 0
-                      ? '#FFFFFF'
+                      ? colors.onPrimary
                       : colors.textSecondary,
                 },
               ]}
@@ -1323,8 +1341,13 @@ export default function AllTransactionsScreen() {
               <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>
                 Select Period
               </Text>
-              <TouchableOpacity onPress={() => setShowMonthModal(false)}>
-                <Ionicons name='close' size={22} color='#9CA3AF' />
+              <TouchableOpacity
+                onPress={() => setShowMonthModal(false)}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                accessibilityRole="button"
+                accessibilityLabel="Close period selector"
+              >
+                <Ionicons name='close' size={22} color={colors.textSecondary} />
               </TouchableOpacity>
             </View>
             <ScrollView showsVerticalScrollIndicator={false}>
@@ -1332,6 +1355,7 @@ export default function AllTransactionsScreen() {
                 const isSelected =
                   key === selectedMonthKey ||
                   (key === ALL_MONTHS_KEY && isAllTime);
+                const label = key === ALL_MONTHS_KEY ? 'All Time' : monthKeyToLabel(key);
                 return (
                   <TouchableOpacity
                     key={key}
@@ -1347,6 +1371,9 @@ export default function AllTransactionsScreen() {
                       setSelectedMonthKey(key);
                       setShowMonthModal(false);
                     }}
+                    accessibilityRole="radio"
+                    accessibilityState={{ selected: isSelected }}
+                    accessibilityLabel={label}
                   >
                     <Text
                       style={[
@@ -1498,8 +1525,10 @@ export default function AllTransactionsScreen() {
                     ]}
                     onPress={applyFilters}
                     activeOpacity={0.8}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Show ${tempPreviewCount} transactions`}
                   >
-                    <Text style={styles.applyBtnText}>
+                    <Text style={[styles.applyBtnText, { color: colors.onPrimary }]}>
                       Show {tempPreviewCount} transaction
                       {tempPreviewCount !== 1 ? 's' : ''}
                     </Text>
@@ -1520,30 +1549,36 @@ const styles = StyleSheet.create({
   errorTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#F8FAFC',
     textAlign: 'center',
   },
   retryBtn: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 44,
     gap: 8,
     paddingVertical: 10,
     paddingHorizontal: 20,
-    backgroundColor: '#263247',
     borderRadius: 12,
     marginTop: 4,
   },
   retryText: {
     fontSize: 15,
     fontWeight: '600',
-    color: '#F8FAFC',
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 14,
-    gap: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    gap: 8,
+  },
+  backBtn: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   title: {
     fontSize: 18,
@@ -1554,17 +1589,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
+    minHeight: 44,
     paddingVertical: 5,
     paddingHorizontal: 10,
-    backgroundColor: '#1A2332',
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#263247',
   },
   periodPillText: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#F8FAFC',
   },
   content: { padding: 20 },
   search: {
@@ -1573,7 +1606,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     paddingHorizontal: 14,
     marginBottom: 12,
-    fontSize: 14,
+    fontSize: 16,
   },
   filterRow: {
     flexDirection: 'row',

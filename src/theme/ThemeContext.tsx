@@ -11,7 +11,7 @@ interface ThemeContextType {
 }
 
 const ThemeContext = createContext<ThemeContextType>({
-  colors: { ...NEUTRAL_DARK, primary: '#9CA3AF' },
+  colors: { ...NEUTRAL_DARK, primary: '#E4E4E7', onPrimary: '#111827' },
   isDark: true,
   toggleTheme: () => {},
   colorPalette: 'grey',
@@ -21,20 +21,19 @@ const ThemeContext = createContext<ThemeContextType>({
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [isDark, setIsDark] = useState(true);
   const [colorPalette, setPalette] = useState<ColorPaletteName>('grey');
-  const [ready, setReady] = useState(false);
 
   useEffect(() => {
     getSettings()
       .then((s) => {
-        if (s.colorPalette) {
+        if (s.colorPalette && COLOR_PALETTES[s.colorPalette as ColorPaletteName]) {
           setPalette(s.colorPalette as ColorPaletteName);
+        }
+        if (s.themeMode) {
+          setIsDark(s.themeMode !== 'light');
         }
       })
       .catch(() => {
         // Use defaults
-      })
-      .finally(() => {
-        setReady(true);
       });
   }, []);
 
@@ -44,24 +43,31 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     saveSetting('themeMode', next ? 'dark' : 'light').catch(() => {});
   };
 
-  const changeColorPalette = (palette: ColorPaletteName) => {
-    setPalette(palette);
-    saveSetting('colorPalette', palette).catch(() => {});
+  const changeColorPalette = (paletteName: ColorPaletteName) => {
+    setPalette(paletteName);
+    saveSetting('colorPalette', paletteName).catch(() => {});
   };
 
   const baseColors = isDark ? NEUTRAL_DARK : NEUTRAL_LIGHT;
-  const palette = COLOR_PALETTES[colorPalette];
+  const palette = COLOR_PALETTES[colorPalette] || COLOR_PALETTES.grey;
+
+  // High-contrast text on primary across Yellow, Grey (Dark), Orange, Green, Teal vs Dark palettes
+  const isLightPrimary =
+    colorPalette === 'yellow' ||
+    (isDark && colorPalette === 'grey') ||
+    (!isDark && (colorPalette === 'orange' || colorPalette === 'green' || colorPalette === 'teal'));
+  const onPrimary = isLightPrimary ? '#111827' : '#FFFFFF';
+
   const colors: ColorScheme = {
     ...baseColors,
     primary: isDark ? palette.primaryDark : palette.primary,
-    background: isDark ? palette.darkBg : palette.subtle,
-    card: isDark ? palette.darkBg : palette.subtle,
+    onPrimary,
+    background: isDark ? palette.darkBg : baseColors.background,
+    card: isDark ? palette.cardDark : baseColors.card,
     inputFill: isDark ? palette.inputFillDark : palette.inputFill,
-    successBg: isDark ? palette.subtleDark : palette.subtle,
-    dangerBg: isDark ? palette.subtleDark : palette.subtle,
+    successBg: baseColors.successBg,
+    dangerBg: baseColors.dangerBg,
   };
-
-  if (!ready) return null;
 
   return (
     <ThemeContext.Provider value={{ colors, isDark, toggleTheme, colorPalette, changeColorPalette }}>

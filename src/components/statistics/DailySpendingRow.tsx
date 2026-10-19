@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { formatCurrency } from '@/services/constants';
+import { useTheme } from '@/theme/ThemeContext';
 
 interface Props {
   dateKey: string;
@@ -17,6 +18,7 @@ export default function DailySpendingRow({
   currency,
   isLast = false,
 }: Props) {
+  const { colors } = useTheme();
   const [y, m, d] = dateKey.split('-').map(Number);
   const dt = new Date(y, (m ?? 1) - 1, d ?? 1);
   const dayLabel = dt.toLocaleDateString('en-US', {
@@ -28,16 +30,25 @@ export default function DailySpendingRow({
   const barWidth = maxTotal > 0 ? (total / maxTotal) * 100 : 0;
 
   return (
-    <View style={[styles.row, isLast && styles.rowLast]}>
+    <View
+      style={[
+        styles.row,
+        { backgroundColor: colors.card, borderBottomColor: colors.border },
+        isLast && styles.rowLast,
+      ]}
+      accessible={true}
+      accessibilityRole="text"
+      accessibilityLabel={`${dayLabel}, spent ${formatCurrency(total, currency)}`}
+    >
       <View style={styles.left}>
-        <Text style={styles.date} numberOfLines={1}>
+        <Text style={[styles.date, { color: colors.textPrimary }]} numberOfLines={1}>
           {dayLabel}
         </Text>
-        <View style={styles.barTrack}>
-          <View style={[styles.barFill, { width: `${barWidth}%` }]} />
+        <View style={[styles.barTrack, { backgroundColor: colors.inputFill }]}>
+          <View style={[styles.barFill, { width: `${barWidth}%`, backgroundColor: colors.primary }]} />
         </View>
       </View>
-      <Text style={styles.amount} numberOfLines={1} adjustsFontSizeToFit>
+      <Text style={[styles.amount, { color: colors.danger }]} numberOfLines={1} adjustsFontSizeToFit>
         {formatCurrency(total, currency)}
       </Text>
     </View>
@@ -46,16 +57,14 @@ export default function DailySpendingRow({
 
 const styles = StyleSheet.create({
   row: {
-    height: 30,
+    minHeight: 40,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 14,
-    backgroundColor: '#101827',
-    marginBottom: 8,
+    paddingVertical: 8,
+    marginBottom: 4,
     borderBottomWidth: 1,
-    borderColor: '#1A2332',
-    paddingBottom: 8,
   },
   left: {
     flex: 1,
@@ -66,13 +75,11 @@ const styles = StyleSheet.create({
   date: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#F8FAFC',
-    width: 130,
+    width: 120,
   },
   barTrack: {
     flex: 1,
     height: 6,
-    backgroundColor: '#1A2332',
     borderRadius: 3,
     overflow: 'hidden',
   },
@@ -81,13 +88,11 @@ const styles = StyleSheet.create({
   },
   barFill: {
     height: 6,
-    backgroundColor: '#4A90E2',
     borderRadius: 3,
   },
   amount: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#EF4444',
     marginLeft: 10,
   },
 });

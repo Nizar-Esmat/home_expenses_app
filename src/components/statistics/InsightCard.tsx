@@ -12,9 +12,13 @@ export default function InsightCard({ icon, label, value }: Props) {
   const { colors } = useTheme();
 
   return (
-    <View style={[styles.card, { borderColor: colors.border }]}>
+    <View
+      style={[styles.card, { borderColor: colors.border, backgroundColor: colors.card }]}
+      accessible={true}
+      accessibilityLabel={`${label}: ${value}`}
+    >
       <Text style={[styles.icon, { color: colors.textPrimary }]}>{icon}</Text>
-      <Text style={[styles.value]} numberOfLines={1} adjustsFontSizeToFit>
+      <Text style={[styles.value, { color: colors.textPrimary }]} numberOfLines={1} adjustsFontSizeToFit>
         {value}
       </Text>
       <Text
@@ -43,7 +47,6 @@ const styles = StyleSheet.create({
   },
   value: {
     fontSize: 16,
-    color: '#F8FAFC',
     fontWeight: '500',
     textAlign: 'center',
   },

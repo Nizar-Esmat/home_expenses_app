@@ -55,8 +55,14 @@ export default function IncomeTile({ income, currency, category, onDelete, accou
       <Text style={[styles.amount, { color: colors.success }]}>
         +{formatCurrency(income.amount, currency)}
       </Text>
-      <TouchableOpacity onPress={confirmDelete} style={styles.deleteBtn}>
-        <Ionicons name="trash-outline" size={18} color={colors.danger} />
+      <TouchableOpacity
+        onPress={confirmDelete}
+        style={styles.deleteBtn}
+        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        accessibilityRole="button"
+        accessibilityLabel={`Delete income of ${formatCurrency(income.amount, currency)}`}
+      >
+        <Ionicons name="trash-outline" size={20} color={colors.danger} />
       </TouchableOpacity>
     </View>
   );
@@ -73,11 +79,16 @@ const styles = StyleSheet.create({
   },
   emoji: { fontSize: 22 },
   info: { flex: 1 },
-  note: { fontSize: 15, fontWeight: '600' },
+  note: { fontSize: 15, fontWeight: '600', textAlign: 'auto' },
   date: { fontSize: 12, marginTop: 2 },
   accountChip: { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 3 },
   accountChipIcon: { fontSize: 11 },
-  accountChipText: { fontSize: 11 },
-  amount: { fontSize: 15, fontWeight: '700', marginRight: 8 },
-  deleteBtn: { padding: 4 },
+  accountChipText: { fontSize: 11, textAlign: 'auto' },
+  amount: { fontSize: 15, fontWeight: '700', marginRight: 4 },
+  deleteBtn: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 });

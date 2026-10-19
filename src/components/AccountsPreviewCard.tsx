@@ -26,11 +26,17 @@ export default function AccountsPreviewCard({
 
   if (accounts.length === 0) {
     return (
-      <TouchableOpacity style={styles.emptyCard} onPress={onAddAccount}>
-        <Ionicons name='wallet-outline' size={24} color='#AAB2C0' />
-        <Text style={styles.emptyText}>No accounts yet</Text>
+      <TouchableOpacity
+        style={styles.emptyCard}
+        onPress={onAddAccount}
+        activeOpacity={0.7}
+        accessibilityRole="button"
+        accessibilityLabel="No accounts yet. Tap to add an account"
+      >
+        <Ionicons name='wallet-outline' size={28} color={colors.textSecondary} />
+        <Text style={[styles.emptyText, { color: colors.textSecondary }]}>No accounts yet</Text>
         <View style={[styles.addBtn, { backgroundColor: colors.primary }]}>
-          <Text style={styles.addBtnText}>Add account</Text>
+          <Text style={[styles.addBtnText, { color: colors.onPrimary }]}>Add account</Text>
         </View>
       </TouchableOpacity>
     );
@@ -61,19 +67,23 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     alignItems: 'center',
     justifyContent: 'center',
-    borderStyle: 'dashed',
   },
   emptyText: {
     fontSize: 14,
     fontWeight: '500',
-    color: '#AAB2C0',
     marginTop: 8,
   },
   addBtn: {
     marginTop: 14,
+    minHeight: 44,
     paddingHorizontal: 20,
-    paddingVertical: 10,
+    paddingVertical: 12,
     borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  addBtnText: { color: '#FFFFFF', fontSize: 14, fontWeight: '700' },
+  addBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
 });

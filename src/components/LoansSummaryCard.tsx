@@ -26,6 +26,8 @@ export default function LoansSummaryCard({ totalBorrowed, totalLent, currency, o
       style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}
       onPress={onPress}
       activeOpacity={0.8}
+      accessibilityRole="button"
+      accessibilityLabel={`Loans summary. You owe ${fmtAmt(totalBorrowed, currency)}. Owed to you: ${fmtAmt(totalLent, currency)}`}
     >
       <View style={styles.header}>
         <View style={styles.titleRow}>
@@ -38,14 +40,14 @@ export default function LoansSummaryCard({ totalBorrowed, totalLent, currency, o
       <View style={styles.row}>
         <View style={styles.col}>
           <Text style={[styles.label, { color: colors.textSecondary }]}>You owe</Text>
-          <Text style={[styles.amount, { color: totalBorrowed > 0 ? '#EF4444' : colors.textSecondary }]}>
+          <Text style={[styles.amount, { color: totalBorrowed > 0 ? colors.danger : colors.textSecondary }]}>
             {fmtAmt(totalBorrowed, currency)}
           </Text>
         </View>
         <View style={[styles.divider, { backgroundColor: colors.border }]} />
         <View style={styles.col}>
           <Text style={[styles.label, { color: colors.textSecondary }]}>Owed to you</Text>
-          <Text style={[styles.amount, { color: totalLent > 0 ? '#10B981' : colors.textSecondary }]}>
+          <Text style={[styles.amount, { color: totalLent > 0 ? colors.success : colors.textSecondary }]}>
             {fmtAmt(totalLent, currency)}
           </Text>
         </View>

@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/theme/ThemeContext';
 import { HomeTransaction } from '@/types';
@@ -27,6 +28,7 @@ export default function RecentTransactionsSection({
 }: Props) {
   const { colors } = useTheme();
   const { showDialog } = useAppDialog();
+  const router = useRouter();
 
   const handleDeleteConfirm = (tx: HomeTransaction) => {
     showDialog({
@@ -42,10 +44,12 @@ export default function RecentTransactionsSection({
 
   return (
     <View>
-      <View style={styles.headerRow}>
+      <View style={[styles.headerRow, { borderTopColor: colors.border }]}>
         <View style={styles.headerLeft}>
-          <Text style={styles.headerTitle}>Recent Transactions</Text>
-          <Text style={styles.headerSubtitle}>
+          <Text style={[styles.headerTitle, { color: colors.textPrimary }]} accessibilityRole="header">
+            Recent Transactions
+          </Text>
+          <Text style={[styles.headerSubtitle, { color: colors.textSecondary }]}>
             {error
               ? "Couldn't load balances"
               : transactions.length > 0
@@ -53,7 +57,13 @@ export default function RecentTransactionsSection({
                 : 'No transactions yet'}
           </Text>
         </View>
-        <TouchableOpacity style={styles.headerAction} onPress={onSeeAll}>
+        <TouchableOpacity
+          style={styles.headerAction}
+          onPress={onSeeAll}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          accessibilityRole="button"
+          accessibilityLabel="View all transactions"
+        >
           <Text style={[styles.headerActionText, { color: colors.primary }]}>
             View all
           </Text>
@@ -62,8 +72,8 @@ export default function RecentTransactionsSection({
       </View>
 
       {error ? (
-        <TouchableOpacity style={styles.retryBtn} onPress={onRetry}>
-          <Text style={styles.retryText}>Couldn&apos;t load balances</Text>
+        <TouchableOpacity style={styles.retryBtn} onPress={onRetry} accessibilityRole="button" accessibilityLabel="Retry loading balances">
+          <Text style={[styles.retryText, { color: colors.textSecondary }]}>Couldn&apos;t load balances</Text>
           <Text style={[styles.retryAction, { color: colors.primary }]}>
             {' '}
             Retry
@@ -71,9 +81,21 @@ export default function RecentTransactionsSection({
         </TouchableOpacity>
       ) : transactions.length === 0 ? (
         <View style={styles.empty}>
-          <Text style={styles.emptyText}>
+          <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
             No transactions for this month yet
           </Text>
+          <TouchableOpacity
+            style={[styles.emptyCta, { backgroundColor: colors.primary + '18', borderColor: colors.primary + '40' }]}
+            onPress={() => router.push('/add-expense')}
+            accessibilityRole="button"
+            accessibilityLabel="Add an expense"
+            activeOpacity={0.8}
+          >
+            <Ionicons name="add" size={16} color={colors.primary} />
+            <Text style={[styles.emptyCtaText, { color: colors.primary }]}>
+              Add Expense
+            </Text>
+          </TouchableOpacity>
         </View>
       ) : (
         transactions.map((tx, index) => (
@@ -98,7 +120,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: 12,
     borderTopWidth: 1,
-    borderColor: '#C0C0C080',
     paddingTop: 12,
     gap: 12,
   },
@@ -107,35 +128,48 @@ const styles = StyleSheet.create({
     fontSize: 20,
     lineHeight: 26,
     fontWeight: '700',
-    color: '#F8FAFC',
   },
   headerSubtitle: {
     fontSize: 14,
     lineHeight: 20,
     fontWeight: '400',
-    color: '#AAB2C0',
     marginTop: 4,
   },
   headerAction: {
     flexDirection: 'row',
     alignItems: 'center',
+    minHeight: 44,
     gap: 4,
-    marginTop: 4,
   },
   headerActionText: { fontSize: 14, fontWeight: '600' },
-  empty: { alignItems: 'center', paddingVertical: 32 },
+  empty: { alignItems: 'center', paddingVertical: 28 },
   emptyText: {
     fontSize: 14,
     fontWeight: '500',
-    color: '#AAB2C0',
     textAlign: 'center',
+  },
+  emptyCta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    minHeight: 44,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    marginTop: 12,
+  },
+  emptyCtaText: {
+    fontSize: 14,
+    fontWeight: '600',
   },
   retryBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 24,
+    minHeight: 44,
+    paddingVertical: 12,
   },
-  retryText: { fontSize: 14, color: '#AAB2C0' },
+  retryText: { fontSize: 14 },
   retryAction: { fontSize: 14, fontWeight: '600' },
 });

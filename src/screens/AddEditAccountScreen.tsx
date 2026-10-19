@@ -115,17 +115,23 @@ export default function AddEditAccountScreen() {
 
   return (
     <KeyboardAvoidingView
-      style={styles.screen}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      style={[styles.screen, { backgroundColor: colors.background }]}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-          <View style={[styles.header, { borderBottomColor: colors.border }]}>
-        <TouchableOpacity onPress={() => router.back()}>
+      <View style={[styles.header, { borderBottomColor: colors.border }]}>
+        <TouchableOpacity
+          onPress={() => router.back()}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          accessibilityRole="button"
+          accessibilityLabel="Go back"
+          style={styles.backBtn}
+        >
           <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
         </TouchableOpacity>
-        <Text style={[styles.title, { color: colors.textPrimary }]}>
+        <Text style={[styles.title, { color: colors.textPrimary }]} accessibilityRole="header">
           {isEdit ? 'Edit Account' : 'New Account'}
         </Text>
-        <View style={{ width: 24 }} />
+        <View style={{ width: 44 }} />
       </View>
 
         <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
@@ -210,19 +216,30 @@ export default function AddEditAccountScreen() {
 
         {/* Color */}
         <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>COLOR</Text>
-        <View style={styles.colorGrid}>
-          {PRESET_COLORS.map((c) => (
-            <TouchableOpacity
-              key={c}
-              style={[
-                styles.colorDot,
-                { backgroundColor: c },
-                color === c && { borderColor: '#fff', borderWidth: 3 },
-              ]}
-              onPress={() => setColor(c)}
-              activeOpacity={0.8}
-            />
-          ))}
+        <View style={styles.colorGrid} accessibilityRole="radiogroup" accessibilityLabel="Account color">
+          {PRESET_COLORS.map((c) => {
+            const isSelected = color === c;
+            return (
+              <TouchableOpacity
+                key={c}
+                style={[
+                  styles.colorDot,
+                  { backgroundColor: c },
+                  isSelected && { borderColor: colors.textPrimary, borderWidth: 2.5 },
+                ]}
+                onPress={() => setColor(c)}
+                activeOpacity={0.8}
+                hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                accessibilityRole="radio"
+                accessibilityState={{ selected: isSelected }}
+                accessibilityLabel={`Color ${c}`}
+              >
+                {isSelected && (
+                  <Ionicons name="checkmark" size={20} color="#FFFFFF" />
+                )}
+              </TouchableOpacity>
+            );
+          })}
         </View>
 
           <AppButton
@@ -241,7 +258,13 @@ const styles = StyleSheet.create({
   screen: { flex: 1 },
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: 1,
+    paddingHorizontal: 16, paddingVertical: 10, borderBottomWidth: 1,
+  },
+  backBtn: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   title: { fontSize: 18, fontWeight: '700' },
   content: { padding: 20 },
@@ -275,7 +298,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
+    minHeight: 44,
     paddingVertical: 10,
+    paddingHorizontal: 4,
     borderRadius: 12,
     borderWidth: 1.5,
   },
@@ -294,10 +319,12 @@ const styles = StyleSheet.create({
 
   colorGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginBottom: 28 },
   colorDot: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     borderWidth: 2,
     borderColor: 'transparent',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

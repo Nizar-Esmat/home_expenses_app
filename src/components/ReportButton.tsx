@@ -8,14 +8,19 @@ interface Props {
 }
 
 export default function ReportButton({ onPress }: Props) {
+  const { colors } = useTheme();
+
   return (
     <TouchableOpacity
       style={styles.button}
       onPress={onPress}
       activeOpacity={0.8}
+      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+      accessibilityRole="button"
+      accessibilityLabel="View statistics"
     >
-      <Text style={styles.text}> View statistics</Text>
-      <Ionicons name='chevron-forward' size={16} color='#9CA3AF' />
+      <Text style={[styles.text, { color: colors.primary }]}>View statistics</Text>
+      <Ionicons name='chevron-forward' size={16} color={colors.primary} />
     </TouchableOpacity>
   );
 }
@@ -26,12 +31,11 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
     alignItems: 'center',
     justifyContent: 'flex-end',
-    paddingTop: 6,
+    minHeight: 44,
     gap: 4,
   },
   text: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#9CA3AF',
   },
 });

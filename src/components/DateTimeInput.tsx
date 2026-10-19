@@ -16,8 +16,10 @@ export default function DateTimeInput({ date, onChange, useCustomDate, onUseCust
   const [showDate, setShowDate] = useState(false);
   const [showTime, setShowTime] = useState(false);
 
-  const formatDate = (d: Date) => d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
-  const formatTime = (d: Date) => d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+  const formatDate = (d: Date) =>
+    d.toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' });
+  const formatTime = (d: Date) =>
+    d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
 
   const handleDateChange = (_event: DateTimePickerEvent, selectedDate?: Date) => {
     setShowDate(false);
@@ -38,9 +40,13 @@ export default function DateTimeInput({ date, onChange, useCustomDate, onUseCust
       <TouchableOpacity
         style={[styles.toggleRow, { backgroundColor: colors.inputFill, borderColor: colors.border }]}
         onPress={() => onUseCustomDateChange(!useCustomDate)}
+        accessibilityRole="checkbox"
+        accessibilityState={{ checked: useCustomDate }}
+        accessibilityLabel="Custom date and time"
+        activeOpacity={0.8}
       >
         <View style={styles.toggleLeft}>
-          <Ionicons name={useCustomDate ? 'remove-circle-outline' : 'add-circle-outline'} size={20} color={colors.primary} />
+          <Ionicons name={useCustomDate ? 'checkbox' : 'square-outline'} size={20} color={colors.primary} />
           <Text style={[styles.toggleLabel, { color: colors.textPrimary }]}>Custom date & time</Text>
         </View>
       </TouchableOpacity>
@@ -51,15 +57,21 @@ export default function DateTimeInput({ date, onChange, useCustomDate, onUseCust
             <TouchableOpacity
               style={[styles.pill, { backgroundColor: colors.inputFill, borderColor: colors.border }]}
               onPress={() => setShowDate(true)}
+              accessibilityRole="button"
+              accessibilityLabel={`Select date, currently ${formatDate(date)}`}
+              activeOpacity={0.8}
             >
-              <Ionicons name="calendar-outline" size={18} color={colors.textPrimary} />
+              <Ionicons name="calendar-outline" size={18} color={colors.primary} />
               <Text style={[styles.pillText, { color: colors.textPrimary }]}>{formatDate(date)}</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.pill, { backgroundColor: colors.inputFill, borderColor: colors.border }]}
               onPress={() => setShowTime(true)}
+              accessibilityRole="button"
+              accessibilityLabel={`Select time, currently ${formatTime(date)}`}
+              activeOpacity={0.8}
             >
-              <Ionicons name="time-outline" size={18} color={colors.textPrimary} />
+              <Ionicons name="time-outline" size={18} color={colors.primary} />
               <Text style={[styles.pillText, { color: colors.textPrimary }]}>{formatTime(date)}</Text>
             </TouchableOpacity>
           </View>
@@ -87,10 +99,28 @@ export default function DateTimeInput({ date, onChange, useCustomDate, onUseCust
 }
 
 const styles = StyleSheet.create({
-  toggleRow: { flexDirection: 'row', alignItems: 'center', padding: 14, borderRadius: 12, borderWidth: 1.5, marginBottom: 16 },
+  toggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    minHeight: 48,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    marginBottom: 16,
+  },
   toggleLeft: { flexDirection: 'row', alignItems: 'center' },
   toggleLabel: { fontSize: 14, fontWeight: '600', marginLeft: 10 },
   row: { flexDirection: 'row', gap: 10, marginBottom: 16 },
-  pill: { flex: 1, flexDirection: 'row', alignItems: 'center', padding: 12, borderRadius: 12, borderWidth: 1.5 },
-  pillText: { fontSize: 14, marginLeft: 8 },
+  pill: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    minHeight: 44,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 1.5,
+  },
+  pillText: { fontSize: 14, fontWeight: '500', marginLeft: 8 },
 });

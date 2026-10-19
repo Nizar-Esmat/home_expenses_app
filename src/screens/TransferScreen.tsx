@@ -173,6 +173,9 @@ export default function TransferScreen() {
         style={[styles.selectorBtn, { backgroundColor: colors.inputFill, borderColor: colors.border }]}
         onPress={onToggle}
         activeOpacity={0.8}
+        accessibilityRole="button"
+        accessibilityLabel={`${label}: ${selected ? selected.name : 'Select account'}`}
+        accessibilityState={{ expanded: show }}
       >
         {selected ? (
           <View style={styles.selectedRow}>
@@ -192,32 +195,37 @@ export default function TransferScreen() {
 
       {show && (
         <View style={[styles.dropdown, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          {accounts
-            .filter((a) => a.id !== excludeId)
-            .map((acc) => {
-              const isSelected = selected?.id === acc.id;
-              return (
-                <TouchableOpacity
-                  key={acc.id}
-                  style={[
-                    styles.dropdownItem,
-                    isSelected && { backgroundColor: colors.primary + '15' },
-                    { borderBottomColor: colors.border },
-                  ]}
-                  onPress={() => { onSelect(acc); onToggle(); }}
-                  activeOpacity={0.75}
-                >
-                  <Text style={styles.dropdownIcon}>{acc.icon ?? '💳'}</Text>
-                  <View style={styles.dropdownInfo}>
-                    <Text style={[styles.dropdownName, { color: colors.textPrimary }]}>{acc.name}</Text>
-                    <Text style={[styles.dropdownBalance, { color: colors.textSecondary }]}>
-                      {ACCOUNT_TYPE_LABELS[acc.type]} · {acc.currentBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                    </Text>
-                  </View>
-                  {isSelected && <Ionicons name="checkmark-circle" size={18} color={colors.primary} />}
-                </TouchableOpacity>
-              );
-            })}
+          <ScrollView style={{ maxHeight: 220 }} nestedScrollEnabled showsVerticalScrollIndicator={false}>
+            {accounts
+              .filter((a) => a.id !== excludeId)
+              .map((acc) => {
+                const isSelected = selected?.id === acc.id;
+                return (
+                  <TouchableOpacity
+                    key={acc.id}
+                    style={[
+                      styles.dropdownItem,
+                      isSelected && { backgroundColor: colors.primary + '15' },
+                      { borderBottomColor: colors.border },
+                    ]}
+                    onPress={() => { onSelect(acc); onToggle(); }}
+                    activeOpacity={0.75}
+                    accessibilityRole="radio"
+                    accessibilityState={{ selected: isSelected }}
+                    accessibilityLabel={`${acc.name}, ${ACCOUNT_TYPE_LABELS[acc.type]}`}
+                  >
+                    <Text style={styles.dropdownIcon}>{acc.icon ?? '💳'}</Text>
+                    <View style={styles.dropdownInfo}>
+                      <Text style={[styles.dropdownName, { color: colors.textPrimary }]}>{acc.name}</Text>
+                      <Text style={[styles.dropdownBalance, { color: colors.textSecondary }]}>
+                        {ACCOUNT_TYPE_LABELS[acc.type]} · {acc.currentBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </Text>
+                    </View>
+                    {isSelected && <Ionicons name="checkmark-circle" size={18} color={colors.primary} />}
+                  </TouchableOpacity>
+                );
+              })}
+          </ScrollView>
         </View>
       )}
     </View>
@@ -225,15 +233,21 @@ export default function TransferScreen() {
 
   return (
     <KeyboardAvoidingView
-      style={styles.screen}
+      style={[styles.screen, { backgroundColor: colors.background }]}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
       <View style={[styles.header, { borderBottomColor: colors.border }]}>
-        <TouchableOpacity onPress={() => router.back()}>
+        <TouchableOpacity
+          onPress={() => router.back()}
+          style={styles.backBtn}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          accessibilityRole="button"
+          accessibilityLabel="Go back"
+        >
           <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
         </TouchableOpacity>
         <Text style={[styles.title, { color: colors.textPrimary }]}>{editTransfer ? 'Edit Transfer' : 'Transfer'}</Text>
-        <View style={{ width: 24 }} />
+        <View style={{ width: 44 }} />
       </View>
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
@@ -261,6 +275,9 @@ export default function TransferScreen() {
             onPress={swapAccounts}
             activeOpacity={0.75}
             disabled={!fromAccount || !toAccount}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            accessibilityRole="button"
+            accessibilityLabel="Swap source and destination accounts"
           >
             <Ionicons name="swap-vertical" size={18} color={colors.primary} />
           </TouchableOpacity>
@@ -329,7 +346,13 @@ const styles = StyleSheet.create({
   screen: { flex: 1 },
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: 1,
+    paddingHorizontal: 16, paddingVertical: 10, borderBottomWidth: 1,
+  },
+  backBtn: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   title: { fontSize: 18, fontWeight: '700' },
   content: { padding: 20 },
