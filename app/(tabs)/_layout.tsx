@@ -44,14 +44,21 @@ function FloatingTabBar() {
   const pathname = usePathname();
   const insets = useSafeAreaInsets();
 
-  const tabBarBg = isDark ? '#0A0A0A' : '#FFFFFF';
-  const selectedBg = isDark ? colors.primary + '30' : colors.primary + '20';
-
+  const selectedBg = isDark ? colors.primary + '28' : colors.primary + '18';
   const activeIndex = getIndexFromPathname(pathname);
 
   return (
-      <View style={[styles.wrapper, { bottom: 16 + insets.bottom }]}>
-      <View style={[styles.tabBar, { backgroundColor: tabBarBg }]}>
+    <View style={[styles.wrapper, { bottom: 16 + insets.bottom }]}>
+      <View
+        style={[
+          styles.tabBar,
+          {
+            backgroundColor: colors.surfaceElevated,
+            borderColor: colors.border,
+          },
+        ]}
+        accessibilityRole="tablist"
+      >
         {TAB_ITEMS.map((item, index) => {
           const isActive = activeIndex === index;
           return (
@@ -66,6 +73,9 @@ function FloatingTabBar() {
                 setTabSlideDirection(activeIndex, index);
                 router.push(`/${item.name}` as any);
               }}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: isActive }}
+              accessibilityLabel={item.title}
             >
               <Ionicons
                 name={isActive ? item.icon : item.iconOutline}
@@ -125,13 +135,14 @@ const styles = StyleSheet.create({
     height: 78,
     width: '100%',
     borderRadius: 20,
+    borderWidth: 1,
     paddingHorizontal: 4,
     ...Platform.select({
       ios: {
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.2,
-        shadowRadius: 12,
+        shadowOpacity: 0.15,
+        shadowRadius: 16,
       },
       android: {
         elevation: 8,
