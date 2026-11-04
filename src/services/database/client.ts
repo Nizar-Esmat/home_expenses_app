@@ -245,6 +245,7 @@ const INCOME_BUILT_IN: { name: string; emoji: string; sortOrder: number }[] = [
   { name: 'Gift', emoji: '🎁', sortOrder: 2 },
   { name: 'Investment', emoji: '📈', sortOrder: 3 },
   { name: 'Other', emoji: '💰', sortOrder: 4 },
+  { name: 'Starting Balance', emoji: '🏁', sortOrder: 5 },
 ];
 
 const DEFAULT_INCOME_COLORS: Record<string, string> = {
@@ -253,6 +254,7 @@ const DEFAULT_INCOME_COLORS: Record<string, string> = {
   Gift: '#A855F7',
   Investment: '#F59E0B',
   Other: '#6B7280',
+  'Starting Balance': '#059669',
 };
 
 async function seedIncomeCategories(db: SQLite.SQLiteDatabase): Promise<void> {

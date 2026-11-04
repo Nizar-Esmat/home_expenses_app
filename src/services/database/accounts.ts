@@ -149,7 +149,8 @@ export async function setFavoriteBankAccount(id: number | null): Promise<void> {
 export interface AddAccountInput {
   name: string;
   type: AccountType;
-  openingBalance: number;
+  openingBalance?: number;
+  startingBalance?: number;
   icon?: string | null;
   color?: string | null;
   isDefault?: number;
@@ -158,23 +159,66 @@ export interface AddAccountInput {
 export async function addAccount(input: AddAccountInput): Promise<number> {
   const db = await getDb();
   const now = nowIso();
-  const balanceMinor = toMinorUnits(input.openingBalance);
-  const result = await db.runAsync(
-    `INSERT INTO accounts
-       (name, type, currencyCode, openingBalanceMinor, currentBalanceMinor, icon, color, isPrimary, isArchived, createdAt, updatedAt)
-     VALUES (?, ?, 'EGP', ?, ?, ?, ?, 0, 0, ?, ?)`,
-    [
-      input.name.trim(),
-      toDbAccountType(input.type),
-      balanceMinor,
-      balanceMinor,
-      input.icon ?? null,
-      input.color ?? null,
-      now,
-      now,
-    ],
-  );
-  return result.lastInsertRowId;
+  const starting = input.startingBalance ?? input.openingBalance ?? 0;
+  const startingMinor = toMinorUnits(starting);
+
+  let newAccountId = 0;
+
+  await db.withTransactionAsync(async () => {
+    // 1. Create the account with 0 opening balance
+    const result = await db.runAsync(
+      `INSERT INTO accounts
+         (name, type, currencyCode, openingBalanceMinor, currentBalanceMinor, icon, color, isPrimary, isArchived, createdAt, updatedAt)
+       VALUES (?, ?, 'EGP', 0, 0, ?, ?, 0, 0, ?, ?)`,
+      [
+        input.name.trim(),
+        toDbAccountType(input.type),
+        input.icon ?? null,
+        input.color ?? null,
+        now,
+        now,
+      ],
+    );
+    newAccountId = result.lastInsertRowId;
+
+    // 2. If starting balance > 0, atomically insert the initial deposit transaction
+    if (startingMinor > 0) {
+      let category = await db.getFirstAsync<{ id: number }>(
+        "SELECT id FROM categories WHERE type = 'INCOME' AND name = 'Starting Balance' LIMIT 1",
+      );
+
+      if (!category) {
+        const catRes = await db.runAsync(
+          `INSERT INTO categories
+             (name, type, icon, color, isDefault, sortOrder, createdAt, updatedAt)
+           VALUES ('Starting Balance', 'INCOME', '🏁', '#059669', 1, 5, ?, ?)`,
+          [now, now],
+        );
+        category = { id: catRes.lastInsertRowId };
+      }
+
+      await db.runAsync(
+        `INSERT INTO transactions
+           (accountId, categoryId, type, amountMinor, currencyCode, title, note, transactionDate, createdAt, updatedAt)
+         VALUES (?, ?, 'INCOME', ?, 'EGP', ?, ?, ?, ?, ?)`,
+        [
+          newAccountId,
+          category.id,
+          startingMinor,
+          'Starting Balance',
+          `Initial balance for ${input.name.trim()}`,
+          now,
+          now,
+          now,
+        ],
+      );
+
+      // 3. Recalculate materialized running balance
+      await recalculateBalance(newAccountId);
+    }
+  });
+
+  return newAccountId;
 }
 
 export interface UpdateAccountInput {
