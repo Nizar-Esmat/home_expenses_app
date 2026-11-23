@@ -8,22 +8,19 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import CategorySpendingSkeleton from '@/components/skeletons/CategorySpendingSkeleton';
+import ScreenHeader from '@/components/ScreenHeader';
 import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/theme/ThemeContext';
 import {
-  getExpensesByMonth,
-  getAllExpenses,
   getSettings,
   deleteExpense,
-  getCategories,
-  getTransferFeesByMonth,
-  getAllTransferFees,
+  getCategorySpendingSql,
   getTransactionsByCategory,
 } from '@/services/database';
 import { monthKeyToLabel, formatCurrency, currentMonthKey } from '@/services/constants';
-import { Category, HomeTransaction, Settings } from '@/types';
-import { buildSpendingByCategory, SpendingCategoryItem } from '@/services/reportUtils';
+import { HomeTransaction, Settings } from '@/types';
+import { SpendingCategoryItem } from '@/services/reportUtils';
 import CategoryStatRow from '@/components/statistics/CategoryStatRow';
 import TransactionRow from '@/components/TransactionRow';
 import { useAppDialog } from '@/components/AppDialog';
@@ -48,19 +45,14 @@ export default function AllCategorySpendingScreen() {
 
   const load = useCallback(() => {
     setLoading(true);
-    const expensePromise = isAllTime ? getAllExpenses() : getExpensesByMonth(selectedMonthKey);
-    const feePromise = isAllTime ? getAllTransferFees() : getTransferFeesByMonth(selectedMonthKey);
-
-    Promise.all([expensePromise, feePromise, getSettings(), getCategories()])
-      .then(([exps, fees, sets, cats]) => {
+    Promise.all([getCategorySpendingSql(selectedMonthKey), getSettings()])
+      .then(([cats, sets]) => {
         setSettings(sets);
-        const map: Record<string, Category> = {};
-        cats.forEach((c) => (map[c.name] = c));
-        setCategories(buildSpendingByCategory(exps, map, fees));
+        setCategories(cats);
         setLoading(false);
       })
       .catch(() => setLoading(false));
-  }, [isAllTime, selectedMonthKey]);
+  }, [selectedMonthKey]);
 
   useFocusEffect(load);
 
@@ -134,23 +126,15 @@ export default function AllCategorySpendingScreen() {
 
   return (
     <View style={[styles.screen, { backgroundColor: colors.background }]}>
-      <View style={[styles.header, { borderBottomColor: colors.border }]}>
-        <TouchableOpacity
-          onPress={() => router.back()}
-          style={styles.backBtn}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          accessibilityRole="button"
-          accessibilityLabel="Go back"
-        >
-          <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
-        </TouchableOpacity>
-        <Text style={[styles.title, { color: colors.textPrimary }]} numberOfLines={1}>
-          Spending by Category
-        </Text>
-        <Text style={[styles.periodLabel, { color: colors.textSecondary }]} numberOfLines={1}>
-          {periodLabel}
-        </Text>
-      </View>
+      <ScreenHeader
+        title="Spending by Category"
+        alignTitle="left"
+        rightAction={
+          <Text style={[styles.periodLabel, { color: colors.textSecondary }]} numberOfLines={1}>
+            {periodLabel}
+          </Text>
+        }
+      />
 
       <ScrollView
         contentContainerStyle={styles.content}
@@ -235,21 +219,6 @@ export default function AllCategorySpendingScreen() {
 const styles = StyleSheet.create({
   screen: { flex: 1 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-  },
-  backBtn: {
-    width: 44,
-    height: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  title: { fontSize: 20, fontWeight: '700', flex: 1, marginLeft: 8 },
   periodLabel: { fontSize: 13, fontWeight: '600' },
   content: { padding: 20 },
   totalCard: {

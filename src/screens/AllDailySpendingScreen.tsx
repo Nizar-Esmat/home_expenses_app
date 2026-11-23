@@ -8,22 +8,20 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import DailySpendingSkeleton from '@/components/skeletons/DailySpendingSkeleton';
+import ScreenHeader from '@/components/ScreenHeader';
 import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/theme/ThemeContext';
 import {
-  getExpensesByMonth,
-  getAllExpenses,
   getSettings,
   deleteExpense,
   deleteIncome,
-  getTransferFeesByMonth,
-  getAllTransferFees,
+  getDailySpendingSummarySql,
   getTransactionsByDate,
 } from '@/services/database';
 import { monthKeyToLabel, formatCurrencyCompact, currentMonthKey } from '@/services/constants';
 import { HomeTransaction, Settings } from '@/types';
-import { getDailySpendingSummary, DailySpendingSummary } from '@/services/reportUtils';
+import { DailySpendingSummary } from '@/services/reportUtils';
 import DailySpendingRow from '@/components/statistics/DailySpendingRow';
 import TransactionRow from '@/components/TransactionRow';
 import { useAppDialog } from '@/components/AppDialog';
@@ -48,17 +46,14 @@ export default function AllDailySpendingScreen() {
 
   const load = useCallback(() => {
     setLoading(true);
-    const expensePromise = isAllTime ? getAllExpenses() : getExpensesByMonth(selectedMonthKey);
-    const feePromise = isAllTime ? getAllTransferFees() : getTransferFeesByMonth(selectedMonthKey);
-
-    Promise.all([expensePromise, feePromise, getSettings()])
-      .then(([exps, fees, sets]) => {
+    Promise.all([getDailySpendingSummarySql(selectedMonthKey), getSettings()])
+      .then(([sum, sets]) => {
         setSettings(sets);
-        setSummary(getDailySpendingSummary(exps, fees));
+        setSummary(sum);
         setLoading(false);
       })
       .catch(() => setLoading(false));
-  }, [isAllTime, selectedMonthKey]);
+  }, [selectedMonthKey]);
 
   useFocusEffect(load);
 
@@ -135,23 +130,15 @@ export default function AllDailySpendingScreen() {
 
   return (
     <View style={[styles.screen, { backgroundColor: colors.background }]}>
-      <View style={[styles.header, { borderBottomColor: colors.border }]}>
-        <TouchableOpacity
-          onPress={() => router.back()}
-          style={styles.backBtn}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          accessibilityRole="button"
-          accessibilityLabel="Go back"
-        >
-          <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
-        </TouchableOpacity>
-        <Text style={[styles.title, { color: colors.textPrimary }]} numberOfLines={1}>
-          Daily Spending
-        </Text>
-        <Text style={[styles.periodLabel, { color: colors.textSecondary }]} numberOfLines={1}>
-          {periodLabel}
-        </Text>
-      </View>
+      <ScreenHeader
+        title="Daily Spending"
+        alignTitle="left"
+        rightAction={
+          <Text style={[styles.periodLabel, { color: colors.textSecondary }]} numberOfLines={1}>
+            {periodLabel}
+          </Text>
+        }
+      />
 
       <ScrollView
         contentContainerStyle={styles.content}
@@ -187,55 +174,60 @@ export default function AllDailySpendingScreen() {
           </View>
         )}
 
-        {summary?.allDays.map((day, index) => (
-          <View key={day.dateKey}>
-            <TouchableOpacity
-              activeOpacity={0.7}
-              onPress={() => handleDayPress(day.dateKey)}
-              style={styles.dayRowTouchable}
-              accessibilityRole="button"
-              accessibilityLabel={`${day.dateKey}, total spending ${day.total}`}
-              accessibilityState={{ expanded: expandedDay === day.dateKey }}
-            >
-              <DailySpendingRow
-                dateKey={day.dateKey}
-                total={day.total}
-                maxTotal={summary.totalSpent}
-                currency={currency}
-                isLast={index === summary.allDays.length - 1}
-              />
-              <Ionicons
-                name={expandedDay === day.dateKey ? 'chevron-up' : 'chevron-down'}
-                size={16}
-                color={colors.textSecondary}
-                style={styles.expandIcon}
-              />
-            </TouchableOpacity>
+        {summary?.allDays.map((day) => {
+          const isExpanded = expandedDay === day.dateKey;
+          return (
+            <View key={day.dateKey} style={styles.dayGroup}>
+              <TouchableOpacity
+                activeOpacity={0.7}
+                onPress={() => handleDayPress(day.dateKey)}
+                accessibilityRole="button"
+                accessibilityLabel={`${day.dateKey}, total spending ${day.total}`}
+                accessibilityState={{ expanded: isExpanded }}
+              >
+                <DailySpendingRow
+                  dateKey={day.dateKey}
+                  total={day.total}
+                  maxTotal={summary.totalSpent}
+                  currency={currency}
+                  expandable={true}
+                  isExpanded={isExpanded}
+                />
+              </TouchableOpacity>
 
-            {expandedDay === day.dateKey && (
-              <View style={styles.expandedSection}>
-                {loadingDay ? (
-                  <ActivityIndicator color={colors.primary} size="small" style={styles.dayLoader} />
-                ) : dayTransactions.length > 0 ? (
-                  dayTransactions.map((tx, i) => (
-                    <TransactionRow
-                      key={`${tx.type}-${tx.id}`}
-                      tx={tx}
-                      currency={currency}
-                      onEdit={() => handleEdit(tx)}
-                      onDelete={() => handleDeleteConfirm(tx)}
-                      showDivider={i < dayTransactions.length - 1}
-                    />
-                  ))
-                ) : (
-                  <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
-                    No transactions
-                  </Text>
-                )}
-              </View>
-            )}
-          </View>
-        ))}
+              {isExpanded && (
+                <View
+                  style={[
+                    styles.expandedSection,
+                    {
+                      backgroundColor: colors.card,
+                      borderColor: colors.border,
+                    },
+                  ]}
+                >
+                  {loadingDay ? (
+                    <ActivityIndicator color={colors.primary} size="small" style={styles.dayLoader} />
+                  ) : dayTransactions.length > 0 ? (
+                    dayTransactions.map((tx, i) => (
+                      <TransactionRow
+                        key={`${tx.type}-${tx.id}`}
+                        tx={tx}
+                        currency={currency}
+                        onEdit={() => handleEdit(tx)}
+                        onDelete={() => handleDeleteConfirm(tx)}
+                        showDivider={i < dayTransactions.length - 1}
+                      />
+                    ))
+                  ) : (
+                    <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
+                      No transactions
+                    </Text>
+                  )}
+                </View>
+              )}
+            </View>
+          );
+        })}
 
         {(!summary || summary.allDays.length === 0) && (
           <View style={styles.emptyState}>
@@ -256,21 +248,6 @@ export default function AllDailySpendingScreen() {
 const styles = StyleSheet.create({
   screen: { flex: 1 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-  },
-  backBtn: {
-    width: 44,
-    height: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  title: { fontSize: 20, fontWeight: '700', flex: 1, marginLeft: 8 },
   periodLabel: { fontSize: 13, fontWeight: '600' },
   content: { padding: 20 },
   statsRow: {
@@ -286,19 +263,16 @@ const styles = StyleSheet.create({
   statLabel: { fontSize: 11, fontWeight: '600' },
   statValue: { fontSize: 14, fontWeight: '700' },
   statDivider: { width: 1, height: 36 },
-  dayRowTouchable: {
-    position: 'relative',
-  },
-  expandIcon: {
-    position: 'absolute',
-    right: 14,
-    top: -14,
-    zIndex: 1,
+  dayGroup: {
+    marginBottom: 4,
   },
   expandedSection: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    marginBottom: 8,
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    marginTop: -2,
+    marginBottom: 12,
   },
   dayLoader: { paddingVertical: 16 },
   emptyText: { textAlign: 'center', paddingVertical: 12, fontSize: 14 },

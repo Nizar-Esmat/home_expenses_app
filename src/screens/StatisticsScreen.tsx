@@ -10,26 +10,22 @@ import { useRouter, useFocusEffect } from 'expo-router';
 import { useTheme } from '@/theme/ThemeContext';
 import { useMonth } from '@/contexts/MonthContext';
 import {
-  getExpensesByMonth,
-  getIncomesByMonth,
   getSettings,
   getCategories,
-  getAllExpenses,
-  getAllIncomes,
   getMonthHistory,
   getExpenseTotalByMonth,
   getExpenseTotalAll,
-  getTransferFeesByMonth,
-  getAllTransferFees,
+  getIncomeTotalByMonth,
+  getIncomeTotalAll,
   getAccounts,
+  getCategorySpendingSql,
+  getDailySpendingSummarySql,
+  getQuickInsightsSql,
+  getTopExpensesSql,
 } from '@/services/database';
 import { currentMonthKey, formatCurrency } from '@/services/constants';
-import { Account, Category, Expense, Income, Settings } from '@/types';
+import { Account, Category, Expense, Settings } from '@/types';
 import {
-  getQuickInsights,
-  buildSpendingByCategory,
-  getDailySpendingSummary,
-  getTopExpenses,
   QuickInsightsData,
   SpendingCategoryItem,
   DailySpendingSummary,
@@ -52,10 +48,24 @@ export default function StatisticsScreen() {
   const { selectedMonthKey, setSelectedMonthKey } = useMonth();
 
   const [availableMonthKeys, setAvailableMonthKeys] = useState<string[]>([]);
-  const [expenses, setExpenses] = useState<Expense[]>([]);
-  const [incomes, setIncomes] = useState<Income[]>([]);
-  const [transferFees, setTransferFees] = useState<Expense[]>([]);
-  const [totalSpentValue, setTotalSpentValue] = useState(0);
+  const [totalSpent, setTotalSpent] = useState(0);
+  const [totalIncome, setTotalIncome] = useState(0);
+  const [insights, setInsights] = useState<QuickInsightsData>({
+    transactionCount: 0,
+    averageExpense: 0,
+    topCategory: null,
+    biggestExpense: 0,
+  });
+  const [spendingByCategory, setSpendingByCategory] = useState<SpendingCategoryItem[]>([]);
+  const [dailySummary, setDailySummary] = useState<DailySpendingSummary>({
+    highestDay: null,
+    averageDailySpend: 0,
+    topDays: [],
+    allDays: [],
+    maxTotal: 0,
+    totalSpent: 0,
+  });
+  const [biggestExpenses, setBiggestExpenses] = useState<Expense[]>([]);
   const [settings, setSettings] = useState<Settings | null>(null);
   const [categoryMap, setCategoryMap] = useState<Record<string, Category>>({});
   const [accountMap, setAccountMap] = useState<Record<number, Account>>({});
@@ -100,25 +110,32 @@ export default function StatisticsScreen() {
     setLoading(true);
     setError(false);
 
-    const expensePromise = isAllTime
-      ? getAllExpenses()
-      : getExpensesByMonth(selectedMonthKey);
-    const incomePromise = isAllTime
-      ? getAllIncomes()
-      : getIncomesByMonth(selectedMonthKey);
-    const totalPromise = isAllTime
+    const spentPromise = isAllTime
       ? getExpenseTotalAll()
       : getExpenseTotalByMonth(selectedMonthKey);
-    const feePromise = isAllTime
-      ? getAllTransferFees()
-      : getTransferFeesByMonth(selectedMonthKey);
+    const incomePromise = isAllTime
+      ? getIncomeTotalAll()
+      : getIncomeTotalByMonth(selectedMonthKey);
+    const insightsPromise = getQuickInsightsSql(selectedMonthKey);
+    const categoryPromise = getCategorySpendingSql(selectedMonthKey);
+    const dailyPromise = getDailySpendingSummarySql(selectedMonthKey);
+    const topExpensesPromise = getTopExpensesSql(selectedMonthKey, 5);
 
-    Promise.all([expensePromise, incomePromise, totalPromise, feePromise])
-      .then(([exps, incs, total, fees]) => {
-        setExpenses(exps);
-        setIncomes(incs);
-        setTransferFees(fees);
-        setTotalSpentValue(total);
+    Promise.all([
+      spentPromise,
+      incomePromise,
+      insightsPromise,
+      categoryPromise,
+      dailyPromise,
+      topExpensesPromise,
+    ])
+      .then(([spent, inc, ins, cats, daily, top]) => {
+        setTotalSpent(spent);
+        setTotalIncome(inc);
+        setInsights(ins);
+        setSpendingByCategory(cats);
+        setDailySummary(daily);
+        setBiggestExpenses(top);
         setLoading(false);
       })
       .catch(() => {
@@ -138,21 +155,10 @@ export default function StatisticsScreen() {
     loadMonthData();
   }, [selectedMonthKey, loadMonthData]);
 
-  const totalSpent = totalSpentValue;
-  const totalIncome = incomes.reduce((s, i) => s + i.amount, 0);
   const net = totalIncome - totalSpent;
   const currency = settings?.currency ?? 'EGP';
 
-  const insights: QuickInsightsData = getQuickInsights(expenses, incomes, transferFees);
-  const spendingByCategory: SpendingCategoryItem[] = buildSpendingByCategory(
-    expenses,
-    categoryMap,
-    transferFees,
-  );
-  const dailySummary: DailySpendingSummary = getDailySpendingSummary(expenses, transferFees);
-  const biggestExpenses: Expense[] = getTopExpenses(expenses, 5, transferFees);
-
-  const hasData = expenses.length > 0 || incomes.length > 0 || transferFees.length > 0;
+  const hasData = insights.transactionCount > 0 || totalSpent > 0 || totalIncome > 0;
 
   const handleViewAllTransactions = () => {
     router.push({
@@ -263,7 +269,7 @@ export default function StatisticsScreen() {
 
             <BiggestExpensesPreview
               expenses={biggestExpenses}
-              totalCount={expenses.length + transferFees.length}
+              totalCount={insights.transactionCount}
               currency={currency}
               categoryMap={categoryMap}
               accountMap={accountMap}
