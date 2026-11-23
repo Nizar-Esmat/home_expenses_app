@@ -8,6 +8,7 @@ import { getLoans, softDeleteLoan, getLoanById, getSettings } from '@/services/d
 import { Loan } from '@/types';
 import LoanTile from '@/components/LoanTile';
 import { useAppDialog } from '@/components/AppDialog';
+import ScreenHeader from '@/components/ScreenHeader';
 
 type Tab = 'BORROWED' | 'LENT';
 
@@ -73,32 +74,24 @@ export default function LoansScreen() {
 
   return (
     <View style={[styles.screen, { backgroundColor: colors.background }]}>
-      {/* Header */}
-      <View style={[styles.header, { borderBottomColor: colors.border }]}>
-        <TouchableOpacity
-          onPress={() => router.back()}
-          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-          style={styles.headerBtn}
-          accessibilityRole="button"
-          accessibilityLabel="Go back"
-        >
-          <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
-        </TouchableOpacity>
-        <Text style={[styles.title, { color: colors.textPrimary }]} accessibilityRole="header">Loans</Text>
-        <TouchableOpacity
-          onPress={() => router.push('/add-loan')}
-          activeOpacity={0.8}
-          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-          style={styles.headerBtn}
-          accessibilityRole="button"
-          accessibilityLabel="Add loan"
-        >
-          <Ionicons name="add-circle-outline" size={26} color={colors.primary} />
-        </TouchableOpacity>
-      </View>
+      <ScreenHeader
+        title="Loans"
+        rightAction={
+          <TouchableOpacity
+            onPress={() => router.push('/add-loan')}
+            activeOpacity={0.8}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            style={styles.headerBtn}
+            accessibilityRole="button"
+            accessibilityLabel="Add loan"
+          >
+            <Ionicons name="add-circle-outline" size={26} color={colors.primary} />
+          </TouchableOpacity>
+        }
+      />
 
       {/* Summary bar */}
-      <View style={[styles.summaryBar, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
+      <View style={[styles.summaryBar, { backgroundColor: colors.card, borderColor: colors.border }]}>
         <View style={styles.summaryCol}>
           <Text style={[styles.summaryLabel, { color: colors.textSecondary }]}>You owe</Text>
           <Text style={[styles.summaryAmt, { color: borrowedTotal > 0 ? colors.danger : colors.textSecondary }]}>
@@ -114,23 +107,28 @@ export default function LoansScreen() {
         </View>
       </View>
 
-      {/* Tabs */}
-      <View style={[styles.tabs, { borderBottomColor: colors.border }]} accessibilityRole="tablist">
-        {(['BORROWED', 'LENT'] as Tab[]).map((t) => (
-          <TouchableOpacity
-            key={t}
-            style={[styles.tab, tab === t && { borderBottomColor: colors.primary, borderBottomWidth: 2 }]}
-            onPress={() => setTab(t)}
-            activeOpacity={0.8}
-            accessibilityRole="tab"
-            accessibilityState={{ selected: tab === t }}
-            accessibilityLabel={t === 'BORROWED' ? 'You Owe' : 'Owed to You'}
-          >
-            <Text style={[styles.tabText, { color: tab === t ? colors.primary : colors.textSecondary, fontWeight: tab === t ? '700' : '500' }]}>
-              {t === 'BORROWED' ? '📥 You Owe' : '📤 Owed to You'}
-            </Text>
-          </TouchableOpacity>
-        ))}
+      {/* Modern Segmented Pill Tabs */}
+      <View style={styles.tabsWrapper}>
+        <View style={[styles.tabs, { backgroundColor: colors.inputFill, borderColor: colors.border }]}>
+          {(['BORROWED', 'LENT'] as Tab[]).map((t) => (
+            <TouchableOpacity
+              key={t}
+              style={[
+                styles.tab,
+                tab === t && { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1 },
+              ]}
+              onPress={() => setTab(t)}
+              activeOpacity={0.8}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: tab === t }}
+              accessibilityLabel={t === 'BORROWED' ? 'You Owe' : 'Owed to You'}
+            >
+              <Text style={[styles.tabText, { color: tab === t ? colors.primary : colors.textSecondary, fontWeight: tab === t ? '700' : '500' }]}>
+                {t === 'BORROWED' ? '📥 You Owe' : '📤 Owed to You'}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
       </View>
 
       <ScrollView contentContainerStyle={styles.list} showsVerticalScrollIndicator={false}>
@@ -189,31 +187,40 @@ export default function LoansScreen() {
 
 const styles = StyleSheet.create({
   screen: { flex: 1 },
-  header: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 16, paddingVertical: 10, borderBottomWidth: 1,
-  },
   headerBtn: {
     width: 44,
     height: 44,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  title: { fontSize: 18, fontWeight: '700' },
   summaryBar: {
-    flexDirection: 'row', alignItems: 'center', paddingVertical: 12,
-    paddingHorizontal: 20, borderBottomWidth: 1,
+    flexDirection: 'row', alignItems: 'center', paddingVertical: 14,
+    paddingHorizontal: 20, marginHorizontal: 20, marginTop: 12, marginBottom: 8,
+    borderRadius: 14, borderWidth: 1,
   },
   summaryCol: { flex: 1, alignItems: 'center' },
   summaryLabel: { fontSize: 11, marginBottom: 2 },
   summaryAmt: { fontSize: 16, fontWeight: '700' },
   summaryDivider: { width: 1, height: 28, marginHorizontal: 8 },
-  tabs: {
-    flexDirection: 'row', borderBottomWidth: 1,
+  tabsWrapper: {
+    paddingHorizontal: 20,
+    paddingVertical: 8,
   },
-  tab: { flex: 1, alignItems: 'center', justifyContent: 'center', minHeight: 44, paddingVertical: 10 },
-  tabText: { fontSize: 14, fontWeight: '700' },
-  list: { padding: 16 },
+  tabs: {
+    flexDirection: 'row',
+    borderRadius: 12,
+    borderWidth: 1,
+    padding: 3,
+  },
+  tab: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 38,
+    borderRadius: 9,
+  },
+  tabText: { fontSize: 13 },
+  list: { padding: 20 },
   empty: { alignItems: 'center', paddingTop: 60, paddingHorizontal: 32 },
   emptyEmoji: { fontSize: 48, marginBottom: 16 },
   emptyTitle: { fontSize: 18, fontWeight: '700', marginBottom: 8 },

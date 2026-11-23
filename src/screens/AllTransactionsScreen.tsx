@@ -13,6 +13,7 @@ import {
   PanResponder,
 } from 'react-native';
 import TransactionsSkeleton from '@/components/skeletons/TransactionsSkeleton';
+import ScreenHeader from '@/components/ScreenHeader';
 import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/theme/ThemeContext';
@@ -67,17 +68,17 @@ const initialFilterState: FilterState = {
 
 function getSortLabel(field: SortField, order: SortOrder): string {
   if (field === 'date')
-    return `Date · ${order === 'asc' ? 'Newest → Oldest' : 'Oldest → Newest'}`;
+    return `Date · ${order === 'desc' ? 'Newest → Oldest' : 'Oldest → Newest'}`;
   if (field === 'amount')
-    return `Amount · ${order === 'asc' ? 'High → Low' : 'Low → High'}`;
-  return `${field.charAt(0).toUpperCase() + field.slice(1)} · ${order === 'asc' ? 'A → Z' : 'Z → A'}`;
+    return `Amount · ${order === 'desc' ? 'High → Low' : 'Low → High'}`;
+  return `${field.charAt(0).toUpperCase() + field.slice(1)} · ${order === 'desc' ? 'Z → A' : 'A → Z'}`;
 }
 
 function getSortSubtitle(field: SortField, order: SortOrder): string {
   if (field === 'date')
-    return order === 'asc' ? 'Newest → Oldest' : 'Oldest → Newest';
-  if (field === 'amount') return order === 'asc' ? 'High → Low' : 'Low → High';
-  return order === 'asc' ? 'A → Z' : 'Z → A';
+    return order === 'desc' ? 'Newest → Oldest' : 'Oldest → Newest';
+  if (field === 'amount') return order === 'desc' ? 'High → Low' : 'Low → High';
+  return order === 'desc' ? 'Z → A' : 'A → Z';
 }
 
 function getCategoryColor(type: string): string {
@@ -151,7 +152,7 @@ const OrderSection = React.memo(
         <Text style={[styles.sheetSectionLabel, { color: colors.textPrimary }]}>
           Order
         </Text>
-        {(['asc', 'desc'] as SortOrder[]).map((order) => (
+        {(['desc', 'asc'] as SortOrder[]).map((order) => (
           <TouchableOpacity
             key={order}
             style={[
@@ -163,14 +164,14 @@ const OrderSection = React.memo(
             onPress={() => onSortOrderChange(order)}
           >
             <Ionicons
-              name={order === 'asc' ? 'arrow-up' : 'arrow-down'}
+              name={order === 'desc' ? 'arrow-down' : 'arrow-up'}
               size={18}
               color={colors.textSecondary}
               style={{ marginRight: 8 }}
             />
             <View style={styles.orderContent}>
               <Text style={[styles.orderTitle, { color: colors.textPrimary }]}>
-                {order === 'asc' ? 'Ascending' : 'Descending'}
+                {order === 'desc' ? 'Descending' : 'Ascending'}
               </Text>
               <Text
                 style={[styles.orderSubtitle, { color: colors.textSecondary }]}
@@ -457,8 +458,15 @@ const AmountRangeSection = React.memo(
 export default function AllTransactionsScreen() {
   const { colors } = useTheme();
   const router = useRouter();
-  const { monthKey: routeMonthKey, typeFilter: routeTypeFilter } =
-    useLocalSearchParams<{ monthKey?: string; typeFilter?: string }>();
+  const {
+    monthKey: routeMonthKey,
+    typeFilter: routeTypeFilter,
+    sortBy: routeSortBy,
+  } = useLocalSearchParams<{
+    monthKey?: string;
+    typeFilter?: string;
+    sortBy?: string;
+  }>();
   const { showDialog } = useAppDialog();
 
   const initialMonthKey = routeMonthKey
@@ -486,11 +494,20 @@ export default function AllTransactionsScreen() {
   const [allCategories, setAllCategories] = useState<Category[]>([]);
   const [allAccounts, setAllAccounts] = useState<Account[]>([]);
 
+  const initialSort: { sortField: SortField; sortOrder: SortOrder } = useMemo(() => {
+    if (routeSortBy === 'amount_desc') {
+      return { sortField: 'amount', sortOrder: 'desc' };
+    }
+    return { sortField: 'date', sortOrder: 'desc' };
+  }, [routeSortBy]);
+
   const [activeFilters, setActiveFilters] = useState<FilterState>({
     ...initialFilterState,
+    ...initialSort,
   });
   const [tempFilters, setTempFilters] = useState<FilterState>({
     ...initialFilterState,
+    ...initialSort,
   });
   const [showFilterSheet, setShowFilterSheet] = useState(false);
 
@@ -601,21 +618,24 @@ export default function AllTransactionsScreen() {
 
     const sorted = [...result];
     sorted.sort((a, b) => {
-      const multiplier = activeFilters.sortOrder === 'desc' ? -1 : 1;
+      const isDesc = activeFilters.sortOrder === 'desc';
       if (activeFilters.sortField === 'date') {
-        return (
-          multiplier *
-          (new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-        );
+        const timeA = new Date(a.createdAt).getTime();
+        const timeB = new Date(b.createdAt).getTime();
+        return isDesc ? timeB - timeA : timeA - timeB;
       }
       if (activeFilters.sortField === 'amount') {
-        return multiplier * (b.amount - a.amount);
+        return isDesc ? b.amount - a.amount : a.amount - b.amount;
       }
       if (activeFilters.sortField === 'category') {
-        return multiplier * a.category.localeCompare(b.category);
+        return isDesc
+          ? b.category.localeCompare(a.category)
+          : a.category.localeCompare(b.category);
       }
       if (activeFilters.sortField === 'account') {
-        return multiplier * a.accountName.localeCompare(b.accountName);
+        return isDesc
+          ? b.accountName.localeCompare(a.accountName)
+          : a.accountName.localeCompare(b.accountName);
       }
       return 0;
     });
@@ -957,35 +977,24 @@ export default function AllTransactionsScreen() {
 
   return (
     <View style={[styles.screen, { backgroundColor: colors.background }]}>
-      <View style={[styles.header, { borderBottomColor: colors.border }]}>
-        <TouchableOpacity
-          onPress={() => router.back()}
-          style={styles.backBtn}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          accessibilityRole="button"
-          accessibilityLabel="Go back"
-        >
-          <Ionicons name='arrow-back' size={24} color={colors.textPrimary} />
-        </TouchableOpacity>
-        <Text
-          style={[styles.title, { color: colors.textPrimary }]}
-          numberOfLines={1}
-        >
-          Transactions
-        </Text>
-        <TouchableOpacity
-          style={[styles.periodPill, { backgroundColor: colors.inputFill, borderColor: colors.border }]}
-          onPress={() => setShowMonthModal(true)}
-          activeOpacity={0.8}
-          accessibilityRole="button"
-          accessibilityLabel={`Select period, currently ${periodLabel}`}
-        >
-          <Text style={[styles.periodPillText, { color: colors.textPrimary }]} numberOfLines={1}>
-            {periodLabel}
-          </Text>
-          <Ionicons name='chevron-down' size={14} color={colors.textSecondary} />
-        </TouchableOpacity>
-      </View>
+      <ScreenHeader
+        title="Transactions"
+        alignTitle="left"
+        rightAction={
+          <TouchableOpacity
+            style={[styles.periodPill, { backgroundColor: colors.inputFill, borderColor: colors.border }]}
+            onPress={() => setShowMonthModal(true)}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel={`Select period, currently ${periodLabel}`}
+          >
+            <Text style={[styles.periodPillText, { color: colors.textPrimary }]} numberOfLines={1}>
+              {periodLabel}
+            </Text>
+            <Ionicons name='chevron-down' size={14} color={colors.textSecondary} />
+          </TouchableOpacity>
+        }
+      />
 
       <ScrollView
         contentContainerStyle={styles.content}
@@ -1002,7 +1011,7 @@ export default function AllTransactionsScreen() {
       >
         <View
           style={[
-            styles.summaryStrip,
+            styles.summaryCard,
             { backgroundColor: colors.card, borderColor: colors.border },
           ]}
         >
@@ -1023,51 +1032,57 @@ export default function AllTransactionsScreen() {
             />
           </TouchableOpacity>
           {summaryOpen && (
-            <View
-              style={[styles.summaryContent, { borderColor: colors.border }]}
-            >
-              <View style={styles.summaryStat}>
-                <Text
-                  style={[styles.summaryLabel, { color: colors.textSecondary }]}
-                >
-                  Total Income
-                </Text>
-                <Text style={[styles.summaryAmount, { color: colors.success }]}>
-                  {formatCurrency(summaryStats.totalIncome, settings?.currency)}
-                </Text>
-                <Text
-                  style={[styles.summaryCount, { color: colors.textSecondary }]}
-                >
-                  {summaryStats.incomeCount} transaction
-                  {summaryStats.incomeCount !== 1 ? 's' : ''}
-                </Text>
-              </View>
+            <>
               <View
                 style={[
-                  styles.summaryDivider,
+                  styles.summaryDividerH,
                   { backgroundColor: colors.border },
                 ]}
               />
-              <View style={styles.summaryStat}>
-                <Text
-                  style={[styles.summaryLabel, { color: colors.textSecondary }]}
-                >
-                  Total Expenses
-                </Text>
-                <Text style={[styles.summaryAmount, { color: colors.danger }]}>
-                  {formatCurrency(
-                    summaryStats.totalExpenses,
-                    settings?.currency,
-                  )}
-                </Text>
-                <Text
-                  style={[styles.summaryCount, { color: colors.textSecondary }]}
-                >
-                  {summaryStats.expenseCount} transaction
-                  {summaryStats.expenseCount !== 1 ? 's' : ''}
-                </Text>
+              <View style={styles.summaryContent}>
+                <View style={styles.summaryStat}>
+                  <Text
+                    style={[styles.summaryLabel, { color: colors.textSecondary }]}
+                  >
+                    Total Income
+                  </Text>
+                  <Text style={[styles.summaryAmount, { color: colors.success }]}>
+                    {formatCurrency(summaryStats.totalIncome, settings?.currency)}
+                  </Text>
+                  <Text
+                    style={[styles.summaryCount, { color: colors.textSecondary }]}
+                  >
+                    {summaryStats.incomeCount} transaction
+                    {summaryStats.incomeCount !== 1 ? 's' : ''}
+                  </Text>
+                </View>
+                <View
+                  style={[
+                    styles.summaryDividerV,
+                    { backgroundColor: colors.border },
+                  ]}
+                />
+                <View style={styles.summaryStat}>
+                  <Text
+                    style={[styles.summaryLabel, { color: colors.textSecondary }]}
+                  >
+                    Total Expenses
+                  </Text>
+                  <Text style={[styles.summaryAmount, { color: colors.danger }]}>
+                    {formatCurrency(
+                      summaryStats.totalExpenses,
+                      settings?.currency,
+                    )}
+                  </Text>
+                  <Text
+                    style={[styles.summaryCount, { color: colors.textSecondary }]}
+                  >
+                    {summaryStats.expenseCount} transaction
+                    {summaryStats.expenseCount !== 1 ? 's' : ''}
+                  </Text>
+                </View>
               </View>
-            </View>
+            </>
           )}
         </View>
 
@@ -1566,25 +1581,6 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
   },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    gap: 8,
-  },
-  backBtn: {
-    width: 44,
-    height: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  title: {
-    fontSize: 18,
-    fontWeight: '700',
-    flex: 1,
-  },
   periodPill: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1682,8 +1678,10 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '500',
   },
-  summaryStrip: {
-    marginBottom: 12,
+  summaryCard: {
+    borderWidth: 1,
+    borderRadius: 14,
+    marginBottom: 16,
     overflow: 'hidden',
   },
   summaryHeader: {
@@ -1691,21 +1689,24 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: 13,
   },
   summaryTitle: {
     fontSize: 14,
     fontWeight: '700',
   },
+  summaryDividerH: {
+    height: 1,
+    width: '100%',
+  },
   summaryContent: {
     flexDirection: 'row',
-    borderWidth: 1,
-    borderRadius: 12,
-    paddingVertical: 16,
+    paddingVertical: 14,
     paddingHorizontal: 16,
   },
   summaryStat: {
     flex: 1,
+    alignItems: 'center',
   },
   summaryLabel: {
     fontSize: 12,
@@ -1713,17 +1714,18 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   summaryAmount: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '700',
-    marginBottom: 4,
+    marginBottom: 3,
   },
   summaryCount: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '400',
   },
-  summaryDivider: {
+  summaryDividerV: {
     width: 1,
-    marginHorizontal: 16,
+    alignSelf: 'stretch',
+    marginHorizontal: 12,
   },
   resultCount: { fontSize: 12, marginBottom: 10 },
   emptyText: { textAlign: 'center', fontSize: 14, paddingVertical: 24 },

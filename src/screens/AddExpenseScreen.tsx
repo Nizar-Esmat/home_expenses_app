@@ -28,6 +28,7 @@ import AppButton from '@/components/AppButton';
 import DateTimeInput from '@/components/DateTimeInput';
 import AccountPicker from '@/components/AccountPicker';
 import { useAppDialog } from '@/components/AppDialog';
+import ScreenHeader from '@/components/ScreenHeader';
 
 interface SubItem {
   localId: string;
@@ -293,21 +294,9 @@ export default function AddExpenseScreen() {
       style={[styles.screen, { backgroundColor: colors.background }]}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <View style={[styles.header, { borderBottomColor: colors.border }]}>
-        <TouchableOpacity
-          onPress={() => router.back()}
-          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-          accessibilityRole="button"
-          accessibilityLabel="Go back"
-          style={styles.backBtn}
-        >
-          <Ionicons name='arrow-back' size={24} color={colors.textPrimary} />
-        </TouchableOpacity>
-        <Text style={[styles.title, { color: colors.textPrimary }]} accessibilityRole="header">
-          {editExpense ? 'Edit Expense' : 'Add Expense'}
-        </Text>
-        <View style={{ width: 44 }} />
-      </View>
+      <ScreenHeader
+        title={editExpense ? 'Edit Expense' : 'Add Expense'}
+      />
 
       <ScrollView
         contentContainerStyle={styles.content}
@@ -573,21 +562,6 @@ export default function AddExpenseScreen() {
 
 const styles = StyleSheet.create({
   screen: { flex: 1 },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-  },
-  backBtn: {
-    width: 44,
-    height: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  title: { fontSize: 18, fontWeight: '700' },
   content: { padding: 20 },
   pinnedFooter: {
     paddingHorizontal: 20,

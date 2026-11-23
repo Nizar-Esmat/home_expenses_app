@@ -200,7 +200,7 @@ export default function HomeScreen() {
         />
 
         {/* Accounts */}
-        <View style={[styles.sectionHeaderRow, { borderTopColor: colors.border }]}>
+        <View style={styles.sectionHeaderRow}>
           <View style={styles.sectionLeft}>
             <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Accounts</Text>
             <Text style={[styles.sectionSubtitle, { color: colors.textSecondary }]}>
@@ -360,20 +360,22 @@ export default function HomeScreen() {
           />
         </View>
 
-        <MonthlySummaryCard
-          income={formatCurrency(totalIncome, settings?.currency)}
-          spent={formatCurrency(totalSpent, settings?.currency)}
-          net={formatCurrency(periodNet, settings?.currency)}
-        />
-
-        {(loanSummary.totalBorrowed > 0 || loanSummary.totalLent > 0) && (
-          <LoansSummaryCard
-            totalBorrowed={loanSummary.totalBorrowed}
-            totalLent={loanSummary.totalLent}
-            currency={settings?.currency ?? 'EGP'}
-            onPress={() => router.push('/loans')}
+        <View style={styles.summaryContainer}>
+          <MonthlySummaryCard
+            income={formatCurrency(totalIncome, settings?.currency)}
+            spent={formatCurrency(totalSpent, settings?.currency)}
+            net={formatCurrency(periodNet, settings?.currency)}
           />
-        )}
+
+          {(loanSummary.totalBorrowed > 0 || loanSummary.totalLent > 0) && (
+            <LoansSummaryCard
+              totalBorrowed={loanSummary.totalBorrowed}
+              totalLent={loanSummary.totalLent}
+              currency={settings?.currency ?? 'EGP'}
+              onPress={() => router.push('/loans')}
+            />
+          )}
+        </View>
 
         {/* Recent Transactions */}
         <View style={{ marginTop: 24 }}>
@@ -404,20 +406,22 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   screen: { flex: 1 },
   content: { padding: 20 },
-  headerRow: { marginBottom: 24 },
+  headerRow: { marginBottom: 20 },
+  summaryContainer: {
+    gap: 12,
+  },
   pageTitle: {
     fontSize: 24,
     lineHeight: 32,
     fontWeight: '700',
+    letterSpacing: -0.4,
   },
   sectionHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderTopWidth: 1,
     justifyContent: 'space-between',
     marginBottom: 10,
-    marginTop: 10,
-    paddingTop: 10,
+    marginTop: 14,
     gap: 12,
   },
   sectionLeft: { flex: 1, alignItems: 'flex-start' },

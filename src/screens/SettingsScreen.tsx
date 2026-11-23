@@ -24,6 +24,7 @@ import {
   exportDatabaseFileAndShare,
   pickAndImportBackupMerge,
 } from '@/services/sync';
+import { populateSampleData } from '@/services/database';
 import { useAppDialog } from '@/components/AppDialog';
 import { ReminderSettings } from '@/types';
 import {
@@ -69,7 +70,7 @@ export default function SettingsScreen() {
   const ringColor = colors.textPrimary;
 
   const [syncingAction, setSyncingAction] = useState<
-    'export_json' | 'export_db' | 'import' | null
+    'export_json' | 'export_db' | 'import' | 'sample' | null
   >(null);
 
   const [reminderSettings, setReminderSettings] = useState<ReminderSettings>(
@@ -358,10 +359,47 @@ export default function SettingsScreen() {
     });
   };
 
+  const handleSeedSampleData = () => {
+    showDialog({
+      title: 'Load Sample Data?',
+      message:
+        'This will populate your app with realistic sample accounts, expenses, incomes, transfers, and loans for testing.',
+      type: 'info',
+      buttons: [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Load Data',
+          style: 'default',
+          onPress: async () => {
+            try {
+              setSyncingAction('sample');
+              await populateSampleData();
+              showDialog({
+                title: 'Data Loaded!',
+                message: 'Sample accounts, expenses, incomes, transfers, and loans have been created. Switch to Home or Statistics to explore!',
+                type: 'success',
+                buttons: [{ text: 'OK', style: 'default' }],
+              });
+            } catch {
+              showDialog({
+                title: 'Error',
+                message: 'Failed to populate sample data.',
+                type: 'danger',
+                buttons: [{ text: 'OK', style: 'default' }],
+              });
+            } finally {
+              setSyncingAction(null);
+            }
+          },
+        },
+      ],
+    });
+  };
+
   return (
     <View style={[styles.screen, { backgroundColor: colors.background }]}>
-      <View style={[styles.header, { borderBottomColor: colors.border }]}>
-        <Text style={[styles.title, { color: colors.textPrimary }]}>
+      <View style={styles.header}>
+        <Text style={[styles.title, { color: colors.textPrimary }]} accessibilityRole="header">
           Settings
         </Text>
       </View>
@@ -399,8 +437,12 @@ export default function SettingsScreen() {
             <Switch
               value={isDark}
               onValueChange={toggleTheme}
-              trackColor={{ false: colors.border, true: colors.primary }}
-              thumbColor={colors.background}
+              trackColor={{
+                false: isDark ? '#3F3F46' : '#D4D4D8',
+                true: colors.primary,
+              }}
+              thumbColor="#FFFFFF"
+              ios_backgroundColor={isDark ? '#3F3F46' : '#D4D4D8'}
               accessibilityLabel="Toggle Dark Mode"
               accessibilityRole="switch"
             />
@@ -415,6 +457,7 @@ export default function SettingsScreen() {
               const color = isDark ? PALETTE_COLORS_DARK[p] : PALETTE_COLORS[p];
               const checkmarkColor =
                 p === 'yellow' ||
+                p === 'lime' ||
                 (isDark && p === 'grey') ||
                 (!isDark && (p === 'orange' || p === 'green' || p === 'teal'))
                   ? '#111827'
@@ -501,8 +544,12 @@ export default function SettingsScreen() {
             <Switch
               value={reminderSettings.enabled}
               onValueChange={handleToggleReminder}
-              trackColor={{ false: colors.border, true: colors.primary }}
-              thumbColor={colors.background}
+              trackColor={{
+                false: isDark ? '#3F3F46' : '#D4D4D8',
+                true: colors.primary,
+              }}
+              thumbColor="#FFFFFF"
+              ios_backgroundColor={isDark ? '#3F3F46' : '#D4D4D8'}
               accessibilityLabel="Toggle Expense Reminders"
               accessibilityRole="switch"
             />
@@ -942,9 +989,48 @@ export default function SettingsScreen() {
               />
             )}
           </TouchableOpacity>
+          <View style={[styles.divider, { backgroundColor: colors.border }]} />
+          <TouchableOpacity
+            style={styles.navRowNoBorder}
+            onPress={handleSeedSampleData}
+            activeOpacity={0.6}
+            disabled={syncingAction !== null}
+          >
+            <View style={styles.navRowLeft}>
+              <View
+                style={[
+                  styles.navIcon,
+                  { backgroundColor: colors.primary + '33' },
+                ]}
+              >
+                <Ionicons
+                  name='flask-outline'
+                  size={16}
+                  color={colors.primary}
+                />
+              </View>
+              <View>
+                <Text style={[styles.navLabel, { color: colors.textPrimary }]}>
+                  Load Sample Data
+                </Text>
+                <Text style={[styles.navSub, { color: colors.textSecondary }]}>
+                  Populate demo accounts, transactions & loans
+                </Text>
+              </View>
+            </View>
+            {syncingAction === 'sample' ? (
+              <ActivityIndicator color={colors.primary} size='small' />
+            ) : (
+              <Ionicons
+                name='chevron-forward'
+                size={18}
+                color={colors.textSecondary}
+              />
+            )}
+          </TouchableOpacity>
         </View>
 
-        <View style={{ height: 60 }} />
+        <View style={{ height: 150 }} />
       </ScrollView>
     </View>
   );
@@ -953,15 +1039,19 @@ export default function SettingsScreen() {
 const styles = StyleSheet.create({
   screen: { flex: 1 },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
+    paddingTop: 14,
+    paddingBottom: 10,
   },
-  title: { fontSize: 20, fontWeight: '800' },
-  content: { padding: 16 },
+  title: {
+    fontSize: 24,
+    fontWeight: '700',
+    letterSpacing: -0.4,
+  },
+  content: {
+    paddingHorizontal: 20,
+    paddingTop: 8,
+  },
 
   sectionLabel: {
     fontSize: 13,
@@ -1031,13 +1121,13 @@ const styles = StyleSheet.create({
   paletteGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    paddingHorizontal: 14,
+    paddingHorizontal: 8,
     paddingBottom: 16,
-    gap: 12,
+    rowGap: 12,
   },
   paletteItem: {
     alignItems: 'center',
-    width: 56,
+    width: '20%',
     paddingVertical: 4,
   },
   colorCircle: {

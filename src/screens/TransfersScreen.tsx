@@ -3,7 +3,7 @@ import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet, Modal,
 } from 'react-native';
 import TransfersSkeleton from '@/components/skeletons/TransfersSkeleton';
-import { useRouter, useFocusEffect } from 'expo-router';
+import { useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/theme/ThemeContext';
 import {
@@ -17,13 +17,13 @@ import {
 import { Account, Settings, Transfer } from '@/types';
 import { currentMonthKey, monthKeyToLabel } from '@/services/constants';
 import TransferTile from '@/components/TransferTile';
+import ScreenHeader from '@/components/ScreenHeader';
 
 const ALL_MONTHS_KEY = 'all';
 const BATCH_SIZE = 30;
 
 export default function TransfersScreen() {
   const { colors } = useTheme();
-  const router = useRouter();
   const currentMonth = currentMonthKey();
 
   const [transfers, setTransfers] = useState<Transfer[]>([]);
@@ -90,19 +90,7 @@ export default function TransfersScreen() {
 
   return (
     <View style={[styles.screen, { backgroundColor: colors.background }]}> 
-      <View style={[styles.header, { borderBottomColor: colors.border }]}> 
-        <TouchableOpacity
-          onPress={() => router.back()}
-          style={styles.backBtn}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          accessibilityRole="button"
-          accessibilityLabel="Go back"
-        >
-          <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
-        </TouchableOpacity>
-        <Text style={[styles.title, { color: colors.textPrimary }]}>Transfers</Text>
-        <View style={{ width: 44 }} />
-      </View>
+      <ScreenHeader title="Transfers" />
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}> 
         <View style={styles.filterRow}>
@@ -241,17 +229,6 @@ export default function TransfersScreen() {
 const styles = StyleSheet.create({
   screen: { flex: 1 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  header: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 16, paddingVertical: 10, borderBottomWidth: 1,
-  },
-  backBtn: {
-    width: 44,
-    height: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  title: { fontSize: 18, fontWeight: '700' },
   content: { padding: 20 },
   filterRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 14 },
   monthFilterBtn: {

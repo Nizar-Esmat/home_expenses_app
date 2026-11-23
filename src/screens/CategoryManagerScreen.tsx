@@ -3,7 +3,7 @@ import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   Modal, TextInput, KeyboardAvoidingView, Platform,
 } from 'react-native';
-import { useFocusEffect, useRouter } from 'expo-router';
+import { useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/theme/ThemeContext';
 import {
@@ -14,6 +14,7 @@ import { EMOJI_GROUPS, CATEGORY_COLORS } from '@/services/constants';
 import { Category } from '@/types';
 import CategoryCard from '@/components/CategoryCard';
 import { useAppDialog } from '@/components/AppDialog';
+import ScreenHeader from '@/components/ScreenHeader';
 
 // ── Modal state type ──────────────────────────────────────────
 
@@ -43,7 +44,6 @@ const INITIAL_FORM: FormState = {
 
 export default function CategoryManagerScreen() {
   const { colors } = useTheme();
-  const router = useRouter();
   const { showDialog } = useAppDialog();
 
   const [categories, setCategories] = useState<Category[]>([]);
@@ -154,25 +154,11 @@ export default function CategoryManagerScreen() {
 
   return (
     <View style={[styles.screen, { backgroundColor: colors.background }]}>
-
-      {/* Header */}
-      <View style={[styles.header, { borderBottomColor: colors.border }]}>
-        <TouchableOpacity
-          onPress={() => router.back()}
-          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-          style={styles.backBtn}
-          accessibilityRole="button"
-          accessibilityLabel="Go back"
-        >
-          <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
-        </TouchableOpacity>
-        <View style={styles.headerText}>
-          <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Categories</Text>
-          <Text style={[styles.headerSub, { color: colors.textSecondary }]}>
-            {categories.length} total · {custom.length} custom
-          </Text>
-        </View>
-      </View>
+      <ScreenHeader
+        title="Categories"
+        subtitle={`${categories.length} total · ${custom.length} custom`}
+        alignTitle="left"
+      />
 
       {/* List */}
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
@@ -476,27 +462,14 @@ function CategoryForm({ form, setField, onSave, onClose, colors }: FormProps) {
 const styles = StyleSheet.create({
   screen: { flex: 1 },
 
-  header: {
-    flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1,
-  },
-  backBtn: {
-    width: 44,
-    height: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   closeBtn: {
     width: 44,
     height: 44,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  headerText: { flex: 1, marginLeft: 8 },
-  headerTitle: { fontSize: 20, fontWeight: '800' },
-  headerSub: { fontSize: 12, marginTop: 2 },
 
-  content: { padding: 16 },
+  content: { padding: 20 },
   sectionRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 12, marginTop: 4 },
   sectionLabel: { fontSize: 15, fontWeight: '700' },
   sectionSub: { fontSize: 12, marginTop: 2 },

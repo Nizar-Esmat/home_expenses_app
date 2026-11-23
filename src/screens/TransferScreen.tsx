@@ -6,6 +6,7 @@ import {
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/theme/ThemeContext';
 import { getActiveAccounts, addTransfer, getTransferById, updateTransfer } from '@/services/database';
 import { Account, Transfer } from '@/types';
@@ -14,10 +15,12 @@ import AppInput from '@/components/AppInput';
 import AppButton from '@/components/AppButton';
 import DateTimeInput from '@/components/DateTimeInput';
 import { useAppDialog } from '@/components/AppDialog';
+import ScreenHeader from '@/components/ScreenHeader';
 
 export default function TransferScreen() {
   const { colors } = useTheme();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { transferId } = useLocalSearchParams<{ transferId?: string }>();
   const { showDialog } = useAppDialog();
 
@@ -236,19 +239,7 @@ export default function TransferScreen() {
       style={[styles.screen, { backgroundColor: colors.background }]}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      <View style={[styles.header, { borderBottomColor: colors.border }]}>
-        <TouchableOpacity
-          onPress={() => router.back()}
-          style={styles.backBtn}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          accessibilityRole="button"
-          accessibilityLabel="Go back"
-        >
-          <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
-        </TouchableOpacity>
-        <Text style={[styles.title, { color: colors.textPrimary }]}>{editTransfer ? 'Edit Transfer' : 'Transfer'}</Text>
-        <View style={{ width: 44 }} />
-      </View>
+      <ScreenHeader title={editTransfer ? 'Edit Transfer' : 'Transfer'} />
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
         {/* Banner */}
@@ -300,6 +291,13 @@ export default function TransferScreen() {
           placeholder="0.00"
           keyboardType="decimal-pad"
           error={amountError}
+          textAlign="center"
+          style={{
+            height: 59,
+            paddingVertical: 14,
+            fontSize: 26,
+            fontWeight: '800',
+          }}
         />
 
         <AppInput
@@ -329,33 +327,38 @@ export default function TransferScreen() {
             onUseCustomDateChange={setUseCustomDate}
           />
         )}
+        <View style={{ height: 16 }} />
+      </ScrollView>
 
+      <View
+        style={[
+          styles.pinnedFooter,
+          {
+            backgroundColor: colors.background,
+            borderTopColor: colors.border,
+            paddingBottom: Math.max(insets.bottom, 12),
+          },
+        ]}
+      >
         <AppButton
           label={editTransfer ? 'Update Transfer' : 'Transfer'}
           onPress={save}
           loading={loading}
           disabled={!fromAccount || !toAccount || fromAccount.id === toAccount?.id}
         />
-        <View style={{ height: 40 }} />
-      </ScrollView>
+      </View>
     </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
   screen: { flex: 1 },
-  header: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 16, paddingVertical: 10, borderBottomWidth: 1,
-  },
-  backBtn: {
-    width: 44,
-    height: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  title: { fontSize: 18, fontWeight: '700' },
   content: { padding: 20 },
+  pinnedFooter: {
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
   banner: {
     flexDirection: 'row', alignItems: 'center', gap: 10,
     padding: 14, borderRadius: 14, marginBottom: 24,

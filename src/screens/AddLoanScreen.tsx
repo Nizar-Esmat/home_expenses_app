@@ -1,38 +1,45 @@
 import React, { useEffect, useState } from 'react';
 import {
-  View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  KeyboardAvoidingView, Platform,
+  View,
+  Text,
+  ScrollView,
+  TouchableOpacity,
+  StyleSheet,
+  KeyboardAvoidingView,
+  Platform,
+  Modal,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/theme/ThemeContext';
-import { getAccounts, getLoans, getLoanById, addLoan, addRepayment, updateLoan } from '@/services/database';
+import {
+  getAccounts,
+  getLoans,
+  getLoanById,
+  addLoan,
+  addRepayment,
+  updateLoan,
+  getSettings,
+} from '@/services/database';
 import { Account, Loan, LoanType } from '@/types';
-import { ACCOUNT_TYPE_LABELS } from '@/components/AccountPicker';
+import { formatCurrency } from '@/services/constants';
 import AppInput from '@/components/AppInput';
 import AppButton from '@/components/AppButton';
 import DateTimeInput from '@/components/DateTimeInput';
+import AccountPicker from '@/components/AccountPicker';
 import { useAppDialog } from '@/components/AppDialog';
+import ScreenHeader from '@/components/ScreenHeader';
 
 type Mode = 'loan' | 'repayment';
-
-const STATUS_LABEL: Record<string, string> = {
-  PENDING: 'Pending',
-  PARTIAL: 'Partial',
-  SETTLED: 'Settled',
-};
 
 export default function AddLoanScreen() {
   const { colors } = useTheme();
   const router = useRouter();
-  const { loanId: loanIdParam, editLoanId: editLoanIdParam } = useLocalSearchParams<{ loanId?: string; editLoanId?: string }>();
+  const insets = useSafeAreaInsets();
+  const { loanId: loanIdParam, editLoanId: editLoanIdParam } =
+    useLocalSearchParams<{ loanId?: string; editLoanId?: string }>();
   const { showDialog } = useAppDialog();
-
-  const statusColors: Record<string, string> = {
-    PENDING: colors.warning,
-    PARTIAL: colors.primary,
-    SETTLED: colors.success,
-  };
 
   const isEditing = !!editLoanIdParam;
   const [editingLoanId, setEditingLoanId] = useState<number | null>(null);
@@ -41,27 +48,37 @@ export default function AddLoanScreen() {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [account, setAccount] = useState<Account | null>(null);
   const [amount, setAmount] = useState('');
+  const [currency, setCurrency] = useState('EGP');
   const [note, setNote] = useState('');
   const [date, setDate] = useState(new Date());
   const [useCustomDate, setUseCustomDate] = useState(false);
   const [amountError, setAmountError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [showAccountPicker, setShowAccountPicker] = useState(false);
 
+  // Loan specific state
   const [loanType, setLoanType] = useState<LoanType>('BORROWED');
   const [contactName, setContactName] = useState('');
   const [contactError, setContactError] = useState('');
 
+  // Repayment specific state
   const [activeLoans, setActiveLoans] = useState<Loan[]>([]);
   const [selectedLoan, setSelectedLoan] = useState<Loan | null>(null);
-  const [showLoanPicker, setShowLoanPicker] = useState(false);
+  const [showLoanModal, setShowLoanModal] = useState(false);
 
   useEffect(() => {
     const init = async () => {
-      const [accts, loans] = await Promise.all([getAccounts(), getLoans('ACTIVE')]);
+      const [accts, loans, sets] = await Promise.all([
+        getAccounts(),
+        getLoans('ACTIVE'),
+        getSettings(),
+      ]);
+
       const activeAccts = accts.filter((a) => a.isArchived === 0);
       setAccounts(activeAccts);
       setActiveLoans(loans);
+      if (sets?.currency) {
+        setCurrency(sets.currency);
+      }
 
       if (editLoanIdParam) {
         const loan = await getLoanById(Number(editLoanIdParam));
@@ -86,6 +103,9 @@ export default function AddLoanScreen() {
           setSelectedLoan(pre);
           setAmount(String(pre.amount - pre.paidAmount));
         }
+      } else if (!editLoanIdParam && loans.length > 0) {
+        // default selected loan in repayment mode
+        setSelectedLoan(loans[0]);
       }
     };
     init();
@@ -95,7 +115,19 @@ export default function AddLoanScreen() {
     setMode(m);
     setAmountError('');
     setContactError('');
+    if (m === 'repayment') {
+      if (!selectedLoan && activeLoans.length > 0) {
+        setSelectedLoan(activeLoans[0]);
+        setAmount(String(activeLoans[0].amount - activeLoans[0].paidAmount));
+      } else if (selectedLoan) {
+        setAmount(String(selectedLoan.amount - selectedLoan.paidAmount));
+      }
+    }
   };
+
+  const remainingBalance = selectedLoan
+    ? Math.max(0, selectedLoan.amount - selectedLoan.paidAmount)
+    : 0;
 
   const validateAndSave = async () => {
     const v = parseFloat(amount.replace(',', '.'));
@@ -106,601 +138,1001 @@ export default function AddLoanScreen() {
     setAmountError('');
 
     if (!account) {
-      showDialog({ title: 'Error', message: 'Please select an account.', icon: '⚠️', type: 'warning', buttons: [{ text: 'OK', style: 'default' }] });
+      showDialog({
+        title: 'Account Required',
+        message: 'Please select an account for this transaction.',
+        type: 'warning',
+        buttons: [{ text: 'OK', style: 'default' }],
+      });
       return;
     }
 
     if (mode === 'loan') {
-      if (!contactName.trim()) { setContactError('Enter a contact name'); return; }
+      if (!contactName.trim()) {
+        setContactError('Please enter a contact name');
+        return;
+      }
       setContactError('');
       setLoading(true);
       try {
         const loanDate = useCustomDate ? date.toISOString() : new Date().toISOString();
         if (editingLoanId !== null) {
-          await updateLoan(editingLoanId, { type: loanType, contactName: contactName.trim(), amount: v, accountId: account.id, note: note.trim() || null, loanDate });
+          await updateLoan(editingLoanId, {
+            type: loanType,
+            contactName: contactName.trim(),
+            amount: v,
+            accountId: account.id,
+            note: note.trim() || null,
+            loanDate,
+          });
         } else {
-          await addLoan({ type: loanType, contactName: contactName.trim(), amount: v, accountId: account.id, note: note.trim() || null, loanDate });
+          await addLoan({
+            type: loanType,
+            contactName: contactName.trim(),
+            amount: v,
+            accountId: account.id,
+            note: note.trim() || null,
+            loanDate,
+          });
         }
         router.back();
       } catch {
-        showDialog({ title: 'Error', message: 'Failed to save loan. Please try again.', icon: '❌', type: 'danger', buttons: [{ text: 'OK', style: 'default' }] });
-      } finally { setLoading(false); }
+        showDialog({
+          title: 'Error',
+          message: 'Failed to save loan. Please try again.',
+          type: 'danger',
+          buttons: [{ text: 'OK', style: 'default' }],
+        });
+      } finally {
+        setLoading(false);
+      }
     } else {
       if (!selectedLoan) {
-        showDialog({ title: 'Error', message: 'Please select a loan to repay.', icon: '⚠️', type: 'warning', buttons: [{ text: 'OK', style: 'default' }] });
+        showDialog({
+          title: 'Select Loan',
+          message: 'Please select an active loan to record a repayment.',
+          type: 'warning',
+          buttons: [{ text: 'OK', style: 'default' }],
+        });
         return;
       }
-      const remaining = selectedLoan.amount - selectedLoan.paidAmount;
-      if (v > remaining) {
-        setAmountError(`Exceeds remaining balance of ${remaining.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
+      if (v > remainingBalance) {
+        setAmountError(
+          `Amount exceeds remaining balance of ${formatCurrency(remainingBalance, currency)}`,
+        );
         return;
       }
       setLoading(true);
       try {
         const repaymentDate = useCustomDate ? date.toISOString() : new Date().toISOString();
-        await addRepayment(selectedLoan.id, { amount: v, accountId: account.id, note: note.trim() || null, repaymentDate });
+        await addRepayment(selectedLoan.id, {
+          amount: v,
+          accountId: account.id,
+          note: note.trim() || null,
+          repaymentDate,
+        });
         router.back();
       } catch {
-        showDialog({ title: 'Error', message: 'Failed to save repayment. Please try again.', icon: '❌', type: 'danger', buttons: [{ text: 'OK', style: 'default' }] });
-      } finally { setLoading(false); }
+        showDialog({
+          title: 'Error',
+          message: 'Failed to save repayment. Please try again.',
+          type: 'danger',
+          buttons: [{ text: 'OK', style: 'default' }],
+        });
+      } finally {
+        setLoading(false);
+      }
     }
   };
-
-  const remainingBalance = selectedLoan ? selectedLoan.amount - selectedLoan.paidAmount : 0;
 
   return (
     <KeyboardAvoidingView
       style={[styles.screen, { backgroundColor: colors.background }]}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-
-      {/* ── Header ───────────────────────────────── */}
-      <View style={[styles.header, { borderBottomColor: colors.border }]}>
-        <TouchableOpacity
-          onPress={() => router.back()}
-          style={[styles.backBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
-          activeOpacity={0.8}
-          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-          accessibilityRole="button"
-          accessibilityLabel="Go back"
-        >
-          <Ionicons name="arrow-back" size={20} color={colors.textPrimary} />
-        </TouchableOpacity>
-
-        <View style={styles.headerCenter}>
-          <Text style={[styles.title, { color: colors.textPrimary }]} accessibilityRole="header">
-            {isEditing ? 'Edit Loan' : mode === 'loan' ? 'New Loan' : 'Add Repayment'}
-          </Text>
-          {isEditing && (
-            <Text style={[styles.titleSub, { color: colors.textSecondary }]}>Update loan details</Text>
-          )}
-        </View>
-
-        <View style={{ width: 44 }} />
-      </View>
+      <ScreenHeader
+        title={isEditing ? 'Edit Loan' : mode === 'loan' ? 'New Loan' : 'Record Repayment'}
+      />
 
       <ScrollView
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
-        {/* ── Mode Toggle ──────────────────────────── */}
+        {/* Mode Segmented Tab (New Loan vs Repayment) */}
         {!isEditing && (
           <View
-            style={[styles.modeToggle, { backgroundColor: colors.inputFill, borderColor: colors.border }]}
+            style={[
+              styles.modeSegmentTrack,
+              { backgroundColor: colors.inputFill, borderColor: colors.border },
+            ]}
             accessibilityRole="tablist"
           >
             <TouchableOpacity
-              style={[styles.modeBtn, mode === 'loan' && { backgroundColor: colors.primary }]}
+              style={[
+                styles.modeSegmentBtn,
+                mode === 'loan' && [
+                  styles.modeSegmentActive,
+                  { backgroundColor: colors.card, borderColor: colors.border },
+                ],
+              ]}
               onPress={() => switchMode('loan')}
               activeOpacity={0.8}
               accessibilityRole="tab"
               accessibilityState={{ selected: mode === 'loan' }}
-              accessibilityLabel="New Loan"
             >
               <Ionicons
-                name={mode === 'loan' ? 'cash' : 'cash-outline'}
+                name={mode === 'loan' ? 'wallet' : 'wallet-outline'}
                 size={16}
-                color={mode === 'loan' ? colors.onPrimary : colors.textSecondary}
+                color={mode === 'loan' ? colors.primary : colors.textSecondary}
               />
-              <Text style={[styles.modeBtnText, { color: mode === 'loan' ? colors.onPrimary : colors.textSecondary }]}>
+              <Text
+                style={[
+                  styles.modeSegmentText,
+                  { color: mode === 'loan' ? colors.textPrimary : colors.textSecondary },
+                  mode === 'loan' && styles.modeSegmentTextActive,
+                ]}
+              >
                 New Loan
               </Text>
             </TouchableOpacity>
+
             <TouchableOpacity
-              style={[styles.modeBtn, mode === 'repayment' && { backgroundColor: colors.primary }]}
+              style={[
+                styles.modeSegmentBtn,
+                mode === 'repayment' && [
+                  styles.modeSegmentActive,
+                  { backgroundColor: colors.card, borderColor: colors.border },
+                ],
+              ]}
               onPress={() => switchMode('repayment')}
               activeOpacity={0.8}
               accessibilityRole="tab"
               accessibilityState={{ selected: mode === 'repayment' }}
-              accessibilityLabel="Repayment"
             >
               <Ionicons
                 name={mode === 'repayment' ? 'return-down-back' : 'return-down-back-outline'}
                 size={16}
-                color={mode === 'repayment' ? colors.onPrimary : colors.textSecondary}
+                color={mode === 'repayment' ? colors.primary : colors.textSecondary}
               />
-              <Text style={[styles.modeBtnText, { color: mode === 'repayment' ? colors.onPrimary : colors.textSecondary }]}>
+              <Text
+                style={[
+                  styles.modeSegmentText,
+                  { color: mode === 'repayment' ? colors.textPrimary : colors.textSecondary },
+                  mode === 'repayment' && styles.modeSegmentTextActive,
+                ]}
+              >
                 Repayment
               </Text>
             </TouchableOpacity>
           </View>
         )}
 
-        {/* ── LOAN MODE ──────────────────────────────── */}
+        {/* ── LOAN MODE ─────────────────────────────────── */}
         {mode === 'loan' ? (
           <>
-            <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>LOAN TYPE</Text>
-            <View style={styles.typeRow} accessibilityRole="radiogroup" accessibilityLabel="Loan type">
-
-              {/* BORROWED */}
+            {/* Direction Selector (Borrowed vs Lent) */}
+            <View style={styles.directionRow}>
               <TouchableOpacity
                 style={[
-                  styles.typeBtn,
-                  { backgroundColor: colors.card, borderColor: loanType === 'BORROWED' ? colors.primary : colors.border },
+                  styles.directionCard,
+                  {
+                    backgroundColor: loanType === 'BORROWED' ? colors.primary + '14' : colors.card,
+                    borderColor: loanType === 'BORROWED' ? colors.primary : colors.border,
+                  },
                 ]}
                 onPress={() => setLoanType('BORROWED')}
                 activeOpacity={0.8}
                 accessibilityRole="radio"
                 accessibilityState={{ selected: loanType === 'BORROWED' }}
-                accessibilityLabel="Borrowed: Someone lent you"
               >
-                <View style={[styles.typeAccentRail, { backgroundColor: loanType === 'BORROWED' ? colors.primary : 'transparent' }]} />
-                <View style={styles.typeBtnInner}>
-                  <View style={[styles.typeIconCircle, { backgroundColor: loanType === 'BORROWED' ? colors.primary + '22' : colors.inputFill }]}>
-                    <Text style={styles.typeEmoji}>📥</Text>
-                  </View>
-                  <Text style={[styles.typeBtnLabel, { color: loanType === 'BORROWED' ? colors.primary : colors.textPrimary }]}>
-                    Borrowed
-                  </Text>
-                  <Text style={[styles.typeBtnDesc, { color: colors.textSecondary }]}>Someone lent you</Text>
-                  {loanType === 'BORROWED' && (
-                    <View style={[styles.typeCheck, { backgroundColor: colors.primary }]}>
-                      <Ionicons name="checkmark" size={10} color={colors.onPrimary} />
-                    </View>
-                  )}
+                <View
+                  style={[
+                    styles.directionIconCircle,
+                    {
+                      backgroundColor:
+                        loanType === 'BORROWED' ? colors.primary + '22' : colors.inputFill,
+                    },
+                  ]}
+                >
+                  <Ionicons
+                    name="arrow-down-circle"
+                    size={22}
+                    color={loanType === 'BORROWED' ? colors.primary : colors.textSecondary}
+                  />
                 </View>
+                <Text style={[styles.directionTitle, { color: colors.textPrimary }]}>
+                  Borrowed
+                </Text>
+                <Text style={[styles.directionSubtitle, { color: colors.textSecondary }]}>
+                  You owe this money
+                </Text>
+                {loanType === 'BORROWED' && (
+                  <View style={styles.directionCheck}>
+                    <Ionicons name="checkmark-circle" size={18} color={colors.primary} />
+                  </View>
+                )}
               </TouchableOpacity>
 
-              {/* LENT */}
               <TouchableOpacity
                 style={[
-                  styles.typeBtn,
-                  { backgroundColor: colors.card, borderColor: loanType === 'LENT' ? colors.primary : colors.border },
+                  styles.directionCard,
+                  {
+                    backgroundColor: loanType === 'LENT' ? colors.primary + '14' : colors.card,
+                    borderColor: loanType === 'LENT' ? colors.primary : colors.border,
+                  },
                 ]}
                 onPress={() => setLoanType('LENT')}
                 activeOpacity={0.8}
                 accessibilityRole="radio"
                 accessibilityState={{ selected: loanType === 'LENT' }}
-                accessibilityLabel="Lent: You lent someone"
               >
-                <View style={[styles.typeAccentRail, { backgroundColor: loanType === 'LENT' ? colors.primary : 'transparent' }]} />
-                <View style={styles.typeBtnInner}>
-                  <View style={[styles.typeIconCircle, { backgroundColor: loanType === 'LENT' ? colors.primary + '22' : colors.inputFill }]}>
-                    <Text style={styles.typeEmoji}>📤</Text>
-                  </View>
-                  <Text style={[styles.typeBtnLabel, { color: loanType === 'LENT' ? colors.primary : colors.textPrimary }]}>
-                    Lent
-                  </Text>
-                  <Text style={[styles.typeBtnDesc, { color: colors.textSecondary }]}>You lent someone</Text>
-                  {loanType === 'LENT' && (
-                    <View style={[styles.typeCheck, { backgroundColor: colors.primary }]}>
-                      <Ionicons name="checkmark" size={10} color={colors.onPrimary} />
-                    </View>
-                  )}
+                <View
+                  style={[
+                    styles.directionIconCircle,
+                    {
+                      backgroundColor:
+                        loanType === 'LENT' ? colors.primary + '22' : colors.inputFill,
+                    },
+                  ]}
+                >
+                  <Ionicons
+                    name="arrow-up-circle"
+                    size={22}
+                    color={loanType === 'LENT' ? colors.primary : colors.textSecondary}
+                  />
                 </View>
+                <Text style={[styles.directionTitle, { color: colors.textPrimary }]}>
+                  Lent
+                </Text>
+                <Text style={[styles.directionSubtitle, { color: colors.textSecondary }]}>
+                  Owed back to you
+                </Text>
+                {loanType === 'LENT' && (
+                  <View style={styles.directionCheck}>
+                    <Ionicons name="checkmark-circle" size={18} color={colors.primary} />
+                  </View>
+                )}
               </TouchableOpacity>
-
             </View>
 
+            {/* Hero Amount Input */}
+            <AppInput
+              label={`Amount (${currency})`}
+              value={amount}
+              onChangeText={(v) => {
+                setAmount(v);
+                if (amountError) setAmountError('');
+              }}
+              placeholder="0.00"
+              keyboardType="decimal-pad"
+              error={amountError}
+              textAlign="center"
+              style={styles.heroAmountInput}
+            />
+
+            {/* Contact Name */}
             <AppInput
               label="Contact Name"
               value={contactName}
-              onChangeText={(v) => { setContactName(v); if (contactError) setContactError(''); }}
-              placeholder={loanType === 'BORROWED' ? 'Who lent you money?' : 'Who did you lend to?'}
+              onChangeText={(v) => {
+                setContactName(v);
+                if (contactError) setContactError('');
+              }}
+              placeholder={
+                loanType === 'BORROWED' ? 'Who lent you this money?' : 'Who are you lending to?'
+              }
               error={contactError}
+              autoCapitalize="words"
+              returnKeyType="done"
             />
           </>
         ) : (
+          /* ── REPAYMENT MODE ─────────────────────────────── */
           <>
-            {/* ── REPAYMENT MODE ─────────────────────── */}
-            <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>SELECT LOAN</Text>
-
-            {/* Loan picker button */}
-            <TouchableOpacity
-              style={[styles.loanPickerBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
-              onPress={() => setShowLoanPicker((v) => !v)}
-              activeOpacity={0.8}
-            >
-              {selectedLoan ? (
-                <View style={{ gap: 10 }}>
-                  <View style={styles.loanPickerTop}>
-                    <View style={styles.loanPickerLeft}>
-                      <View style={[styles.loanTypeIcon, { backgroundColor: selectedLoan.type === 'BORROWED' ? colors.success + '18' : colors.danger + '18' }]}>
-                        <Text style={{ fontSize: 18 }}>{selectedLoan.type === 'BORROWED' ? '📥' : '📤'}</Text>
+            {activeLoans.length === 0 ? (
+              <View
+                style={[
+                  styles.emptyStateCard,
+                  { backgroundColor: colors.card, borderColor: colors.border },
+                ]}
+              >
+                <View
+                  style={[
+                    styles.emptyIconCircle,
+                    { backgroundColor: colors.success + '18' },
+                  ]}
+                >
+                  <Ionicons name="checkmark-circle-outline" size={36} color={colors.success} />
+                </View>
+                <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>
+                  No Active Loans
+                </Text>
+                <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
+                  All loans have been settled or no loans have been recorded yet.
+                </Text>
+                <TouchableOpacity
+                  style={[styles.emptyActionBtn, { backgroundColor: colors.primary }]}
+                  onPress={() => switchMode('loan')}
+                  activeOpacity={0.8}
+                >
+                  <Text style={[styles.emptyActionBtnText, { color: colors.onPrimary }]}>
+                    Create a New Loan
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            ) : selectedLoan ? (
+              <>
+                {/* Active Selected Loan Card */}
+                <View
+                  style={[
+                    styles.selectedLoanCard,
+                    { backgroundColor: colors.card, borderColor: colors.border },
+                  ]}
+                >
+                  <View style={styles.selectedLoanTop}>
+                    <View style={styles.selectedLoanPerson}>
+                      <View
+                        style={[
+                          styles.selectedLoanIconWrap,
+                          {
+                            backgroundColor:
+                              selectedLoan.type === 'BORROWED'
+                                ? colors.primary + '18'
+                                : colors.success + '18',
+                          },
+                        ]}
+                      >
+                        <Ionicons
+                          name={
+                            selectedLoan.type === 'BORROWED'
+                              ? 'arrow-down-circle-outline'
+                              : 'arrow-up-circle-outline'
+                          }
+                          size={20}
+                          color={
+                            selectedLoan.type === 'BORROWED' ? colors.primary : colors.success
+                          }
+                        />
                       </View>
                       <View>
-                        <Text style={[styles.loanPickerName, { color: colors.textPrimary, textAlign: 'auto' }]}>
+                        <Text
+                          style={[styles.selectedLoanName, { color: colors.textPrimary }]}
+                        >
                           {selectedLoan.contactName}
                         </Text>
-                        <Text style={[styles.loanPickerSub, { color: colors.textSecondary }]}>
-                          {selectedLoan.type === 'BORROWED' ? 'Borrowed' : 'Lent'}
+                        <Text
+                          style={[styles.selectedLoanSub, { color: colors.textSecondary }]}
+                        >
+                          {selectedLoan.type === 'BORROWED'
+                            ? 'Borrowed · You owe'
+                            : 'Lent · Owed to you'}
                         </Text>
                       </View>
                     </View>
-                    <View style={styles.loanPickerRight}>
-                      <View style={[styles.statusBadge, { backgroundColor: (statusColors[selectedLoan.status] ?? colors.textSecondary) + '22' }]}>
-                        <Text style={[styles.statusText, { color: statusColors[selectedLoan.status] ?? colors.textSecondary }]}>
-                          {STATUS_LABEL[selectedLoan.status]}
+
+                    {activeLoans.length > 1 && (
+                      <TouchableOpacity
+                        style={[
+                          styles.switchLoanBtn,
+                          {
+                            backgroundColor: colors.inputFill,
+                            borderColor: colors.border,
+                          },
+                        ]}
+                        onPress={() => setShowLoanModal(true)}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      >
+                        <Text style={[styles.switchLoanText, { color: colors.primary }]}>
+                          Change
                         </Text>
-                      </View>
-                      <Ionicons name={showLoanPicker ? 'chevron-up' : 'chevron-down'} size={16} color={colors.textSecondary} />
-                    </View>
+                        <Ionicons name="chevron-forward" size={14} color={colors.primary} />
+                      </TouchableOpacity>
+                    )}
                   </View>
-                  {/* Progress bar */}
-                  <View style={{ gap: 4 }}>
-                    <View style={[styles.progressTrack, { backgroundColor: colors.border }]}>
+
+                  {/* Progress Bar */}
+                  <View style={styles.progressContainer}>
+                    <View
+                      style={[styles.progressTrack, { backgroundColor: colors.border }]}
+                    >
                       <View
                         style={[
                           styles.progressFill,
                           {
                             backgroundColor: colors.primary,
-                            width: `${Math.min(100, (selectedLoan.paidAmount / selectedLoan.amount) * 100)}%` as `${number}%`,
+                            width: `${Math.min(
+                              100,
+                              Math.max(
+                                0,
+                                (selectedLoan.paidAmount / selectedLoan.amount) * 100,
+                              ),
+                            )}%` as `${number}%`,
                           },
                         ]}
                       />
                     </View>
-                    <View style={styles.progressLabels}>
-                      <Text style={[styles.progressLabel, { color: colors.textSecondary }]}>
-                        Paid {((selectedLoan.paidAmount / selectedLoan.amount) * 100).toFixed(0)}%
+                    <View style={styles.progressLabelRow}>
+                      <Text
+                        style={[styles.progressLabelText, { color: colors.textSecondary }]}
+                      >
+                        Paid: {((selectedLoan.paidAmount / selectedLoan.amount) * 100).toFixed(0)}%
                       </Text>
-                      <Text style={[styles.progressLabel, { color: colors.textSecondary }]}>
-                        Left {remainingBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      <Text
+                        style={[styles.progressLabelText, { color: colors.textSecondary }]}
+                      >
+                        Remaining: {formatCurrency(remainingBalance, currency)}
+                      </Text>
+                    </View>
+                  </View>
+
+                  {/* Stat Columns */}
+                  <View
+                    style={[styles.loanStatsRow, { borderTopColor: colors.border }]}
+                  >
+                    <View style={styles.loanStatCol}>
+                      <Text
+                        style={[styles.loanStatLabel, { color: colors.textSecondary }]}
+                      >
+                        Total
+                      </Text>
+                      <Text
+                        style={[styles.loanStatVal, { color: colors.textPrimary }]}
+                      >
+                        {formatCurrency(selectedLoan.amount, currency)}
+                      </Text>
+                    </View>
+                    <View
+                      style={[styles.loanStatDivider, { backgroundColor: colors.border }]}
+                    />
+                    <View style={styles.loanStatCol}>
+                      <Text
+                        style={[styles.loanStatLabel, { color: colors.textSecondary }]}
+                      >
+                        Paid
+                      </Text>
+                      <Text
+                        style={[styles.loanStatVal, { color: colors.success }]}
+                      >
+                        {formatCurrency(selectedLoan.paidAmount, currency)}
+                      </Text>
+                    </View>
+                    <View
+                      style={[styles.loanStatDivider, { backgroundColor: colors.border }]}
+                    />
+                    <View style={styles.loanStatCol}>
+                      <Text
+                        style={[styles.loanStatLabel, { color: colors.textSecondary }]}
+                      >
+                        Remaining
+                      </Text>
+                      <Text
+                        style={[styles.loanStatVal, { color: colors.primary }]}
+                      >
+                        {formatCurrency(remainingBalance, currency)}
                       </Text>
                     </View>
                   </View>
                 </View>
-              ) : (
-                <View style={styles.loanPickerPlaceholderRow}>
-                  <View style={[styles.loanTypeIcon, { backgroundColor: colors.inputFill }]}>
-                    <Ionicons name="receipt-outline" size={18} color={colors.textSecondary} />
-                  </View>
-                  <Text style={[styles.loanPickerPlaceholder, { color: colors.textSecondary }]}>
-                    Select a loan to repay…
-                  </Text>
-                  <Ionicons name="chevron-down" size={16} color={colors.textSecondary} />
-                </View>
-              )}
-            </TouchableOpacity>
 
-            {/* Loan dropdown */}
-            {showLoanPicker && (
-              <View style={[styles.dropdown, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                {activeLoans.length === 0 ? (
-                  <View style={styles.dropdownEmptyWrap}>
-                    <Text style={{ fontSize: 28, marginBottom: 6 }}>🔍</Text>
-                    <Text style={[styles.dropdownEmpty, { color: colors.textSecondary }]}>No active loans</Text>
-                  </View>
-                ) : (
-                  <ScrollView nestedScrollEnabled style={{ maxHeight: 220 }} showsVerticalScrollIndicator={false}>
-                    {activeLoans.map((loan) => {
-                      const rem = loan.amount - loan.paidAmount;
-                      const isSelected = selectedLoan?.id === loan.id;
-                      const paidPct = Math.min(100, (loan.paidAmount / loan.amount) * 100);
-                      return (
-                        <TouchableOpacity
-                          key={loan.id}
-                          style={[
-                            styles.dropdownItem,
-                            { borderBottomColor: colors.border },
-                            isSelected && { backgroundColor: colors.primary + '10' },
-                          ]}
-                          onPress={() => {
-                            setSelectedLoan(loan);
-                            setAmount(String(rem));
-                            setShowLoanPicker(false);
-                            setAmountError('');
-                          }}
-                          activeOpacity={0.75}
-                        >
-                          <View style={[styles.loanTypeIcon, { backgroundColor: loan.type === 'BORROWED' ? colors.success + '15' : colors.danger + '15' }]}>
-                            <Text style={{ fontSize: 16 }}>{loan.type === 'BORROWED' ? '📥' : '📤'}</Text>
-                          </View>
-                          <View style={styles.dropdownInfo}>
-                            <Text style={[styles.dropdownName, { color: colors.textPrimary, textAlign: 'auto' }]}>{loan.contactName}</Text>
-                            <Text style={[styles.dropdownSub, { color: colors.textSecondary }]}>
-                              {loan.type === 'BORROWED' ? 'Borrowed' : 'Lent'} · Rem {rem.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                            </Text>
-                            <View style={[styles.dropdownProgress, { backgroundColor: colors.border }]}>
-                              <View
-                                style={[
-                                  styles.dropdownProgressFill,
-                                  { backgroundColor: colors.primary, width: `${paidPct}%` as `${number}%` },
-                                ]}
-                              />
-                            </View>
-                          </View>
-                          {isSelected && <Ionicons name="checkmark-circle" size={20} color={colors.primary} />}
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </ScrollView>
+                {/* Hero Repayment Amount */}
+                <AppInput
+                  label={`Repayment Amount (${currency})`}
+                  value={amount}
+                  onChangeText={(v) => {
+                    setAmount(v);
+                    if (amountError) setAmountError('');
+                  }}
+                  placeholder="0.00"
+                  keyboardType="decimal-pad"
+                  error={amountError}
+                  textAlign="center"
+                  style={styles.heroAmountInput}
+                />
+
+                {/* Quick Fill Full Balance Button */}
+                {remainingBalance > 0 && (
+                  <TouchableOpacity
+                    style={[
+                      styles.quickFillBtn,
+                      {
+                        backgroundColor: colors.primary + '14',
+                        borderColor: colors.primary + '30',
+                      },
+                    ]}
+                    onPress={() => {
+                      setAmount(String(remainingBalance));
+                      if (amountError) setAmountError('');
+                    }}
+                    activeOpacity={0.75}
+                  >
+                    <Ionicons name="flash" size={14} color={colors.primary} />
+                    <Text style={[styles.quickFillText, { color: colors.primary }]}>
+                      Pay full remaining ({formatCurrency(remainingBalance, currency)})
+                    </Text>
+                  </TouchableOpacity>
                 )}
-              </View>
-            )}
-
-            {/* Summary card */}
-            {selectedLoan && (
-              <View style={[styles.summaryCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                <View style={styles.summaryCol}>
-                  <Text style={[styles.summaryLabel, { color: colors.textSecondary }]}>Total</Text>
-                  <Text style={[styles.summaryAmt, { color: colors.textPrimary }]}>
-                    {selectedLoan.amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  </Text>
-                </View>
-                <View style={[styles.summaryDivider, { backgroundColor: colors.border }]} />
-                <View style={styles.summaryCol}>
-                  <Text style={[styles.summaryLabel, { color: colors.textSecondary }]}>Paid</Text>
-                  <Text style={[styles.summaryAmt, { color: colors.success }]}>
-                    {selectedLoan.paidAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  </Text>
-                </View>
-                <View style={[styles.summaryDivider, { backgroundColor: colors.border }]} />
-                <View style={styles.summaryCol}>
-                  <Text style={[styles.summaryLabel, { color: colors.textSecondary }]}>Remaining</Text>
-                  <Text style={[styles.summaryAmt, { color: colors.danger }]}>
-                    {remainingBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  </Text>
-                </View>
-              </View>
-            )}
+              </>
+            ) : null}
           </>
         )}
 
-        {/* ── Amount ───────────────────────────────── */}
-        <AppInput
-          label="Amount"
-          value={amount}
-          onChangeText={(v) => { setAmount(v); if (amountError) setAmountError(''); }}
-          placeholder="0.00"
-          keyboardType="decimal-pad"
-          error={amountError}
-        />
-
-        {/* ── Account Picker ───────────────────────── */}
-        <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>ACCOUNT</Text>
-        <TouchableOpacity
-          style={[styles.pickerBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
-          onPress={() => setShowAccountPicker((v) => !v)}
-          activeOpacity={0.8}
-        >
-          {account ? (
-            <View style={styles.pickerRow}>
-              {account.color ? <View style={[styles.acctDot, { backgroundColor: account.color }]} /> : null}
-              <View style={[styles.acctIconWrap, { backgroundColor: colors.inputFill }]}>
-                <Text style={{ fontSize: 18 }}>{account.icon ?? '💳'}</Text>
-              </View>
-              <View style={styles.acctInfo}>
-                <Text style={[styles.acctName, { color: colors.textPrimary }]}>{account.name}</Text>
-                <Text style={[styles.acctType, { color: colors.textSecondary }]}>{ACCOUNT_TYPE_LABELS[account.type]}</Text>
-              </View>
-              <View style={[styles.balancePill, { backgroundColor: colors.primary + '15' }]}>
-                <Text style={[styles.balancePillText, { color: colors.primary }]}>
-                  {account.currentBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </Text>
-              </View>
-            </View>
-          ) : (
-            <View style={styles.pickerRow}>
-              <View style={[styles.acctIconWrap, { backgroundColor: colors.inputFill }]}>
-                <Ionicons name="wallet-outline" size={18} color={colors.textSecondary} />
-              </View>
-              <Text style={[styles.acctPlaceholder, { color: colors.textSecondary }]}>Select account…</Text>
-            </View>
-          )}
-          <Ionicons name={showAccountPicker ? 'chevron-up' : 'chevron-down'} size={18} color={colors.textSecondary} />
-        </TouchableOpacity>
-
-        {showAccountPicker && (
-          <View style={[styles.dropdown, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            {accounts.map((acc) => {
-              const isSelected = account?.id === acc.id;
-              return (
-                <TouchableOpacity
-                  key={acc.id}
-                  style={[
-                    styles.dropdownItem,
-                    { borderBottomColor: colors.border },
-                    isSelected && { backgroundColor: colors.primary + '10' },
-                  ]}
-                  onPress={() => { setAccount(acc); setShowAccountPicker(false); }}
-                  activeOpacity={0.75}
-                >
-                  {acc.color ? <View style={[styles.acctDot, { backgroundColor: acc.color }]} /> : null}
-                  <View style={[styles.acctIconWrap, { backgroundColor: colors.inputFill }]}>
-                    <Text style={{ fontSize: 16 }}>{acc.icon ?? '💳'}</Text>
-                  </View>
-                  <View style={styles.dropdownInfo}>
-                    <Text style={[styles.dropdownName, { color: colors.textPrimary }]}>{acc.name}</Text>
-                    <Text style={[styles.dropdownSub, { color: colors.textSecondary }]}>{ACCOUNT_TYPE_LABELS[acc.type]}</Text>
-                  </View>
-                  <Text style={[styles.dropdownBal, { color: colors.primary }]}>
-                    {acc.currentBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  </Text>
-                  {isSelected && (
-                    <Ionicons name="checkmark-circle" size={20} color={colors.primary} style={{ marginLeft: 6 }} />
-                  )}
-                </TouchableOpacity>
-              );
-            })}
-          </View>
+        {/* ── ACCOUNT PICKER (Shared Standard Component) ── */}
+        {accounts.length > 0 && (
+          <AccountPicker
+            accounts={accounts}
+            selectedAccount={account}
+            onSelect={setAccount}
+          />
         )}
 
-        {/* ── Note + Date group card ───────────────── */}
-        <View style={[styles.groupCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <AppInput
-            label="Note (optional)"
-            value={note}
-            onChangeText={setNote}
-            placeholder="Add a note…"
-            multiline
-            numberOfLines={2}
-            style={{ height: 64, paddingTop: 10, textAlignVertical: 'top' }}
-          />
-          <View style={[styles.groupDivider, { backgroundColor: colors.border }]} />
-          <DateTimeInput
-            date={date}
-            onChange={setDate}
-            useCustomDate={useCustomDate}
-            onUseCustomDateChange={setUseCustomDate}
-          />
-        </View>
+        {/* ── NOTE ─────────────────────────────────────── */}
+        <AppInput
+          label="Note (optional)"
+          value={note}
+          onChangeText={setNote}
+          placeholder="Add details, terms, or reference…"
+          multiline
+          numberOfLines={2}
+          style={styles.noteInput}
+        />
 
+        {/* ── DATE & TIME ──────────────────────────────── */}
+        <DateTimeInput
+          date={date}
+          onChange={setDate}
+          useCustomDate={useCustomDate}
+          onUseCustomDateChange={setUseCustomDate}
+        />
+
+        <View style={{ height: 32 }} />
+      </ScrollView>
+
+      {/* ── PINNED ACTION FOOTER ───────────────────────── */}
+      <View
+        style={[
+          styles.pinnedFooter,
+          {
+            backgroundColor: colors.background,
+            borderTopColor: colors.border,
+            paddingBottom: Math.max(insets.bottom, 12),
+          },
+        ]}
+      >
         <AppButton
-          label={isEditing ? 'Save Changes' : mode === 'loan' ? 'Save Loan' : 'Save Repayment'}
+          label={
+            isEditing
+              ? 'Update Loan'
+              : mode === 'loan'
+                ? loanType === 'BORROWED'
+                  ? 'Save Borrowed Loan'
+                  : 'Save Lent Loan'
+                : 'Record Repayment'
+          }
           onPress={validateAndSave}
           loading={loading}
         />
-        <View style={{ height: 40 }} />
-      </ScrollView>
+      </View>
+
+      {/* ── MODAL: Select Active Loan ──────────────────── */}
+      <Modal
+        visible={showLoanModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowLoanModal(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowLoanModal(false)}
+        >
+          <View
+            style={[
+              styles.modalSheet,
+              { backgroundColor: colors.card, borderColor: colors.border },
+            ]}
+          >
+            <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
+              <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>
+                Select Loan to Repay
+              </Text>
+              <TouchableOpacity
+                onPress={() => setShowLoanModal(false)}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                style={styles.modalCloseBtn}
+              >
+                <Ionicons name="close" size={22} color={colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={styles.modalList}
+            >
+              {activeLoans.map((l) => {
+                const rem = Math.max(0, l.amount - l.paidAmount);
+                const isSelected = selectedLoan?.id === l.id;
+                const isBorrowed = l.type === 'BORROWED';
+                return (
+                  <TouchableOpacity
+                    key={l.id}
+                    style={[
+                      styles.modalLoanItem,
+                      {
+                        backgroundColor: isSelected ? colors.primary + '14' : colors.inputFill,
+                        borderColor: isSelected ? colors.primary : colors.border,
+                      },
+                    ]}
+                    onPress={() => {
+                      setSelectedLoan(l);
+                      setAmount(String(rem));
+                      setShowLoanModal(false);
+                      setAmountError('');
+                    }}
+                    activeOpacity={0.75}
+                  >
+                    <View
+                      style={[
+                        styles.modalLoanIcon,
+                        {
+                          backgroundColor: isBorrowed
+                            ? colors.primary + '18'
+                            : colors.success + '18',
+                        },
+                      ]}
+                    >
+                      <Ionicons
+                        name={
+                          isBorrowed
+                            ? 'arrow-down-circle-outline'
+                            : 'arrow-up-circle-outline'
+                        }
+                        size={22}
+                        color={isBorrowed ? colors.primary : colors.success}
+                      />
+                    </View>
+                    <View style={styles.modalLoanInfo}>
+                      <Text style={[styles.modalLoanName, { color: colors.textPrimary }]}>
+                        {l.contactName}
+                      </Text>
+                      <Text style={[styles.modalLoanType, { color: colors.textSecondary }]}>
+                        {isBorrowed ? 'Borrowed · You owe' : 'Lent · Owed to you'}
+                      </Text>
+                    </View>
+                    <View style={styles.modalLoanRight}>
+                      <Text style={[styles.modalLoanRem, { color: colors.textPrimary }]}>
+                        {formatCurrency(rem, currency)}
+                      </Text>
+                      <Text style={[styles.modalLoanRemLabel, { color: colors.textSecondary }]}>
+                        Remaining
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1 },
-
-  // ── Header
-  header: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 20, paddingVertical: 12, borderBottomWidth: 1,
+  screen: {
+    flex: 1,
   },
-  backBtn: {
-    width: 44, height: 44, borderRadius: 12, borderWidth: 1,
-    alignItems: 'center', justifyContent: 'center',
+  content: {
+    padding: 20,
+    gap: 16,
   },
-  headerCenter: { alignItems: 'center', flex: 1 },
-  title: { fontSize: 18, fontWeight: '700' },
-  titleSub: { fontSize: 12, marginTop: 2 },
 
-  content: { padding: 20 },
-
-  // ── Mode Toggle
-  modeToggle: {
-    flexDirection: 'row', borderRadius: 16, borderWidth: 1.5,
-    padding: 4, marginBottom: 24,
+  // ── Mode Segmented Control
+  modeSegmentTrack: {
+    flexDirection: 'row',
+    borderRadius: 12,
+    borderWidth: 1,
+    padding: 3,
   },
-  modeBtn: {
-    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: 6, minHeight: 44, paddingVertical: 10, borderRadius: 12,
+  modeSegmentBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 38,
+    borderRadius: 9,
+    gap: 6,
   },
-  modeBtnText: { fontSize: 14, fontWeight: '700' },
-
-  // ── Section label
-  sectionLabel: { fontSize: 11, fontWeight: '700', letterSpacing: 1, marginBottom: 8 },
-
-  // ── Loan Type Selector
-  typeRow: { flexDirection: 'row', gap: 10, marginBottom: 20 },
-  typeBtn: {
-    flex: 1, borderRadius: 14, borderWidth: 1.5,
-    overflow: 'hidden', flexDirection: 'row',
+  modeSegmentActive: {
+    borderWidth: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 1,
   },
-  typeAccentRail: { width: 3, alignSelf: 'stretch' },
-  typeBtnInner: {
-    flex: 1, alignItems: 'center',
-    paddingVertical: 16, paddingHorizontal: 10,
+  modeSegmentText: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  modeSegmentTextActive: {
+    fontWeight: '700',
+  },
+
+  // ── Direction Cards (Borrowed vs Lent)
+  directionRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  directionCard: {
+    flex: 1,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    padding: 14,
+    alignItems: 'center',
     position: 'relative',
   },
-  typeIconCircle: {
-    width: 48, height: 48, borderRadius: 24,
-    alignItems: 'center', justifyContent: 'center', marginBottom: 8,
-  },
-  typeEmoji: { fontSize: 22 },
-  typeBtnLabel: { fontSize: 14, fontWeight: '700', marginBottom: 3 },
-  typeBtnDesc: { fontSize: 11, textAlign: 'center' },
-  typeCheck: {
-    position: 'absolute', top: 8, right: 8,
-    width: 18, height: 18, borderRadius: 9,
-    alignItems: 'center', justifyContent: 'center',
-  },
-
-  // ── Loan Picker
-  loanPickerBtn: {
-    borderWidth: 1.5, borderRadius: 14, padding: 14, marginBottom: 8,
-  },
-  loanPickerTop: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-  },
-  loanPickerLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  loanPickerRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  loanPickerName: { fontSize: 15, fontWeight: '700' },
-  loanPickerSub: { fontSize: 12, marginTop: 1 },
-  loanPickerPlaceholderRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  loanPickerPlaceholder: { flex: 1, fontSize: 14 },
-  loanTypeIcon: {
-    width: 40, height: 40, borderRadius: 20,
-    alignItems: 'center', justifyContent: 'center',
-  },
-
-  // Status badge
-  statusBadge: { borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2 },
-  statusText: { fontSize: 10, fontWeight: '700', letterSpacing: 0.5 },
-
-  // Progress bar
-  progressTrack: { height: 4, borderRadius: 2, overflow: 'hidden' },
-  progressFill: { height: 4, borderRadius: 2 },
-  progressLabels: { flexDirection: 'row', justifyContent: 'space-between' },
-  progressLabel: { fontSize: 11 },
-
-  // ── Summary Card
-  summaryCard: {
-    flexDirection: 'row', alignItems: 'center',
-    borderRadius: 14, borderWidth: 1, padding: 16, marginBottom: 16,
-  },
-  summaryCol: { flex: 1, alignItems: 'center' },
-  summaryLabel: { fontSize: 11, fontWeight: '600', marginBottom: 4 },
-  summaryAmt: { fontSize: 15, fontWeight: '700' },
-  summaryDivider: { width: 1, height: 32, marginHorizontal: 4 },
-
-  // ── Dropdown (shared)
-  dropdown: { borderWidth: 1, borderRadius: 14, overflow: 'hidden', marginBottom: 12, maxHeight: 220 },
-  dropdownItem: {
-    flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: 14, paddingVertical: 12, gap: 10, borderBottomWidth: 1,
-  },
-  dropdownInfo: { flex: 1 },
-  dropdownName: { fontSize: 14, fontWeight: '600', marginBottom: 2 },
-  dropdownSub: { fontSize: 12 },
-  dropdownBal: { fontSize: 13, fontWeight: '700' },
-  dropdownProgress: { height: 3, borderRadius: 2, marginTop: 5, overflow: 'hidden' },
-  dropdownProgressFill: { height: 3, borderRadius: 2 },
-  dropdownEmptyWrap: { alignItems: 'center', paddingVertical: 20 },
-  dropdownEmpty: { fontSize: 13 },
-
-  // ── Account Picker
-  pickerBtn: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    borderWidth: 1.5, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 12,
+  directionIconCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
     marginBottom: 8,
   },
-  pickerRow: { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 },
-  acctDot: { width: 8, height: 8, borderRadius: 4 },
-  acctIconWrap: {
-    width: 38, height: 38, borderRadius: 10,
-    alignItems: 'center', justifyContent: 'center',
+  directionTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    marginBottom: 2,
   },
-  acctInfo: { flex: 1 },
-  acctName: { fontSize: 14, fontWeight: '700' },
-  acctType: { fontSize: 12, marginTop: 1 },
-  acctPlaceholder: { flex: 1, fontSize: 14 },
-  balancePill: { borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 },
-  balancePillText: { fontSize: 12, fontWeight: '700' },
+  directionSubtitle: {
+    fontSize: 11,
+    fontWeight: '500',
+    textAlign: 'center',
+  },
+  directionCheck: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+  },
 
-  // ── Note + Date group card
-  groupCard: {
-    borderRadius: 14, borderWidth: 1,
-    paddingHorizontal: 14, paddingTop: 14,
-    marginBottom: 16, overflow: 'hidden',
+  // ── Amount Hero Input
+  heroAmountInput: {
+    height: 58,
+    fontSize: 26,
+    fontWeight: '800',
+    paddingVertical: 12,
   },
-  groupDivider: { height: 1, marginHorizontal: -14, marginBottom: 4 },
+
+  // ── Selected Loan Hero Card (Repayment Mode)
+  selectedLoanCard: {
+    borderRadius: 16,
+    borderWidth: 1,
+    padding: 16,
+    gap: 14,
+  },
+  selectedLoanTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  selectedLoanPerson: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flex: 1,
+  },
+  selectedLoanIconWrap: {
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  selectedLoanName: {
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  selectedLoanSub: {
+    fontSize: 12,
+    marginTop: 1,
+  },
+  switchLoanBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  switchLoanText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+
+  // Progress Bar
+  progressContainer: {
+    gap: 6,
+  },
+  progressTrack: {
+    height: 5,
+    borderRadius: 3,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: 5,
+    borderRadius: 3,
+  },
+  progressLabelRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  progressLabelText: {
+    fontSize: 11,
+    fontWeight: '500',
+  },
+
+  // Stats
+  loanStatsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderTopWidth: StyleSheet.hairlineWidth,
+    paddingTop: 12,
+  },
+  loanStatCol: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  loanStatLabel: {
+    fontSize: 11,
+    fontWeight: '500',
+    marginBottom: 2,
+  },
+  loanStatVal: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  loanStatDivider: {
+    width: StyleSheet.hairlineWidth,
+    height: 24,
+  },
+
+  // Quick Fill Button
+  quickFillBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 10,
+    borderWidth: 1,
+    marginTop: -8,
+  },
+  quickFillText: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+
+  // Note Input
+  noteInput: {
+    minHeight: 64,
+    textAlignVertical: 'top',
+  },
+
+  // Empty State
+  emptyStateCard: {
+    borderRadius: 16,
+    borderWidth: 1,
+    padding: 24,
+    alignItems: 'center',
+    gap: 10,
+  },
+  emptyIconCircle: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyTitle: {
+    fontSize: 17,
+    fontWeight: '700',
+  },
+  emptySubtitle: {
+    fontSize: 13,
+    textAlign: 'center',
+    lineHeight: 18,
+  },
+  emptyActionBtn: {
+    marginTop: 6,
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderRadius: 10,
+  },
+  emptyActionBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+
+  // Pinned Footer
+  pinnedFooter: {
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+
+  // Modal Sheet
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    justifyContent: 'flex-end',
+  },
+  modalSheet: {
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    borderWidth: 1,
+    maxHeight: '75%',
+    paddingBottom: 24,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  modalTitle: {
+    fontSize: 17,
+    fontWeight: '700',
+  },
+  modalCloseBtn: {
+    width: 32,
+    height: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalList: {
+    padding: 16,
+    gap: 10,
+  },
+  modalLoanItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    gap: 10,
+  },
+  modalLoanIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalLoanInfo: {
+    flex: 1,
+  },
+  modalLoanName: {
+    fontSize: 15,
+    fontWeight: '700',
+    marginBottom: 2,
+  },
+  modalLoanType: {
+    fontSize: 12,
+  },
+  modalLoanRight: {
+    alignItems: 'flex-end',
+  },
+  modalLoanRem: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  modalLoanRemLabel: {
+    fontSize: 11,
+    marginTop: 1,
+  },
 });

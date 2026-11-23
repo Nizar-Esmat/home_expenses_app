@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/theme/ThemeContext';
 import { getAccountById, addAccount, updateAccount, getSettings } from '@/services/database';
 import { formatCurrency } from '@/services/constants';
@@ -18,6 +19,7 @@ import { ACCOUNT_TYPE_LABELS, ACCOUNT_TYPE_ICONS } from '@/components/AccountPic
 import AppInput from '@/components/AppInput';
 import AppButton from '@/components/AppButton';
 import { useAppDialog } from '@/components/AppDialog';
+import ScreenHeader from '@/components/ScreenHeader';
 
 const PRESET_COLORS = [
   '#10B981', '#3B82F6', '#8B5CF6', '#F59E0B',
@@ -36,6 +38,7 @@ const ACCOUNT_TYPES: AccountType[] = ['cash', 'bank_account', 'e_wallet'];
 export default function AddEditAccountScreen() {
   const { colors } = useTheme();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { showDialog } = useAppDialog();
   const { accountId } = useLocalSearchParams<{ accountId?: string }>();
   const isEdit = !!accountId;
@@ -147,22 +150,7 @@ export default function AddEditAccountScreen() {
       style={[styles.screen, { backgroundColor: colors.background }]}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      {/* Header */}
-      <View style={[styles.header, { borderBottomColor: colors.border }]}>
-        <TouchableOpacity
-          onPress={() => router.back()}
-          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-          accessibilityRole="button"
-          accessibilityLabel="Go back"
-          style={styles.backBtn}
-        >
-          <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
-        </TouchableOpacity>
-        <Text style={[styles.title, { color: colors.textPrimary }]} accessibilityRole="header">
-          {isEdit ? 'Edit Account' : 'New Account'}
-        </Text>
-        <View style={{ width: 44 }} />
-      </View>
+      <ScreenHeader title={isEdit ? 'Edit Account' : 'New Account'} />
 
       <ScrollView
         contentContainerStyle={styles.content}
@@ -339,39 +327,37 @@ export default function AddEditAccountScreen() {
           })}
         </View>
 
-        {/* Action Button */}
-        <View style={styles.buttonWrap}>
-          <AppButton
-            label={isEdit ? 'Update Account' : 'Create Account'}
-            onPress={save}
-            loading={loading}
-          />
-        </View>
-
-        <View style={{ height: 32 }} />
+        <View style={{ height: 16 }} />
       </ScrollView>
+
+      <View
+        style={[
+          styles.pinnedFooter,
+          {
+            backgroundColor: colors.background,
+            borderTopColor: colors.border,
+            paddingBottom: Math.max(insets.bottom, 12),
+          },
+        ]}
+      >
+        <AppButton
+          label={isEdit ? 'Update Account' : 'Create Account'}
+          onPress={save}
+          loading={loading}
+        />
+      </View>
     </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
   screen: { flex: 1 },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-  },
-  backBtn: {
-    width: 44,
-    height: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  title: { fontSize: 18, fontWeight: '700' },
   content: { padding: 20 },
+  pinnedFooter: {
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
 
   // Live Preview Card
   preview: {
@@ -481,5 +467,4 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
 
-  buttonWrap: { marginTop: 8 },
 });
