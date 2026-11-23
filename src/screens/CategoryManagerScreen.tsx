@@ -10,11 +10,19 @@ import {
   getCategories, addCategory, updateCategory, deleteCategory,
   getCategoryUsageCounts,
 } from '@/services/database';
-import { EMOJI_GROUPS, CATEGORY_COLORS } from '@/services/constants';
+import { CATEGORY_COLORS } from '@/services/constants';
 import { Category } from '@/types';
 import CategoryCard from '@/components/CategoryCard';
 import { useAppDialog } from '@/components/AppDialog';
 import ScreenHeader from '@/components/ScreenHeader';
+import { EmojiKeyboard, type EmojiType } from '@softwhere-uz/react-native-emoji-keyboard';
+import { getEmojiKeyboardTheme } from '@/components/AppEmojiPicker';
+
+const QUICK_CATEGORY_EMOJIS = [
+  '🍔', '💡', '🚗', '🛍️', '🏠', '📦',
+  '☕', '🍕', '🎮', '💊', '✈️', '🎬',
+  '📚', '🏋️', '💼', '💰', '🐾', '🎁',
+];
 
 // ── Modal state type ──────────────────────────────────────────
 
@@ -24,7 +32,6 @@ interface FormState {
   name: string;
   emoji: string;
   color: string;
-  emojiGroup: number;
   saving: boolean;
   nameError: string;
 }
@@ -35,7 +42,6 @@ const INITIAL_FORM: FormState = {
   name: '',
   emoji: '📦',
   color: CATEGORY_COLORS[0],
-  emojiGroup: 0,
   saving: false,
   nameError: '',
 };
@@ -76,7 +82,6 @@ export default function CategoryManagerScreen() {
       name: cat.name,
       emoji: cat.emoji,
       color: cat.color,
-      emojiGroup: 0,
       saving: false,
       nameError: '',
     });
@@ -271,7 +276,46 @@ interface FormProps {
 
 function CategoryForm({ form, setField, onSave, onClose, colors }: FormProps) {
   const isBuiltIn = form.target?.isDefault === 1;
-  const currentGroup = EMOJI_GROUPS[form.emojiGroup];
+  const [isBrowsingEmojis, setIsBrowsingEmojis] = useState(false);
+
+  if (isBrowsingEmojis) {
+    return (
+      <View style={styles.browsingContainer}>
+        {/* Sheet handle */}
+        <View style={[styles.handle, { backgroundColor: colors.border }]} />
+
+        {/* Header row */}
+        <View style={styles.sheetHeader}>
+          <TouchableOpacity
+            onPress={() => setIsBrowsingEmojis(false)}
+            style={styles.backBtn}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            accessibilityRole="button"
+            accessibilityLabel="Back to Category"
+          >
+            <Ionicons name="arrow-back" size={20} color={colors.primary} />
+            <Text style={[styles.backBtnText, { color: colors.primary }]}>Back</Text>
+          </TouchableOpacity>
+          <Text style={[styles.sheetTitle, { color: colors.textPrimary }]}>Choose Emoji</Text>
+          <View style={{ width: 44 }} />
+        </View>
+
+        <View style={styles.keyboardWrapper}>
+          <EmojiKeyboard
+            onEmojiSelected={(e: EmojiType) => {
+              setField('emoji', e.emoji);
+              setIsBrowsingEmojis(false);
+            }}
+            enableSearchBar
+            enableRecentlyUsed
+            categoryPosition="top"
+            defaultHeight={380}
+            theme={getEmojiKeyboardTheme(colors)}
+          />
+        </View>
+      </View>
+    );
+  }
 
   return (
     <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
@@ -297,17 +341,28 @@ function CategoryForm({ form, setField, onSave, onClose, colors }: FormProps) {
 
       {/* Preview badge */}
       <View style={styles.previewRow}>
-        <View style={[styles.previewBadge, { backgroundColor: form.color }]}>
+        <TouchableOpacity
+          onPress={() => setIsBrowsingEmojis(true)}
+          style={[styles.previewBadge, { backgroundColor: form.color }]}
+          accessibilityRole="button"
+          accessibilityLabel="Browse all emojis"
+        >
           <Text style={styles.previewEmoji}>{form.emoji}</Text>
-        </View>
+        </TouchableOpacity>
         <View style={styles.previewInfo}>
           <Text style={[styles.previewName, { color: colors.textPrimary, textAlign: 'auto' }]}>
             {form.name || 'Category Name'}
           </Text>
-          {isBuiltIn && (
+          {isBuiltIn ? (
             <Text style={[styles.previewSub, { color: colors.textSecondary }]}>
               Built-in · emoji & color only
             </Text>
+          ) : (
+            <TouchableOpacity onPress={() => setIsBrowsingEmojis(true)}>
+              <Text style={[styles.previewSub, { color: colors.primary, fontWeight: '600' }]}>
+                Tap badge to search all emojis →
+              </Text>
+            </TouchableOpacity>
           )}
         </View>
       </View>
@@ -377,44 +432,23 @@ function CategoryForm({ form, setField, onSave, onClose, colors }: FormProps) {
 
       {/* Emoji picker */}
       <View style={styles.field}>
-        <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>Icon</Text>
+        <View style={styles.iconFieldHeader}>
+          <Text style={[styles.fieldLabel, { color: colors.textSecondary, marginBottom: 0 }]}>Icon</Text>
+          <TouchableOpacity
+            onPress={() => setIsBrowsingEmojis(true)}
+            style={[styles.browseAllBtn, { backgroundColor: colors.inputFill }]}
+            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+            accessibilityRole="button"
+            accessibilityLabel="Search all emojis"
+          >
+            <Ionicons name="search" size={14} color={colors.primary} />
+            <Text style={[styles.browseAllText, { color: colors.primary }]}>Search All Emojis</Text>
+          </TouchableOpacity>
+        </View>
 
-        {/* Group tabs */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={styles.groupTabScroll}
-          contentContainerStyle={styles.groupTabContent}
-        >
-          {EMOJI_GROUPS.map((g, i) => {
-            const isSelected = form.emojiGroup === i;
-            return (
-              <TouchableOpacity
-                key={g.label}
-                onPress={() => setField('emojiGroup', i)}
-                style={[
-                  styles.groupTab,
-                  { backgroundColor: isSelected ? colors.primary : colors.inputFill },
-                ]}
-                accessibilityRole="tab"
-                accessibilityState={{ selected: isSelected }}
-                accessibilityLabel={g.label}
-              >
-                <Text style={styles.groupTabEmoji}>{g.icon}</Text>
-                <Text style={[
-                  styles.groupTabLabel,
-                  { color: isSelected ? colors.onPrimary : colors.textSecondary },
-                ]}>
-                  {g.label}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
-
-        {/* Emoji grid */}
+        {/* Quick emoji grid */}
         <View style={styles.emojiGrid}>
-          {currentGroup.emojis.map((em) => {
+          {QUICK_CATEGORY_EMOJIS.map((em) => {
             const isSelected = form.emoji === em;
             return (
               <TouchableOpacity
@@ -519,17 +553,36 @@ const styles = StyleSheet.create({
   },
   colorHex: { fontSize: 11, marginTop: 8, letterSpacing: 0.5 },
 
-  groupTabScroll: { marginBottom: 12 },
-  groupTabContent: { gap: 8, paddingBottom: 4 },
-  groupTab: {
-    flexDirection: 'row', alignItems: 'center', gap: 4,
-    paddingHorizontal: 14, minHeight: 44, borderRadius: 22,
+  iconFieldHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
   },
-  groupTabEmoji: { fontSize: 14 },
-  groupTabLabel: { fontSize: 12, fontWeight: '600' },
-  emojiGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 4 },
+  browseAllBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 12,
+  },
+  browseAllText: { fontSize: 12, fontWeight: '700' },
+
+  browsingContainer: { minHeight: 460 },
+  backBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    minHeight: 44,
+    paddingRight: 8,
+  },
+  backBtnText: { fontSize: 15, fontWeight: '600' },
+  keyboardWrapper: { height: 400, overflow: 'hidden' },
+
+  emojiGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   emojiCell: {
-    width: '13%', aspectRatio: 1, minHeight: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 10,
+    width: '14.5%', aspectRatio: 1, minHeight: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 10,
   },
   emojiCellSelected: {
     borderWidth: 2, backgroundColor: '#00000015',

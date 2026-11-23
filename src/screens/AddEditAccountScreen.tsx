@@ -20,6 +20,7 @@ import AppInput from '@/components/AppInput';
 import AppButton from '@/components/AppButton';
 import { useAppDialog } from '@/components/AppDialog';
 import ScreenHeader from '@/components/ScreenHeader';
+import AppEmojiPicker from '@/components/AppEmojiPicker';
 
 const PRESET_COLORS = [
   '#10B981', '#3B82F6', '#8B5CF6', '#F59E0B',
@@ -50,6 +51,7 @@ export default function AddEditAccountScreen() {
   const [type, setType] = useState<AccountType>('cash');
   const [icon, setIcon] = useState('💵');
   const [color, setColor] = useState(PRESET_COLORS[0]!);
+  const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
 
   const [nameError, setNameError] = useState('');
   const [balanceError, setBalanceError] = useState('');
@@ -295,6 +297,43 @@ export default function AddEditAccountScreen() {
               </TouchableOpacity>
             );
           })}
+
+          {!PRESET_ICONS[type].includes(icon) && (
+            <TouchableOpacity
+              style={[
+                styles.iconOption,
+                {
+                  backgroundColor: color + '25',
+                  borderColor: color,
+                },
+              ]}
+              onPress={() => {}}
+              activeOpacity={0.75}
+              hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
+              accessibilityRole="button"
+              accessibilityLabel={`Selected icon ${icon}`}
+            >
+              <Text style={styles.iconEmoji}>{icon}</Text>
+            </TouchableOpacity>
+          )}
+
+          <TouchableOpacity
+            style={[
+              styles.iconOption,
+              styles.moreIconBtn,
+              {
+                backgroundColor: colors.inputFill,
+                borderColor: colors.border,
+              },
+            ]}
+            onPress={() => setEmojiPickerOpen(true)}
+            activeOpacity={0.75}
+            accessibilityRole="button"
+            accessibilityLabel="Browse more emojis"
+          >
+            <Ionicons name="search" size={16} color={colors.primary} />
+            <Text style={[styles.moreIconText, { color: colors.primary }]}>More</Text>
+          </TouchableOpacity>
         </View>
 
         {/* Color selector */}
@@ -346,6 +385,12 @@ export default function AddEditAccountScreen() {
           loading={loading}
         />
       </View>
+
+      <AppEmojiPicker
+        open={emojiPickerOpen}
+        onClose={() => setEmojiPickerOpen(false)}
+        onSelect={(selectedEmoji) => setIcon(selectedEmoji)}
+      />
     </KeyboardAvoidingView>
   );
 }
@@ -449,6 +494,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
+  },
+  moreIconBtn: {
+    flexDirection: 'row',
+    gap: 4,
+    paddingHorizontal: 8,
+    width: 'auto',
+    minWidth: 68,
+  },
+  moreIconText: {
+    fontSize: 12,
+    fontWeight: '700',
   },
   iconEmoji: { fontSize: 22 },
 
