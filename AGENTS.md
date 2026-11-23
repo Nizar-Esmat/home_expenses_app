@@ -26,8 +26,12 @@ Expo SDK 54 / React Native 0.81 / TypeScript app. 100% offline — all data in l
 ### Database (`src/services/database/`)
 
 - **`client.ts`** — lazy singleton `getDb()`, schema creation, migrations, seed data
-- **Schema versioning**: `PRAGMA user_version` in `client.ts` (`SCHEMA_VERSION = 3`). Migrations drop old financial tables and recreate — no incremental migration framework
+- **Schema versioning**: `PRAGMA user_version` in `client.ts` (`SCHEMA_VERSION = 6`). Migrations are incremental and non-destructive via `src/services/database/migrations.ts`
+- **Foreign keys**: `PRAGMA foreign_keys = ON;` is enforced on every database connection
+- **Time-sortable UUIDv7**: Entities (`accounts`, `transactions`, `transfers`, `loans`) have `uuid TEXT UNIQUE` generated via RFC 9562 UUIDv7 for deterministic backup deduplication and optimal B-tree indexing
+- **Direct SQLite Aggregations (`analytics.ts`)**: Category spending, daily summaries, quick KPI insights, and top expenses are computed directly in SQLite using indexable date-range queries (`>= startIso AND < endIso`), avoiding in-memory array allocations
 - **Unified `transactions` table** with `type` column (`'EXPENSE' | 'INCOME'`) and `amountMinor` (integer cents). Separate `transaction_items` table for sub-items. **Legacy `expenses`/`incomes` tables no longer exist** — the old copilot instructions referencing them are stale
+- **Cash movements view (`v_cash_movements`) & triggers**: Unified view across transactions and transfers, plus SQLite validation triggers enforcing account types, transaction types, and distinct transfer accounts
 - **`accounts` table**: `openingBalanceMinor` / `currentBalanceMinor` (cents). `isDefault=1` accounts cannot be deleted. Account types stored as `'CASH' | 'BANK' | 'EWALLET'` in DB but typed as `'cash' | 'bank_account' | 'e_wallet'` in TS — conversion in `helpers.ts`
 - **`categories` table**: unified for both expense and income, keyed by `(type, name)`. `isDefault=1` categories cannot be renamed/deleted. Custom category renames cascade to all referencing transactions in the same transaction
 - **`transfers` table**: between accounts, optional fee with separate `feeAccountId`
@@ -40,7 +44,7 @@ Screens use `useFocusEffect(useCallback(() => { loadData(); }, []))` to reload o
 ### Theme system (`src/theme/`)
 
 - Always use `colors.*` from `useTheme()` — **never hardcode hex values in components**
-- 9 palettes in `colors.ts`: grey, green, blue, purple, orange, red, teal, pink, yellow
+- 10 palettes in `colors.ts`: grey, green, blue, purple, orange, red, teal, pink, yellow, lime
 - Theme mode and palette persisted in SQLite `settings` table
 - `toggleTheme()` cycles through `'light' | 'dark' | 'system'`
 
@@ -72,6 +76,7 @@ Configured in both `tsconfig.json` and `babel.config.cjs` (via `module-resolver`
 
 ## Known gotchas
 
-- Schema migrations are **destructive** (drop + recreate financial tables) when `user_version < SCHEMA_VERSION` — any change to `SCHEMA_VERSION` will wipe user financial data
+- Schema migrations are **incremental and non-destructive** via `src/services/database/migrations.ts` — tables are never dropped on version bumps
+- Foreign keys are enforced at runtime via `PRAGMA foreign_keys = ON;` in `client.ts`
 - The `android/` directory is in `.gitignore` — use `npx expo prebuild` to regenerate
 - Default currency is `EGP` — hardcoded in `client.ts`

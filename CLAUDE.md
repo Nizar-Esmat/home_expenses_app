@@ -33,24 +33,28 @@ Modal screens (`add-expense`, `add-income`) are presented via `router.push()`.
 
 ### Database — SQLite (`expo-sqlite`)
 
-**File:** `budgetbuddy.db` · **Schema version:** `PRAGMA user_version` (currently 3)
+**File:** `budgetbuddy.db` · **Schema version:** `PRAGMA user_version` (currently 6)
 
 | Table | Purpose |
 |---|---|
 | `settings` | User preferences: themeMode, colorPalette, currency |
-| `accounts` | Cash/bank/e-wallet accounts with balances |
+| `accounts` | Cash/bank/e-wallet accounts with balances and UUIDv7 |
 | `categories` | Expense categories with emoji, color, isDefault |
-| `transactions` | Unified table for expenses and incomes (`type = 'EXPENSE' \| 'INCOME'`) |
+| `transactions` | Unified table for expenses and incomes (`type = 'EXPENSE' \| 'INCOME'`) with UUIDv7 |
 | `transaction_items` | Sub-items for multi-category transactions |
-| `transfers` | Inter-account transfers with optional fees |
+| `transfers` | Inter-account transfers with optional fees and UUIDv7 |
+| `loans` / `loan_repayments` | Debt tracking with balance adjustments and UUIDv7 |
+| `v_cash_movements` | Unified view across transactions and transfers |
 
 **Singleton:** `getDb()` in `src/services/database/client.ts` returns the single DB instance and runs schema creation/migrations on first call.
 
 **Critical conventions:**
 - **Money is stored as integer minor units (cents):** always use `toMinorUnits()` / `fromMinorUnits()` from `src/services/database/helpers.ts`
 - **Booleans are INTEGER:** compare with `=== 1` / `=== 0`, never `=== true`
-- **Migrations are destructive:** when `user_version < SCHEMA_VERSION`, financial tables are dropped and recreated — all user data is wiped. Take care when changing `SCHEMA_VERSION`
-- Default currency is `EGP` (hardcoded in `client.ts`)
+- **Migrations are incremental:** defined in `src/services/database/migrations.ts` — never drop financial tables when advancing `SCHEMA_VERSION`
+- **Foreign keys are enforced:** `PRAGMA foreign_keys = ON;` is executed on initialization
+- **SQLite Analytics:** Reporting aggregations run in SQLite via `src/services/database/analytics.ts` (`getCategorySpendingSql`, `getDailySpendingSummarySql`, `getQuickInsightsSql`, `getTopExpensesSql`)
+- **Default currency is `EGP`** (hardcoded in `client.ts`)
 
 All database modules are re-exported from `src/services/database/index.ts`.
 
