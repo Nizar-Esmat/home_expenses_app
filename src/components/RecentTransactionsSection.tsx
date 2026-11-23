@@ -44,7 +44,7 @@ export default function RecentTransactionsSection({
 
   return (
     <View>
-      <View style={[styles.headerRow, { borderTopColor: colors.border }]}>
+      <View style={styles.headerRow}>
         <View style={styles.headerLeft}>
           <Text style={[styles.headerTitle, { color: colors.textPrimary }]} accessibilityRole="header">
             Recent Transactions
@@ -119,8 +119,7 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     justifyContent: 'space-between',
     marginBottom: 12,
-    borderTopWidth: 1,
-    paddingTop: 12,
+    marginTop: 14,
     gap: 12,
   },
   headerLeft: { flex: 1 },

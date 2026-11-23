@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, StyleProp, ViewStyle } from 'react-native';
 import { useTheme } from '@/theme/ThemeContext';
 
 interface Props {
@@ -7,6 +7,7 @@ interface Props {
   spent: string;
   net: string;
   currency?: string;
+  style?: StyleProp<ViewStyle>;
 }
 
 export default function MonthlySummaryCard({
@@ -14,6 +15,7 @@ export default function MonthlySummaryCard({
   spent,
   net,
   currency = 'EGP',
+  style,
 }: Props) {
   const { colors } = useTheme();
 
@@ -57,7 +59,7 @@ export default function MonthlySummaryCard({
 
   return (
     <View
-      style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}
+      style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }, style]}
       accessible={true}
       accessibilityRole="summary"
       accessibilityLabel={`Monthly summary: Net savings ${netText}, Income ${incomeText}, Spent ${spentText}`}

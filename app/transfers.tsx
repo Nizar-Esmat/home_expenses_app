@@ -1,15 +1,6 @@
-import { StyleSheet } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { useTheme } from '@/theme/ThemeContext';
-import TransfersScreen from '@/screens/TransfersScreen';
+import React from 'react';
+import { Redirect } from 'expo-router';
 
 export default function TransfersPage() {
-  const { colors } = useTheme();
-  return (
-    <SafeAreaView style={[styles.safe, { backgroundColor: colors.background }]}> 
-      <TransfersScreen />
-    </SafeAreaView>
-  );
+  return <Redirect href={{ pathname: '/all-transactions', params: { typeFilter: 'transfer' } }} />;
 }
-
-const styles = StyleSheet.create({ safe: { flex: 1 } });

@@ -39,8 +39,8 @@ function RootLayoutNav() {
       <View style={{ flex: 1, backgroundColor: colors.background }}>
         <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.background } }}>
           <Stack.Screen name="(tabs)" />
-          <Stack.Screen name="add-expense" options={{ presentation: 'modal' }} />
-          <Stack.Screen name="add-income" options={{ presentation: 'modal' }} />
+          <Stack.Screen name="add-expense" />
+          <Stack.Screen name="add-income" />
           <Stack.Screen name="daily-spending" />
           <Stack.Screen name="category-spending" />
           <Stack.Screen name="all-transactions" />
@@ -51,7 +51,7 @@ function RootLayoutNav() {
           <Stack.Screen name="transfer" />
           <Stack.Screen name="transfers" />
           <Stack.Screen name="loans" />
-          <Stack.Screen name="add-loan" options={{ presentation: 'modal' }} />
+          <Stack.Screen name="add-loan" />
         </Stack>
       </View>
     </DialogProvider>

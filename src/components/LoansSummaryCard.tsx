@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, StyleProp, ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/theme/ThemeContext';
 
@@ -8,6 +8,7 @@ interface Props {
   totalLent: number;
   currency: string;
   onPress: () => void;
+  style?: StyleProp<ViewStyle>;
 }
 
 function fmtAmt(amount: number, currency: string): string {
@@ -18,12 +19,12 @@ function fmtAmt(amount: number, currency: string): string {
   })}`;
 }
 
-export default function LoansSummaryCard({ totalBorrowed, totalLent, currency, onPress }: Props) {
+export default function LoansSummaryCard({ totalBorrowed, totalLent, currency, onPress, style }: Props) {
   const { colors } = useTheme();
 
   return (
     <TouchableOpacity
-      style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}
+      style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }, style]}
       onPress={onPress}
       activeOpacity={0.8}
       accessibilityRole="button"
@@ -58,8 +59,9 @@ export default function LoansSummaryCard({ totalBorrowed, totalLent, currency, o
 
 const styles = StyleSheet.create({
   card: {
-    borderRadius: 16, borderWidth: 1,
-    padding: 16, marginBottom: 16,
+    borderRadius: 16,
+    borderWidth: 1,
+    padding: 16,
   },
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',

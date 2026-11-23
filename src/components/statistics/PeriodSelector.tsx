@@ -109,6 +109,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 24,
     fontWeight: '700',
+    letterSpacing: -0.4,
   },
   selector: {
     flexDirection: 'row',
