@@ -1,9 +1,11 @@
 import { Account, AccountType } from '@/types';
 import { getDb } from './client';
 import { fromDbAccountType, fromMinorUnits, nowIso, toDbAccountType, toMinorUnits } from './helpers';
+import { generateUuidV7 } from './uuid';
 
 interface AccountRow {
   id: number;
+  uuid?: string;
   name: string;
   type: string;
   openingBalanceMinor: number;
@@ -49,6 +51,7 @@ const DELTA_SQL = `
 function toAccount(row: AccountRow): Account {
   return {
     id: row.id,
+    uuid: row.uuid,
     name: row.name,
     type: fromDbAccountType(row.type),
     openingBalance: fromMinorUnits(row.openingBalanceMinor),
@@ -166,11 +169,13 @@ export async function addAccount(input: AddAccountInput): Promise<number> {
 
   await db.withTransactionAsync(async () => {
     // 1. Create the account with 0 opening balance
+    const accUuid = generateUuidV7();
     const result = await db.runAsync(
       `INSERT INTO accounts
-         (name, type, currencyCode, openingBalanceMinor, currentBalanceMinor, icon, color, isPrimary, isArchived, createdAt, updatedAt)
-       VALUES (?, ?, 'EGP', 0, 0, ?, ?, 0, 0, ?, ?)`,
+         (uuid, name, type, currencyCode, openingBalanceMinor, currentBalanceMinor, icon, color, isPrimary, isArchived, createdAt, updatedAt)
+       VALUES (?, ?, ?, 'EGP', 0, 0, ?, ?, 0, 0, ?, ?)`,
       [
+        accUuid,
         input.name.trim(),
         toDbAccountType(input.type),
         input.icon ?? null,
@@ -197,11 +202,13 @@ export async function addAccount(input: AddAccountInput): Promise<number> {
         category = { id: catRes.lastInsertRowId };
       }
 
+      const txUuid = generateUuidV7();
       await db.runAsync(
         `INSERT INTO transactions
-           (accountId, categoryId, type, amountMinor, currencyCode, title, note, transactionDate, createdAt, updatedAt)
-         VALUES (?, ?, 'INCOME', ?, 'EGP', ?, ?, ?, ?, ?)`,
+           (uuid, accountId, categoryId, type, amountMinor, currencyCode, title, note, transactionDate, createdAt, updatedAt)
+         VALUES (?, ?, ?, 'INCOME', ?, 'EGP', ?, ?, ?, ?, ?)`,
         [
+          txUuid,
           newAccountId,
           category.id,
           startingMinor,
@@ -266,7 +273,7 @@ export async function unarchiveAccount(id: number): Promise<void> {
   await db.runAsync('UPDATE accounts SET isArchived = 0, updatedAt = ? WHERE id = ?', [nowIso(), id]);
 }
 
-export type CanDeleteReason = 'default' | 'has_expenses' | 'has_incomes' | 'has_transfers';
+export type CanDeleteReason = 'default' | 'has_expenses' | 'has_incomes' | 'has_transfers' | 'has_loans';
 
 /** Returns whether the account can be safely deleted, and why not if it cannot. */
 export async function canDeleteAccount(id: number): Promise<{ ok: boolean; reason?: CanDeleteReason }> {
@@ -275,23 +282,33 @@ export async function canDeleteAccount(id: number): Promise<{ ok: boolean; reaso
   if (!account) return { ok: false };
   if (account.isDefault === 1) return { ok: false, reason: 'default' };
 
+  // Check ALL referencing transactions (including soft-deleted) to prevent foreign key violations
   const expRow = await db.getFirstAsync<{ n: number }>(
-    "SELECT COUNT(*) AS n FROM transactions WHERE accountId = ? AND type = 'EXPENSE' AND deletedAt IS NULL",
+    "SELECT COUNT(*) AS n FROM transactions WHERE accountId = ? AND type = 'EXPENSE'",
     [id],
   );
-  if ((expRow?.n ?? 1) > 0) return { ok: false, reason: 'has_expenses' };
+  if ((expRow?.n ?? 0) > 0) return { ok: false, reason: 'has_expenses' };
 
   const incRow = await db.getFirstAsync<{ n: number }>(
-    "SELECT COUNT(*) AS n FROM transactions WHERE accountId = ? AND type = 'INCOME' AND deletedAt IS NULL",
+    "SELECT COUNT(*) AS n FROM transactions WHERE accountId = ? AND type = 'INCOME'",
     [id],
   );
-  if ((incRow?.n ?? 1) > 0) return { ok: false, reason: 'has_incomes' };
+  if ((incRow?.n ?? 0) > 0) return { ok: false, reason: 'has_incomes' };
 
   const trRow = await db.getFirstAsync<{ n: number }>(
-    'SELECT COUNT(*) AS n FROM transfers WHERE (fromAccountId = ? OR toAccountId = ? OR feeAccountId = ?) AND deletedAt IS NULL',
+    'SELECT COUNT(*) AS n FROM transfers WHERE fromAccountId = ? OR toAccountId = ? OR feeAccountId = ?',
     [id, id, id],
   );
-  if ((trRow?.n ?? 1) > 0) return { ok: false, reason: 'has_transfers' };
+  if ((trRow?.n ?? 0) > 0) return { ok: false, reason: 'has_transfers' };
+
+  const loanRow = await db.getFirstAsync<{ n: number }>(
+    `SELECT (
+       (SELECT COUNT(*) FROM loans WHERE accountId = ?) +
+       (SELECT COUNT(*) FROM loan_repayments WHERE accountId = ?)
+     ) AS n`,
+    [id, id],
+  );
+  if ((loanRow?.n ?? 0) > 0) return { ok: false, reason: 'has_loans' };
 
   return { ok: true };
 }

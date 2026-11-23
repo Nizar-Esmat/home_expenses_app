@@ -1,8 +1,9 @@
 import * as SQLite from 'expo-sqlite';
 import { DEFAULT_CATEGORY_COLORS } from '@/services/constants';
 import { nowIso } from './helpers';
+import { populateSampleData } from './seedSampleData';
+import { runMigrations, SCHEMA_VERSION } from './migrations';
 
-const SCHEMA_VERSION = 4;
 const DEFAULT_CURRENCY = 'EGP';
 
 let _db: SQLite.SQLiteDatabase | null = null;
@@ -30,12 +31,29 @@ export async function getDb(): Promise<SQLite.SQLiteDatabase> {
 // ── Schema ────────────────────────────────────────────────────
 
 async function initDb(db: SQLite.SQLiteDatabase): Promise<void> {
-  await db.execAsync('PRAGMA journal_mode = WAL;');
+  await db.execAsync(`
+    PRAGMA journal_mode = WAL;
+    PRAGMA foreign_keys = ON;
+  `);
   await runMigrations(db);
   await createSchema(db);
   await seedCategories(db);
   await seedIncomeCategories(db);
   await seedDefaultAccount(db);
+
+  const sampleSeeded = await db.getFirstAsync<{ value: string }>(
+    "SELECT value FROM settings WHERE key = 'hasSeededSampleData'",
+  );
+  if (!sampleSeeded) {
+    const txCount = await db.getFirstAsync<{ n: number }>('SELECT COUNT(*) AS n FROM transactions');
+    if (!txCount || txCount.n === 0) {
+      await populateSampleData(db);
+    }
+    await db.runAsync(
+      "INSERT OR REPLACE INTO settings (key, value) VALUES ('hasSeededSampleData', '1')",
+    );
+  }
+
   await db.execAsync(`PRAGMA user_version = ${SCHEMA_VERSION};`);
 }
 
@@ -48,29 +66,31 @@ async function createSchema(db: SQLite.SQLiteDatabase): Promise<void> {
 
     CREATE TABLE IF NOT EXISTS accounts (
       id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+      uuid                TEXT    UNIQUE,
       name                TEXT    NOT NULL UNIQUE,
-      type                TEXT    NOT NULL,
+      type                TEXT    NOT NULL CHECK(type IN ('CASH', 'BANK', 'EWALLET')),
       currencyCode        TEXT    NOT NULL DEFAULT '${DEFAULT_CURRENCY}',
       openingBalanceMinor INTEGER NOT NULL DEFAULT 0,
       currentBalanceMinor INTEGER NOT NULL DEFAULT 0,
       icon                TEXT,
       color               TEXT,
-      isPrimary           INTEGER NOT NULL DEFAULT 0,
-      isArchived          INTEGER NOT NULL DEFAULT 0,
+      isPrimary           INTEGER NOT NULL DEFAULT 0 CHECK(isPrimary IN (0, 1)),
+      isArchived          INTEGER NOT NULL DEFAULT 0 CHECK(isArchived IN (0, 1)),
       createdAt           TEXT    NOT NULL,
       updatedAt           TEXT
     );
 
     CREATE INDEX IF NOT EXISTS idx_accounts_type ON accounts(type);
     CREATE INDEX IF NOT EXISTS idx_accounts_isArchived ON accounts(isArchived);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_accounts_uuid ON accounts(uuid);
 
     CREATE TABLE IF NOT EXISTS categories (
       id        INTEGER PRIMARY KEY AUTOINCREMENT,
       name      TEXT    NOT NULL,
-      type      TEXT    NOT NULL,
+      type      TEXT    NOT NULL CHECK(type IN ('EXPENSE', 'INCOME')),
       icon      TEXT,
       color     TEXT,
-      isDefault INTEGER NOT NULL DEFAULT 0,
+      isDefault INTEGER NOT NULL DEFAULT 0 CHECK(isDefault IN (0, 1)),
       sortOrder INTEGER NOT NULL DEFAULT 0,
       createdAt TEXT    NOT NULL,
       updatedAt TEXT,
@@ -81,10 +101,11 @@ async function createSchema(db: SQLite.SQLiteDatabase): Promise<void> {
 
     CREATE TABLE IF NOT EXISTS transactions (
       id              INTEGER PRIMARY KEY AUTOINCREMENT,
+      uuid            TEXT    UNIQUE,
       accountId       INTEGER NOT NULL,
       categoryId      INTEGER NOT NULL,
-      type            TEXT    NOT NULL,
-      amountMinor     INTEGER NOT NULL,
+      type            TEXT    NOT NULL CHECK(type IN ('EXPENSE', 'INCOME')),
+      amountMinor     INTEGER NOT NULL CHECK(amountMinor >= 0),
       currencyCode    TEXT    NOT NULL DEFAULT '${DEFAULT_CURRENCY}',
       title           TEXT,
       note            TEXT,
@@ -100,13 +121,14 @@ async function createSchema(db: SQLite.SQLiteDatabase): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_transactions_category_date ON transactions(categoryId, transactionDate);
     CREATE INDEX IF NOT EXISTS idx_transactions_type_date ON transactions(type, transactionDate);
     CREATE INDEX IF NOT EXISTS idx_transactions_date ON transactions(transactionDate);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_transactions_uuid ON transactions(uuid);
 
     CREATE TABLE IF NOT EXISTS transaction_items (
       id            INTEGER PRIMARY KEY AUTOINCREMENT,
       transactionId INTEGER NOT NULL,
       categoryId    INTEGER,
       name          TEXT    NOT NULL,
-      amountMinor   INTEGER NOT NULL,
+      amountMinor   INTEGER NOT NULL CHECK(amountMinor >= 0),
       quantity      REAL,
       note          TEXT,
       sortOrder     INTEGER NOT NULL DEFAULT 0,
@@ -121,17 +143,19 @@ async function createSchema(db: SQLite.SQLiteDatabase): Promise<void> {
 
     CREATE TABLE IF NOT EXISTS transfers (
       id             INTEGER PRIMARY KEY AUTOINCREMENT,
+      uuid           TEXT    UNIQUE,
       fromAccountId  INTEGER NOT NULL,
       toAccountId    INTEGER NOT NULL,
-      amountMinor    INTEGER NOT NULL,
+      amountMinor    INTEGER NOT NULL CHECK(amountMinor > 0),
       currencyCode   TEXT    NOT NULL DEFAULT '${DEFAULT_CURRENCY}',
-      feeAmountMinor INTEGER NOT NULL DEFAULT 0,
+      feeAmountMinor INTEGER NOT NULL DEFAULT 0 CHECK(feeAmountMinor >= 0),
       feeAccountId   INTEGER,
       note           TEXT,
       transferDate   TEXT    NOT NULL,
       createdAt      TEXT    NOT NULL,
       updatedAt      TEXT,
       deletedAt      TEXT,
+      CHECK(fromAccountId != toAccountId),
       FOREIGN KEY(fromAccountId) REFERENCES accounts(id),
       FOREIGN KEY(toAccountId) REFERENCES accounts(id),
       FOREIGN KEY(feeAccountId) REFERENCES accounts(id)
@@ -140,9 +164,11 @@ async function createSchema(db: SQLite.SQLiteDatabase): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_transfers_from_date ON transfers(fromAccountId, transferDate);
     CREATE INDEX IF NOT EXISTS idx_transfers_to_date ON transfers(toAccountId, transferDate);
     CREATE INDEX IF NOT EXISTS idx_transfers_date ON transfers(transferDate);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_transfers_uuid ON transfers(uuid);
 
     CREATE TABLE IF NOT EXISTS loans (
       id               INTEGER PRIMARY KEY AUTOINCREMENT,
+      uuid             TEXT    UNIQUE,
       type             TEXT    NOT NULL CHECK(type IN ('BORROWED','LENT')),
       contactName      TEXT    NOT NULL,
       amountMinor      INTEGER NOT NULL,
@@ -160,6 +186,7 @@ async function createSchema(db: SQLite.SQLiteDatabase): Promise<void> {
 
     CREATE INDEX IF NOT EXISTS idx_loans_status ON loans(status);
     CREATE INDEX IF NOT EXISTS idx_loans_date ON loans(loanDate);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_loans_uuid ON loans(uuid);
 
     CREATE TABLE IF NOT EXISTS loan_repayments (
       id             INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -175,33 +202,66 @@ async function createSchema(db: SQLite.SQLiteDatabase): Promise<void> {
     );
 
     CREATE INDEX IF NOT EXISTS idx_loan_repayments_loan ON loan_repayments(loanId);
-  `);
-}
 
-// ── Migrations ────────────────────────────────────────────────
+    CREATE VIEW IF NOT EXISTS v_cash_movements AS
+    SELECT
+      'EXPENSE' AS movementType,
+      t.id AS entityId,
+      t.uuid AS entityUuid,
+      t.accountId,
+      NULL AS targetAccountId,
+      -t.amountMinor AS netDeltaMinor,
+      t.amountMinor / 100.0 AS amount,
+      0.0 AS feeAmount,
+      c.name AS categoryName,
+      c.icon AS categoryEmoji,
+      t.note,
+      t.transactionDate AS eventDate,
+      t.createdAt,
+      t.deletedAt
+    FROM transactions t
+    JOIN categories c ON c.id = t.categoryId
+    WHERE t.type = 'EXPENSE'
 
-async function runMigrations(db: SQLite.SQLiteDatabase): Promise<void> {
-  const versionRow = await db.getFirstAsync<{ user_version: number }>('PRAGMA user_version');
-  const version = versionRow?.user_version ?? 0;
+    UNION ALL
 
-  if (version < SCHEMA_VERSION) {
-    await freshResetFinancialSchema(db);
-  }
-}
+    SELECT
+      'INCOME' AS movementType,
+      t.id AS entityId,
+      t.uuid AS entityUuid,
+      t.accountId,
+      NULL AS targetAccountId,
+      t.amountMinor AS netDeltaMinor,
+      t.amountMinor / 100.0 AS amount,
+      0.0 AS feeAmount,
+      c.name AS categoryName,
+      c.icon AS categoryEmoji,
+      t.note,
+      t.transactionDate AS eventDate,
+      t.createdAt,
+      t.deletedAt
+    FROM transactions t
+    JOIN categories c ON c.id = t.categoryId
+    WHERE t.type = 'INCOME'
 
-async function freshResetFinancialSchema(db: SQLite.SQLiteDatabase): Promise<void> {
-  await db.execAsync(`
-    DROP TABLE IF EXISTS loan_repayments;
-    DROP TABLE IF EXISTS loans;
-    DROP TABLE IF EXISTS transaction_items;
-    DROP TABLE IF EXISTS transactions;
-    DROP TABLE IF EXISTS transfers;
-    DROP TABLE IF EXISTS income_categories;
-    DROP TABLE IF EXISTS sub_expenses;
-    DROP TABLE IF EXISTS expenses;
-    DROP TABLE IF EXISTS incomes;
-    DROP TABLE IF EXISTS categories;
-    DROP TABLE IF EXISTS accounts;
+    UNION ALL
+
+    SELECT
+      'TRANSFER' AS movementType,
+      tr.id AS entityId,
+      tr.uuid AS entityUuid,
+      tr.fromAccountId AS accountId,
+      tr.toAccountId AS targetAccountId,
+      -tr.amountMinor AS netDeltaMinor,
+      tr.amountMinor / 100.0 AS amount,
+      tr.feeAmountMinor / 100.0 AS feeAmount,
+      'Transfer' AS categoryName,
+      '🔄' AS categoryEmoji,
+      tr.note,
+      tr.transferDate AS eventDate,
+      tr.createdAt,
+      tr.deletedAt
+    FROM transfers tr;
   `);
 }
 

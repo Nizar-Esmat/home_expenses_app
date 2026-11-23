@@ -116,7 +116,7 @@ async function deleteCategoryByType(
 
   const used = await db.getFirstAsync<{ n: number }>(
     `SELECT
-       (SELECT COUNT(*) FROM transactions WHERE categoryId=? AND deletedAt IS NULL) +
+       (SELECT COUNT(*) FROM transactions WHERE categoryId=?) +
        (SELECT COUNT(*) FROM transaction_items WHERE categoryId=?)
      AS n`,
     [id, id],

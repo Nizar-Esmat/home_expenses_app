@@ -16,6 +16,7 @@ export type IncomeCategory = Category;
 
 export interface Transaction {
   id: number;
+  uuid?: string;
   accountId: number;
   categoryId: number;
   type: TransactionType;
@@ -80,6 +81,7 @@ export type AccountType = 'cash' | 'bank_account' | 'e_wallet';
 
 export interface Account {
   id: number;
+  uuid?: string;
   name: string;
   type: AccountType;
   openingBalance: number;
@@ -95,6 +97,7 @@ export interface Account {
 
 export interface Transfer {
   id: number;
+  uuid?: string;
   fromAccountId: number;
   toAccountId: number;
   amount: number;
@@ -153,6 +156,7 @@ export type LoanStatus = 'PENDING' | 'PARTIAL' | 'SETTLED';
 
 export interface Loan {
   id: number;
+  uuid?: string;
   type: LoanType;
   contactName: string;
   amount: number;
