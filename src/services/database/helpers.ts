@@ -25,6 +25,23 @@ export function tzMonthKey(column: string): string {
   return `strftime('%Y-%m', datetime(${column}, '${sign}${abs} hours'))`;
 }
 
+/**
+ * Computes an indexed ISO 8601 date range [startIso, endIso) for a given monthKey ('YYYY-MM'),
+ * accounting for local timezone boundaries. This enables SQLite to perform fast B-tree index
+ * seeks (column >= ? AND column < ?) instead of slow full-table scans.
+ */
+export function getMonthDateRange(monthKey: string): { startIso: string; endIso: string } {
+  const [yearStr, monthStr] = monthKey.split('-');
+  const year = parseInt(yearStr, 10);
+  const month = parseInt(monthStr, 10); // 1 - 12
+  const start = new Date(year, month - 1, 1, 0, 0, 0, 0);
+  const end = new Date(year, month, 1, 0, 0, 0, 0);
+  return {
+    startIso: start.toISOString(),
+    endIso: end.toISOString(),
+  };
+}
+
 export function toMinorUnits(amount: number): number {
   return Math.round(amount * 100);
 }

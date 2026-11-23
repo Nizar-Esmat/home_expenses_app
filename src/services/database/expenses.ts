@@ -1,7 +1,8 @@
 import { Expense, SubExpense, SubExpenseInput } from '@/types';
 import { getDb } from './client';
-import { nowIso, toMinorUnits, tzMonthKey } from './helpers';
+import { getMonthDateRange, nowIso, toMinorUnits, tzMonthKey } from './helpers';
 import { recalculateBalance } from './accounts';
+import { generateUuidV7 } from './uuid';
 
 interface ExpenseRow {
   id: number;
@@ -122,14 +123,22 @@ export async function addExpense(
   const categoryId = await getCategoryIdByName(category);
   const resolvedAccountId = await getTransactionAccountId(accountId);
   const amountMinor = toMinorUnits(price);
+  const uuid = generateUuidV7();
+
+  if (subExpenses && subExpenses.length > 0) {
+    const subSum = subExpenses.reduce((sum, s) => sum + s.amount, 0);
+    if (Math.abs(toMinorUnits(subSum) - amountMinor) > 1) {
+      throw new Error('Total price does not match the sum of sub-expenses.');
+    }
+  }
 
   let newId = 0;
   await db.withExclusiveTransactionAsync(async () => {
     const result = await db.runAsync(
       `INSERT INTO transactions
-         (accountId, categoryId, type, amountMinor, currencyCode, title, note, transactionDate, createdAt, updatedAt, deletedAt)
-       VALUES (?, ?, 'EXPENSE', ?, 'EGP', ?, ?, ?, ?, ?, NULL)`,
-      [resolvedAccountId, categoryId, amountMinor, category, note ?? null, timestamp, timestamp, timestamp],
+         (uuid, accountId, categoryId, type, amountMinor, currencyCode, title, note, transactionDate, createdAt, updatedAt, deletedAt)
+       VALUES (?, ?, ?, 'EXPENSE', ?, 'EGP', ?, ?, ?, ?, ?, NULL)`,
+      [uuid, resolvedAccountId, categoryId, amountMinor, category, note ?? null, timestamp, timestamp, timestamp],
     );
     newId = result.lastInsertRowId;
 
@@ -144,9 +153,11 @@ export async function addExpense(
         );
       }
     }
+
+    // Atomic balance update inside the same transaction
+    await recalculateBalance(resolvedAccountId);
   });
 
-  await recalculateBalance(resolvedAccountId);
   return newId;
 }
 
@@ -162,6 +173,14 @@ export async function updateExpense(
   const categoryId = await getCategoryIdByName(category);
   const resolvedAccountId = await getTransactionAccountId(accountId);
   const now = nowIso();
+  const amountMinor = toMinorUnits(price);
+
+  if (subExpenses && subExpenses.length > 0) {
+    const subSum = subExpenses.reduce((sum, s) => sum + s.amount, 0);
+    if (Math.abs(toMinorUnits(subSum) - amountMinor) > 1) {
+      throw new Error('Total price does not match the sum of sub-expenses.');
+    }
+  }
 
   const old = await db.getFirstAsync<{ accountId: number | null }>(
     "SELECT accountId FROM transactions WHERE id = ? AND type = 'EXPENSE'",
@@ -171,7 +190,7 @@ export async function updateExpense(
   await db.withExclusiveTransactionAsync(async () => {
     await db.runAsync(
       'UPDATE transactions SET amountMinor=?, categoryId=?, title=?, note=?, accountId=?, updatedAt=? WHERE id=? AND type=?',
-      [toMinorUnits(price), categoryId, category, note ?? null, resolvedAccountId, now, id, 'EXPENSE'],
+      [amountMinor, categoryId, category, note ?? null, resolvedAccountId, now, id, 'EXPENSE'],
     );
 
     await db.runAsync('DELETE FROM transaction_items WHERE transactionId=?', [id]);
@@ -186,12 +205,12 @@ export async function updateExpense(
         );
       }
     }
-  });
 
-  const affected = new Set<number>();
-  if (old?.accountId != null) affected.add(old.accountId);
-  affected.add(resolvedAccountId);
-  for (const accId of affected) await recalculateBalance(accId);
+    const affected = new Set<number>();
+    if (old?.accountId != null) affected.add(old.accountId);
+    affected.add(resolvedAccountId);
+    for (const accId of affected) await recalculateBalance(accId);
+  });
 }
 
 export async function deleteExpense(id: number): Promise<void> {
@@ -202,19 +221,22 @@ export async function deleteExpense(id: number): Promise<void> {
     [id],
   );
 
-  await db.runAsync(
-    "UPDATE transactions SET deletedAt = ?, updatedAt = ? WHERE id = ? AND type = 'EXPENSE'",
-    [nowIso(), nowIso(), id],
-  );
+  await db.withExclusiveTransactionAsync(async () => {
+    await db.runAsync(
+      "UPDATE transactions SET deletedAt = ?, updatedAt = ? WHERE id = ? AND type = 'EXPENSE'",
+      [nowIso(), nowIso(), id],
+    );
 
-  if (exp?.accountId != null) await recalculateBalance(exp.accountId);
+    if (exp?.accountId != null) await recalculateBalance(exp.accountId);
+  });
 }
 
 export async function getExpensesByMonth(monthKey: string): Promise<Expense[]> {
   const db = await getDb();
+  const { startIso, endIso } = getMonthDateRange(monthKey);
   const expenses = await db.getAllAsync<ExpenseRow>(
-    `${EXPENSE_SELECT} AND ${tzMonthKey('t.transactionDate')}=? ORDER BY t.transactionDate DESC, t.id DESC`,
-    [monthKey],
+    `${EXPENSE_SELECT} AND t.transactionDate >= ? AND t.transactionDate < ? ORDER BY t.transactionDate DESC, t.id DESC`,
+    [startIso, endIso],
   );
   await attachSubExpenses(expenses);
   return expenses;
@@ -226,9 +248,10 @@ export async function getExpensesByMonthPaged(
   offset: number,
 ): Promise<Expense[]> {
   const db = await getDb();
+  const { startIso, endIso } = getMonthDateRange(monthKey);
   const expenses = await db.getAllAsync<ExpenseRow>(
-    `${EXPENSE_SELECT} AND ${tzMonthKey('t.transactionDate')}=? ORDER BY t.transactionDate DESC, t.id DESC LIMIT ? OFFSET ?`,
-    [monthKey, limit, offset],
+    `${EXPENSE_SELECT} AND t.transactionDate >= ? AND t.transactionDate < ? ORDER BY t.transactionDate DESC, t.id DESC LIMIT ? OFFSET ?`,
+    [startIso, endIso, limit, offset],
   );
   await attachSubExpenses(expenses);
   return expenses;
@@ -247,22 +270,23 @@ export async function getExpenseById(id: number): Promise<Expense | null> {
 
 export async function getExpenseTotalByMonth(monthKey: string): Promise<number> {
   const db = await getDb();
+  const { startIso, endIso } = getMonthDateRange(monthKey);
   const row = await db.getFirstAsync<{ total: number }>(
     `SELECT (
       (SELECT COALESCE(SUM(amountMinor), 0) FROM transactions
-       WHERE type = 'EXPENSE' AND deletedAt IS NULL AND ${tzMonthKey('transactionDate')} = ?) +
+       WHERE type = 'EXPENSE' AND deletedAt IS NULL AND transactionDate >= ? AND transactionDate < ?) +
       (SELECT COALESCE(SUM(feeAmountMinor), 0) FROM transfers
-       WHERE deletedAt IS NULL AND ${tzMonthKey('transferDate')} = ?) +
+       WHERE deletedAt IS NULL AND transferDate >= ? AND transferDate < ?) +
       (SELECT COALESCE(SUM(l.amountMinor), 0) FROM loans l
-       WHERE l.type = 'LENT' AND l.deletedAt IS NULL AND ${tzMonthKey('l.loanDate')} = ?) +
+       WHERE l.type = 'LENT' AND l.deletedAt IS NULL AND l.loanDate >= ? AND l.loanDate < ?) +
       (SELECT COALESCE(SUM(lr.amountMinor), 0) FROM loan_repayments lr JOIN loans l ON l.id = lr.loanId
        WHERE l.type = 'BORROWED' AND lr.deletedAt IS NULL AND l.deletedAt IS NULL
-         AND ${tzMonthKey('lr.repaymentDate')} = ? AND ${tzMonthKey('l.loanDate')} != ?) -
+         AND lr.repaymentDate >= ? AND lr.repaymentDate < ? AND l.loanDate < ?) -
       (SELECT COALESCE(SUM(lr.amountMinor), 0) FROM loan_repayments lr JOIN loans l ON l.id = lr.loanId
        WHERE l.type = 'LENT' AND lr.deletedAt IS NULL AND l.deletedAt IS NULL
-         AND ${tzMonthKey('lr.repaymentDate')} = ? AND ${tzMonthKey('l.loanDate')} = ?)
+         AND lr.repaymentDate >= ? AND lr.repaymentDate < ? AND l.loanDate >= ? AND l.loanDate < ?)
     ) / 100.0 AS total`,
-    [monthKey, monthKey, monthKey, monthKey, monthKey, monthKey, monthKey],
+    [startIso, endIso, startIso, endIso, startIso, endIso, startIso, endIso, startIso, startIso, endIso, startIso, endIso],
   );
   return row?.total ?? 0;
 }

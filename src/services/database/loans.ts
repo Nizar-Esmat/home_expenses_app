@@ -2,6 +2,7 @@ import { Loan, LoanRepayment, LoanStatus, LoanType } from '@/types';
 import { getDb } from './client';
 import { fromMinorUnits, nowIso, toMinorUnits, tzMonthKey } from './helpers';
 import { recalculateBalance } from './accounts';
+import { generateUuidV7 } from './uuid';
 
 interface LoanRow {
   id: number;
@@ -138,23 +139,31 @@ export async function addLoan(input: AddLoanInput): Promise<number> {
   const db = await getDb();
   const now = nowIso();
   const loanDate = input.loanDate ?? now;
-  const result = await db.runAsync(
-    `INSERT INTO loans
-       (type, contactName, amountMinor, currencyCode, accountId, note, loanDate, paidAmountMinor, status, createdAt, updatedAt)
-     VALUES (?, ?, ?, 'EGP', ?, ?, ?, 0, 'PENDING', ?, ?)`,
-    [
-      input.type,
-      input.contactName.trim(),
-      toMinorUnits(input.amount),
-      input.accountId,
-      input.note ?? null,
-      loanDate,
-      now,
-      now,
-    ],
-  );
-  await recalculateBalance(input.accountId);
-  return result.lastInsertRowId;
+  const uuid = generateUuidV7();
+
+  let newId = 0;
+  await db.withExclusiveTransactionAsync(async () => {
+    const result = await db.runAsync(
+      `INSERT INTO loans
+         (uuid, type, contactName, amountMinor, currencyCode, accountId, note, loanDate, paidAmountMinor, status, createdAt, updatedAt)
+       VALUES (?, ?, ?, ?, 'EGP', ?, ?, ?, 0, 'PENDING', ?, ?)`,
+      [
+        uuid,
+        input.type,
+        input.contactName.trim(),
+        toMinorUnits(input.amount),
+        input.accountId,
+        input.note ?? null,
+        loanDate,
+        now,
+        now,
+      ],
+    );
+    newId = result.lastInsertRowId;
+    await recalculateBalance(input.accountId);
+  });
+
+  return newId;
 }
 
 export interface AddRepaymentInput {
@@ -169,28 +178,30 @@ export async function addRepayment(loanId: number, input: AddRepaymentInput): Pr
   const now = nowIso();
   const repaymentDate = input.repaymentDate ?? now;
 
-  const loan = await db.getFirstAsync<{ amountMinor: number; paidAmountMinor: number; accountId: number }>(
-    'SELECT amountMinor, paidAmountMinor, accountId FROM loans WHERE id = ? AND deletedAt IS NULL',
-    [loanId],
-  );
-  if (!loan) throw new Error('Loan not found.');
+  await db.withExclusiveTransactionAsync(async () => {
+    const loan = await db.getFirstAsync<{ amountMinor: number; paidAmountMinor: number; accountId: number }>(
+      'SELECT amountMinor, paidAmountMinor, accountId FROM loans WHERE id = ? AND deletedAt IS NULL',
+      [loanId],
+    );
+    if (!loan) throw new Error('Loan not found.');
 
-  await db.runAsync(
-    `INSERT INTO loan_repayments (loanId, amountMinor, accountId, note, repaymentDate, createdAt)
-     VALUES (?, ?, ?, ?, ?, ?)`,
-    [loanId, toMinorUnits(input.amount), input.accountId, input.note ?? null, repaymentDate, now],
-  );
+    await db.runAsync(
+      `INSERT INTO loan_repayments (loanId, amountMinor, accountId, note, repaymentDate, createdAt)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [loanId, toMinorUnits(input.amount), input.accountId, input.note ?? null, repaymentDate, now],
+    );
 
-  const newPaid = loan.paidAmountMinor + toMinorUnits(input.amount);
-  const newStatus: LoanStatus =
-    newPaid >= loan.amountMinor ? 'SETTLED' : newPaid > 0 ? 'PARTIAL' : 'PENDING';
+    const newPaid = loan.paidAmountMinor + toMinorUnits(input.amount);
+    const newStatus: LoanStatus =
+      newPaid >= loan.amountMinor ? 'SETTLED' : newPaid > 0 ? 'PARTIAL' : 'PENDING';
 
-  await db.runAsync(
-    'UPDATE loans SET paidAmountMinor = ?, status = ?, updatedAt = ? WHERE id = ?',
-    [newPaid, newStatus, now, loanId],
-  );
+    await db.runAsync(
+      'UPDATE loans SET paidAmountMinor = ?, status = ?, updatedAt = ? WHERE id = ?',
+      [newPaid, newStatus, now, loanId],
+    );
 
-  await recalculateBalance(input.accountId);
+    await recalculateBalance(input.accountId);
+  });
 }
 
 export interface UpdateLoanInput {
@@ -219,14 +230,16 @@ export async function updateLoan(id: number, input: UpdateLoanInput): Promise<vo
       ? 'PARTIAL'
       : 'PENDING';
 
-  await db.runAsync(
-    `UPDATE loans SET type = ?, contactName = ?, amountMinor = ?, accountId = ?, note = ?, loanDate = ?, status = ?, updatedAt = ? WHERE id = ?`,
-    [input.type, input.contactName.trim(), newAmountMinor, input.accountId, input.note ?? null, input.loanDate, newStatus, now, id],
-  );
+  await db.withExclusiveTransactionAsync(async () => {
+    await db.runAsync(
+      `UPDATE loans SET type = ?, contactName = ?, amountMinor = ?, accountId = ?, note = ?, loanDate = ?, status = ?, updatedAt = ? WHERE id = ?`,
+      [input.type, input.contactName.trim(), newAmountMinor, input.accountId, input.note ?? null, input.loanDate, newStatus, now, id],
+    );
 
-  for (const accId of new Set([existing.accountId, input.accountId])) {
-    await recalculateBalance(accId);
-  }
+    for (const accId of new Set([existing.accountId, input.accountId])) {
+      await recalculateBalance(accId);
+    }
+  });
 }
 
 export async function softDeleteLoan(id: number): Promise<void> {
@@ -238,12 +251,14 @@ export async function softDeleteLoan(id: number): Promise<void> {
   if (!loan) return;
 
   const now = nowIso();
-  await db.runAsync('UPDATE loans SET deletedAt = ?, updatedAt = ? WHERE id = ?', [now, now, id]);
-  await db.runAsync(
-    'UPDATE loan_repayments SET deletedAt = ? WHERE loanId = ? AND deletedAt IS NULL',
-    [now, id],
-  );
-  await recalculateBalance(loan.accountId);
+  await db.withExclusiveTransactionAsync(async () => {
+    await db.runAsync('UPDATE loans SET deletedAt = ?, updatedAt = ? WHERE id = ?', [now, now, id]);
+    await db.runAsync(
+      'UPDATE loan_repayments SET deletedAt = ? WHERE loanId = ? AND deletedAt IS NULL',
+      [now, id],
+    );
+    await recalculateBalance(loan.accountId);
+  });
 }
 
 export async function softDeleteRepayment(id: number): Promise<void> {
@@ -255,23 +270,25 @@ export async function softDeleteRepayment(id: number): Promise<void> {
   if (!row) return;
 
   const now = nowIso();
-  await db.runAsync('UPDATE loan_repayments SET deletedAt = ? WHERE id = ?', [now, id]);
+  await db.withExclusiveTransactionAsync(async () => {
+    await db.runAsync('UPDATE loan_repayments SET deletedAt = ? WHERE id = ?', [now, id]);
 
-  const loan = await db.getFirstAsync<{ amountMinor: number; paidAmountMinor: number }>(
-    'SELECT amountMinor, paidAmountMinor FROM loans WHERE id = ?',
-    [row.loanId],
-  );
-  if (loan) {
-    const newPaid = Math.max(0, loan.paidAmountMinor - row.amountMinor);
-    const newStatus: LoanStatus =
-      newPaid >= loan.amountMinor ? 'SETTLED' : newPaid > 0 ? 'PARTIAL' : 'PENDING';
-    await db.runAsync(
-      'UPDATE loans SET paidAmountMinor = ?, status = ?, updatedAt = ? WHERE id = ?',
-      [newPaid, newStatus, now, row.loanId],
+    const loan = await db.getFirstAsync<{ amountMinor: number; paidAmountMinor: number }>(
+      'SELECT amountMinor, paidAmountMinor FROM loans WHERE id = ?',
+      [row.loanId],
     );
-  }
+    if (loan) {
+      const newPaid = Math.max(0, loan.paidAmountMinor - row.amountMinor);
+      const newStatus: LoanStatus =
+        newPaid >= loan.amountMinor ? 'SETTLED' : newPaid > 0 ? 'PARTIAL' : 'PENDING';
+      await db.runAsync(
+        'UPDATE loans SET paidAmountMinor = ?, status = ?, updatedAt = ? WHERE id = ?',
+        [newPaid, newStatus, now, row.loanId],
+      );
+    }
 
-  await recalculateBalance(row.accountId);
+    await recalculateBalance(row.accountId);
+  });
 }
 
 export async function getAvailableLoanMonthKeys(): Promise<string[]> {

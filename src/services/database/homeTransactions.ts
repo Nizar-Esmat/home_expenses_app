@@ -1,6 +1,6 @@
 import { HomeTransaction, SubExpense } from '@/types';
 import { getDb } from './client';
-import { tzMonthKey } from './helpers';
+import { getMonthDateRange } from './helpers';
 
 interface SubExpenseRow {
   id: number;
@@ -52,6 +52,11 @@ export async function getRecentTransactions(
   const db = await getDb();
 
   const hasMonthFilter = monthKey !== undefined && monthKey !== 'ALL';
+  const { startIso, endIso } = hasMonthFilter ? getMonthDateRange(monthKey) : { startIso: '', endIso: '' };
+  const txDateClause = hasMonthFilter ? `AND t.transactionDate >= '${startIso}' AND t.transactionDate < '${endIso}'` : '';
+  const trDateClause = hasMonthFilter ? `AND tr.transferDate >= '${startIso}' AND tr.transferDate < '${endIso}'` : '';
+  const loanDateClause = hasMonthFilter ? `AND l.loanDate >= '${startIso}' AND l.loanDate < '${endIso}'` : '';
+  const repDateClause = hasMonthFilter ? `AND lr.repaymentDate >= '${startIso}' AND lr.repaymentDate < '${endIso}'` : '';
 
   const sql = `
     SELECT id, type, category, emoji, amount, feeAmount, note, createdAt, accountId, fromAccountId, toAccountId, feeAccountId, accountName, accountIcon, accountColor, loanId, contactName FROM (
@@ -77,7 +82,7 @@ export async function getRecentTransactions(
       JOIN categories c ON c.id = t.categoryId
       LEFT JOIN accounts a ON a.id = t.accountId
       WHERE t.type = 'EXPENSE' AND t.deletedAt IS NULL
-      ${hasMonthFilter ? `AND ${tzMonthKey('t.transactionDate')} = '${monthKey}'` : ''}
+      ${txDateClause}
       UNION ALL
       SELECT
         t.id,
@@ -101,7 +106,7 @@ export async function getRecentTransactions(
       JOIN categories c ON c.id = t.categoryId
       LEFT JOIN accounts a ON a.id = t.accountId
       WHERE t.type = 'INCOME' AND t.deletedAt IS NULL
-      ${hasMonthFilter ? `AND ${tzMonthKey('t.transactionDate')} = '${monthKey}'` : ''}
+      ${txDateClause}
       UNION ALL
       SELECT
         tr.id,
@@ -125,7 +130,7 @@ export async function getRecentTransactions(
       LEFT JOIN accounts fromAcc ON fromAcc.id = tr.fromAccountId
       LEFT JOIN accounts toAcc ON toAcc.id = tr.toAccountId
       WHERE tr.deletedAt IS NULL
-      ${hasMonthFilter ? `AND ${tzMonthKey('tr.transferDate')} = '${monthKey}'` : ''}
+      ${trDateClause}
       UNION ALL
       SELECT
         l.id,
@@ -148,7 +153,7 @@ export async function getRecentTransactions(
       FROM loans l
       LEFT JOIN accounts a ON a.id = l.accountId
       WHERE l.deletedAt IS NULL
-      ${hasMonthFilter ? `AND ${tzMonthKey('l.loanDate')} = '${monthKey}'` : ''}
+      ${loanDateClause}
       UNION ALL
       SELECT
         lr.id,
@@ -172,7 +177,7 @@ export async function getRecentTransactions(
       JOIN loans l ON l.id = lr.loanId
       LEFT JOIN accounts a ON a.id = lr.accountId
       WHERE lr.deletedAt IS NULL AND l.deletedAt IS NULL
-      ${hasMonthFilter ? `AND ${tzMonthKey('lr.repaymentDate')} = '${monthKey}'` : ''}
+      ${repDateClause}
     ) src
     ORDER BY src.createdAt DESC
     LIMIT ?
@@ -256,6 +261,8 @@ export async function getTransactionsByCategory(
 ): Promise<HomeTransaction[]> {
   const db = await getDb();
   const hasMonthFilter = monthKey !== undefined && monthKey !== 'ALL';
+  const { startIso, endIso } = hasMonthFilter ? getMonthDateRange(monthKey) : { startIso: '', endIso: '' };
+  const txDateClause = hasMonthFilter ? `AND t.transactionDate >= '${startIso}' AND t.transactionDate < '${endIso}'` : '';
 
   const sql = `
   SELECT id, type, category, emoji, amount, feeAmount, note, createdAt, accountId, accountName, accountIcon, accountColor FROM (
@@ -277,7 +284,7 @@ export async function getTransactionsByCategory(
     LEFT JOIN accounts a ON a.id = t.accountId
     WHERE t.type = 'EXPENSE' AND t.deletedAt IS NULL
       AND c.name = ?
-      ${hasMonthFilter ? `AND ${tzMonthKey('t.transactionDate')} = '${monthKey}'` : ''}
+      ${txDateClause}
     UNION ALL
     SELECT
       t.id,
@@ -297,7 +304,7 @@ export async function getTransactionsByCategory(
     LEFT JOIN accounts a ON a.id = t.accountId
     WHERE t.type = 'INCOME' AND t.deletedAt IS NULL
       AND c.name = ?
-      ${hasMonthFilter ? `AND ${tzMonthKey('t.transactionDate')} = '${monthKey}'` : ''}
+      ${txDateClause}
   ) src
   ORDER BY src.createdAt DESC
   `;
@@ -313,6 +320,11 @@ export async function getTransactions(
   const db = await getDb();
 
   const hasMonthFilter = monthKey !== undefined && monthKey !== 'ALL';
+  const { startIso, endIso } = hasMonthFilter ? getMonthDateRange(monthKey) : { startIso: '', endIso: '' };
+  const txDateClause = hasMonthFilter ? `AND t.transactionDate >= '${startIso}' AND t.transactionDate < '${endIso}'` : '';
+  const trDateClause = hasMonthFilter ? `AND tr.transferDate >= '${startIso}' AND tr.transferDate < '${endIso}'` : '';
+  const loanDateClause = hasMonthFilter ? `AND l.loanDate >= '${startIso}' AND l.loanDate < '${endIso}'` : '';
+  const repDateClause = hasMonthFilter ? `AND lr.repaymentDate >= '${startIso}' AND lr.repaymentDate < '${endIso}'` : '';
 
   const sql = `
   SELECT id, type, category, emoji, amount, feeAmount, note, createdAt, accountId, fromAccountId, toAccountId, feeAccountId, accountName, accountIcon, accountColor, loanId, contactName FROM (
@@ -325,7 +337,7 @@ export async function getTransactions(
   NULL AS loanId, NULL AS contactName
   FROM transactions t JOIN categories c ON c.id = t.categoryId LEFT JOIN accounts a ON a.id = t.accountId
   WHERE t.type = 'EXPENSE' AND t.deletedAt IS NULL
-  ${hasMonthFilter ? `AND ${tzMonthKey('t.transactionDate')} = '${monthKey}'` : ''}
+  ${txDateClause}
   UNION ALL
   SELECT
   t.id, 'income' AS type, c.name AS category, c.icon AS emoji,
@@ -336,7 +348,7 @@ export async function getTransactions(
   NULL AS loanId, NULL AS contactName
   FROM transactions t JOIN categories c ON c.id = t.categoryId LEFT JOIN accounts a ON a.id = t.accountId
   WHERE t.type = 'INCOME' AND t.deletedAt IS NULL
-  ${hasMonthFilter ? `AND ${tzMonthKey('t.transactionDate')} = '${monthKey}'` : ''}
+  ${txDateClause}
   UNION ALL
   SELECT
   tr.id, 'transfer' AS type, 'Transfer' AS category, '🔄' AS emoji,
@@ -349,7 +361,7 @@ export async function getTransactions(
   LEFT JOIN accounts fromAcc ON fromAcc.id = tr.fromAccountId
   LEFT JOIN accounts toAcc ON toAcc.id = tr.toAccountId
   WHERE tr.deletedAt IS NULL
-  ${hasMonthFilter ? `AND ${tzMonthKey('tr.transferDate')} = '${monthKey}'` : ''}
+  ${trDateClause}
   UNION ALL
   SELECT
   l.id, 'loan' AS type,
@@ -361,7 +373,7 @@ export async function getTransactions(
   l.id AS loanId, l.contactName
   FROM loans l LEFT JOIN accounts a ON a.id = l.accountId
   WHERE l.deletedAt IS NULL
-  ${hasMonthFilter ? `AND ${tzMonthKey('l.loanDate')} = '${monthKey}'` : ''}
+  ${loanDateClause}
   UNION ALL
   SELECT
   lr.id, 'loan_repayment' AS type,
@@ -373,7 +385,7 @@ export async function getTransactions(
   l.id AS loanId, l.contactName
   FROM loan_repayments lr JOIN loans l ON l.id = lr.loanId LEFT JOIN accounts a ON a.id = lr.accountId
   WHERE lr.deletedAt IS NULL AND l.deletedAt IS NULL
-  ${hasMonthFilter ? `AND ${tzMonthKey('lr.repaymentDate')} = '${monthKey}'` : ''}
+  ${repDateClause}
   ) src
   ORDER BY src.createdAt DESC
   `;

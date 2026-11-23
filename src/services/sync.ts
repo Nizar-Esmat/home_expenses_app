@@ -9,8 +9,8 @@ import {
 } from '@/services/database';
 import { getDb } from '@/services/database/client';
 
-const BACKUP_VERSION = 4;
-const SUPPORTED_VERSIONS = [3, 4];
+const BACKUP_VERSION = 5;
+const SUPPORTED_VERSIONS = [3, 4, 5];
 
 interface BackupPayload {
   schemaVersion: number;

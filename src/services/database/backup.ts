@@ -3,9 +3,11 @@ import { getDb } from './client';
 import { nowIso } from './helpers';
 import { recalculateAccountBalances } from './accounts';
 import { SettingsRow } from './settings';
+import { generateUuidV7 } from './uuid';
 
 interface BackupAccount {
   id: number;
+  uuid?: string | null;
   name: string;
   type: string;
   currencyCode: string;
@@ -33,6 +35,7 @@ interface BackupCategory {
 
 interface BackupTransfer {
   id: number;
+  uuid?: string | null;
   fromAccountId: number;
   toAccountId: number;
   amountMinor: number;
@@ -48,6 +51,7 @@ interface BackupTransfer {
 
 interface BackupLoan {
   id: number;
+  uuid?: string | null;
   type: 'BORROWED' | 'LENT';
   contactName: string;
   amountMinor: number;
@@ -141,19 +145,21 @@ export async function mergeBackupIntoDatabase(data: DatabaseBackupData): Promise
       if (!acc?.name || !acc?.type) continue;
 
       const existing = await db.getFirstAsync<{ id: number }>(
-        'SELECT id FROM accounts WHERE name = ?',
-        [acc.name],
+        acc.uuid ? 'SELECT id FROM accounts WHERE uuid = ? OR name = ?' : 'SELECT id FROM accounts WHERE name = ?',
+        acc.uuid ? [acc.uuid, acc.name] : [acc.name],
       );
       if (existing) {
         accountIdRemap.set(acc.id, existing.id);
         continue;
       }
 
+      const accUuid = acc.uuid || generateUuidV7();
       const result = await db.runAsync(
         `INSERT INTO accounts
-           (name, type, currencyCode, openingBalanceMinor, currentBalanceMinor, icon, color, isPrimary, isArchived, createdAt, updatedAt)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           (uuid, name, type, currencyCode, openingBalanceMinor, currentBalanceMinor, icon, color, isPrimary, isArchived, createdAt, updatedAt)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
+          accUuid,
           acc.name,
           acc.type,
           acc.currencyCode ?? 'EGP',
@@ -230,11 +236,25 @@ export async function mergeBackupIntoDatabase(data: DatabaseBackupData): Promise
 
     for (const tx of data.transactions) {
       if (!tx?.transactionDate || typeof tx.amountMinor !== 'number' || !tx.type) continue;
-      const fp = `${tx.transactionDate}|${tx.amountMinor}|${tx.type}|${(tx.note ?? '').trim()}`;
-      if (transactionFingerprints.has(fp)) {
-        if (tx.type === 'INCOME') summary.incomesSkipped += 1;
-        else summary.expensesSkipped += 1;
-        continue;
+
+      if (tx.uuid) {
+        const existingTx = await db.getFirstAsync<{ id: number }>(
+          'SELECT id FROM transactions WHERE uuid = ?',
+          [tx.uuid],
+        );
+        if (existingTx) {
+          if (tx.type === 'INCOME') summary.incomesSkipped += 1;
+          else summary.expensesSkipped += 1;
+          transactionIdRemap.set(tx.id, existingTx.id);
+          continue;
+        }
+      } else {
+        const fp = `${tx.transactionDate}|${tx.amountMinor}|${tx.type}|${(tx.note ?? '').trim()}`;
+        if (transactionFingerprints.has(fp)) {
+          if (tx.type === 'INCOME') summary.incomesSkipped += 1;
+          else summary.expensesSkipped += 1;
+          continue;
+        }
       }
 
       const accountId = accountIdRemap.get(tx.accountId) ?? tx.accountId ?? fallbackAccount?.id;
@@ -242,11 +262,13 @@ export async function mergeBackupIntoDatabase(data: DatabaseBackupData): Promise
       const categoryId = categoryIdRemap.get(tx.categoryId) ?? tx.categoryId ?? fallbackCategory?.id;
       if (!accountId || !categoryId) continue;
 
+      const txUuid = tx.uuid || generateUuidV7();
       const result = await db.runAsync(
         `INSERT INTO transactions
-           (accountId, categoryId, type, amountMinor, currencyCode, title, note, transactionDate, createdAt, updatedAt, deletedAt)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           (uuid, accountId, categoryId, type, amountMinor, currencyCode, title, note, transactionDate, createdAt, updatedAt, deletedAt)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
+          txUuid,
           accountId,
           categoryId,
           tx.type,
@@ -261,7 +283,6 @@ export async function mergeBackupIntoDatabase(data: DatabaseBackupData): Promise
         ],
       );
       transactionIdRemap.set(tx.id, result.lastInsertRowId);
-      transactionFingerprints.add(fp);
       if (tx.type === 'INCOME') summary.incomesAdded += 1;
       else summary.expensesAdded += 1;
     }
@@ -302,18 +323,31 @@ export async function mergeBackupIntoDatabase(data: DatabaseBackupData): Promise
       const remappedFee = tr.feeAccountId != null
         ? (accountIdRemap.get(tr.feeAccountId) ?? tr.feeAccountId)
         : null;
-      const fp = `${tr.transferDate}|${tr.amountMinor}|${remappedFrom}|${remappedTo}`;
 
-      if (transferFingerprints.has(fp)) {
-        summary.transfersSkipped += 1;
-        continue;
+      if (tr.uuid) {
+        const existingTr = await db.getFirstAsync<{ id: number }>(
+          'SELECT id FROM transfers WHERE uuid = ?',
+          [tr.uuid],
+        );
+        if (existingTr) {
+          summary.transfersSkipped += 1;
+          continue;
+        }
+      } else {
+        const fp = `${tr.transferDate}|${tr.amountMinor}|${remappedFrom}|${remappedTo}`;
+        if (transferFingerprints.has(fp)) {
+          summary.transfersSkipped += 1;
+          continue;
+        }
       }
 
+      const trUuid = tr.uuid || generateUuidV7();
       await db.runAsync(
         `INSERT INTO transfers
-           (fromAccountId, toAccountId, amountMinor, currencyCode, feeAmountMinor, feeAccountId, note, transferDate, createdAt, updatedAt, deletedAt)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           (uuid, fromAccountId, toAccountId, amountMinor, currencyCode, feeAmountMinor, feeAccountId, note, transferDate, createdAt, updatedAt, deletedAt)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
+          trUuid,
           remappedFrom,
           remappedTo,
           tr.amountMinor,
@@ -327,7 +361,6 @@ export async function mergeBackupIntoDatabase(data: DatabaseBackupData): Promise
           tr.deletedAt ?? null,
         ],
       );
-      transferFingerprints.add(fp);
       summary.transfersAdded += 1;
     }
 
@@ -351,24 +384,39 @@ export async function mergeBackupIntoDatabase(data: DatabaseBackupData): Promise
 
       for (const loan of data.loans) {
         if (!loan?.loanDate || typeof loan.amountMinor !== 'number' || !loan.type) continue;
-        const fp = `${loan.loanDate}|${loan.amountMinor}|${loan.type}|${(loan.contactName ?? '').trim().toLowerCase()}`;
-        if (loanFingerprints.has(fp)) {
-          const existing = existingLoans.find(
-            (l) => `${l.loanDate}|${l.amountMinor}|${l.type}|${l.contactName.trim().toLowerCase()}` === fp,
+
+        if (loan.uuid) {
+          const existing = await db.getFirstAsync<{ id: number }>(
+            'SELECT id FROM loans WHERE uuid = ?',
+            [loan.uuid],
           );
-          if (existing) loanIdRemap.set(loan.id, existing.id);
-          summary.loansSkipped = (summary.loansSkipped ?? 0) + 1;
-          continue;
+          if (existing) {
+            loanIdRemap.set(loan.id, existing.id);
+            summary.loansSkipped = (summary.loansSkipped ?? 0) + 1;
+            continue;
+          }
+        } else {
+          const fp = `${loan.loanDate}|${loan.amountMinor}|${loan.type}|${(loan.contactName ?? '').trim().toLowerCase()}`;
+          if (loanFingerprints.has(fp)) {
+            const existing = existingLoans.find(
+              (l) => `${l.loanDate}|${l.amountMinor}|${l.type}|${l.contactName.trim().toLowerCase()}` === fp,
+            );
+            if (existing) loanIdRemap.set(loan.id, existing.id);
+            summary.loansSkipped = (summary.loansSkipped ?? 0) + 1;
+            continue;
+          }
         }
 
         const accountId = accountIdRemap.get(loan.accountId) ?? loan.accountId ?? fallbackAccount?.id;
         if (!accountId) continue;
 
+        const loanUuid = loan.uuid || generateUuidV7();
         const result = await db.runAsync(
           `INSERT INTO loans
-             (type, contactName, amountMinor, currencyCode, accountId, note, loanDate, paidAmountMinor, status, createdAt, updatedAt, deletedAt)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+             (uuid, type, contactName, amountMinor, currencyCode, accountId, note, loanDate, paidAmountMinor, status, createdAt, updatedAt, deletedAt)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
+            loanUuid,
             loan.type,
             loan.contactName,
             loan.amountMinor,
@@ -384,7 +432,6 @@ export async function mergeBackupIntoDatabase(data: DatabaseBackupData): Promise
           ],
         );
         loanIdRemap.set(loan.id, result.lastInsertRowId);
-        loanFingerprints.add(fp);
         summary.loansAdded = (summary.loansAdded ?? 0) + 1;
       }
     }

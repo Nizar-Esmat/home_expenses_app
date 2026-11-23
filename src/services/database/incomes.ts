@@ -1,7 +1,8 @@
 import { Income, MonthSummary } from '@/types';
 import { getDb } from './client';
-import { nowIso, toMinorUnits, tzMonthKey } from './helpers';
+import { getMonthDateRange, nowIso, toMinorUnits, tzMonthKey } from './helpers';
 import { recalculateBalance } from './accounts';
+import { generateUuidV7 } from './uuid';
 
 interface IncomeRow {
   id: number;
@@ -73,24 +74,28 @@ export async function addIncome(
   const timestamp = createdAt ?? nowIso();
   const categoryId = await getCategoryIdByName(category);
   const resolvedAccountId = await getTransactionAccountId(accountId);
+  const uuid = generateUuidV7();
 
-  await db.runAsync(
-    `INSERT INTO transactions
-       (accountId, categoryId, type, amountMinor, currencyCode, title, note, transactionDate, createdAt, updatedAt, deletedAt)
-     VALUES (?, ?, 'INCOME', ?, 'EGP', ?, ?, ?, ?, ?, NULL)`,
-    [
-      resolvedAccountId,
-      categoryId,
-      toMinorUnits(amount),
-      category,
-      note ?? null,
-      timestamp,
-      timestamp,
-      timestamp,
-    ],
-  );
+  await db.withExclusiveTransactionAsync(async () => {
+    await db.runAsync(
+      `INSERT INTO transactions
+         (uuid, accountId, categoryId, type, amountMinor, currencyCode, title, note, transactionDate, createdAt, updatedAt, deletedAt)
+       VALUES (?, ?, ?, 'INCOME', ?, 'EGP', ?, ?, ?, ?, ?, NULL)`,
+      [
+        uuid,
+        resolvedAccountId,
+        categoryId,
+        toMinorUnits(amount),
+        category,
+        note ?? null,
+        timestamp,
+        timestamp,
+        timestamp,
+      ],
+    );
 
-  await recalculateBalance(resolvedAccountId);
+    await recalculateBalance(resolvedAccountId);
+  });
 }
 
 export async function updateIncome(
@@ -109,15 +114,17 @@ export async function updateIncome(
     [id],
   );
 
-  await db.runAsync(
-    'UPDATE transactions SET amountMinor=?, categoryId=?, title=?, note=?, accountId=?, updatedAt=? WHERE id=? AND type=?',
-    [toMinorUnits(amount), categoryId, category, note ?? null, resolvedAccountId, nowIso(), id, 'INCOME'],
-  );
+  await db.withExclusiveTransactionAsync(async () => {
+    await db.runAsync(
+      'UPDATE transactions SET amountMinor=?, categoryId=?, title=?, note=?, accountId=?, updatedAt=? WHERE id=? AND type=?',
+      [toMinorUnits(amount), categoryId, category, note ?? null, resolvedAccountId, nowIso(), id, 'INCOME'],
+    );
 
-  const affected = new Set<number>();
-  if (old?.accountId != null) affected.add(old.accountId);
-  affected.add(resolvedAccountId);
-  for (const accId of affected) await recalculateBalance(accId);
+    const affected = new Set<number>();
+    if (old?.accountId != null) affected.add(old.accountId);
+    affected.add(resolvedAccountId);
+    for (const accId of affected) await recalculateBalance(accId);
+  });
 }
 
 export async function deleteIncome(id: number): Promise<void> {
@@ -129,38 +136,42 @@ export async function deleteIncome(id: number): Promise<void> {
   );
 
   const now = nowIso();
-  await db.runAsync(
-    "UPDATE transactions SET deletedAt = ?, updatedAt = ? WHERE id = ? AND type = 'INCOME'",
-    [now, now, id],
-  );
+  await db.withExclusiveTransactionAsync(async () => {
+    await db.runAsync(
+      "UPDATE transactions SET deletedAt = ?, updatedAt = ? WHERE id = ? AND type = 'INCOME'",
+      [now, now, id],
+    );
 
-  if (inc?.accountId != null) await recalculateBalance(inc.accountId);
+    if (inc?.accountId != null) await recalculateBalance(inc.accountId);
+  });
 }
 
 export async function getIncomesByMonth(monthKey: string): Promise<Income[]> {
   const db = await getDb();
+  const { startIso, endIso } = getMonthDateRange(monthKey);
   return db.getAllAsync<IncomeRow>(
-    `${INCOME_SELECT} AND ${tzMonthKey('t.transactionDate')}=? ORDER BY t.transactionDate DESC, t.id DESC`,
-    [monthKey],
+    `${INCOME_SELECT} AND t.transactionDate >= ? AND t.transactionDate < ? ORDER BY t.transactionDate DESC, t.id DESC`,
+    [startIso, endIso],
   );
 }
 
 export async function getIncomeTotalByMonth(monthKey: string): Promise<number> {
   const db = await getDb();
+  const { startIso, endIso } = getMonthDateRange(monthKey);
   const row = await db.getFirstAsync<{ total: number }>(
     `SELECT (
       (SELECT COALESCE(SUM(amountMinor), 0) FROM transactions
-       WHERE type = 'INCOME' AND deletedAt IS NULL AND ${tzMonthKey('transactionDate')} = ?) +
+       WHERE type = 'INCOME' AND deletedAt IS NULL AND transactionDate >= ? AND transactionDate < ?) +
       (SELECT COALESCE(SUM(l.amountMinor), 0) FROM loans l
-       WHERE l.type = 'BORROWED' AND l.deletedAt IS NULL AND ${tzMonthKey('l.loanDate')} = ?) +
+       WHERE l.type = 'BORROWED' AND l.deletedAt IS NULL AND l.loanDate >= ? AND l.loanDate < ?) +
       (SELECT COALESCE(SUM(lr.amountMinor), 0) FROM loan_repayments lr JOIN loans l ON l.id = lr.loanId
        WHERE l.type = 'LENT' AND lr.deletedAt IS NULL AND l.deletedAt IS NULL
-         AND ${tzMonthKey('lr.repaymentDate')} = ? AND ${tzMonthKey('l.loanDate')} != ?) -
+         AND lr.repaymentDate >= ? AND lr.repaymentDate < ? AND l.loanDate < ?) -
       (SELECT COALESCE(SUM(lr.amountMinor), 0) FROM loan_repayments lr JOIN loans l ON l.id = lr.loanId
        WHERE l.type = 'BORROWED' AND lr.deletedAt IS NULL AND l.deletedAt IS NULL
-         AND ${tzMonthKey('lr.repaymentDate')} = ? AND ${tzMonthKey('l.loanDate')} = ?)
+         AND lr.repaymentDate >= ? AND lr.repaymentDate < ? AND l.loanDate >= ? AND l.loanDate < ?)
     ) / 100.0 AS total`,
-    [monthKey, monthKey, monthKey, monthKey, monthKey, monthKey],
+    [startIso, endIso, startIso, endIso, startIso, endIso, startIso, startIso, endIso, startIso, endIso],
   );
   return row?.total ?? 0;
 }
@@ -171,9 +182,10 @@ export async function getIncomesByMonthPaged(
   offset: number,
 ): Promise<Income[]> {
   const db = await getDb();
+  const { startIso, endIso } = getMonthDateRange(monthKey);
   return db.getAllAsync<IncomeRow>(
-    `${INCOME_SELECT} AND ${tzMonthKey('t.transactionDate')}=? ORDER BY t.transactionDate DESC, t.id DESC LIMIT ? OFFSET ?`,
-    [monthKey, limit, offset],
+    `${INCOME_SELECT} AND t.transactionDate >= ? AND t.transactionDate < ? ORDER BY t.transactionDate DESC, t.id DESC LIMIT ? OFFSET ?`,
+    [startIso, endIso, limit, offset],
   );
 }
 

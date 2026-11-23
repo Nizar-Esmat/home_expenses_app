@@ -1,7 +1,8 @@
 import { Expense, Transfer } from '@/types';
 import { getDb } from './client';
-import { nowIso, toMinorUnits, tzMonthKey } from './helpers';
+import { getMonthDateRange, nowIso, toMinorUnits, tzMonthKey } from './helpers';
 import { recalculateBalance } from './accounts';
+import { generateUuidV7 } from './uuid';
 
 interface TransferRow {
   id: number;
@@ -58,31 +59,33 @@ export async function updateTransfer(
   if (!old) return;
 
   const now = nowIso();
-  await db.runAsync(
-    `UPDATE transfers
-     SET fromAccountId = ?, toAccountId = ?, amountMinor = ?, feeAmountMinor = ?, feeAccountId = ?,
-         note = ?, updatedAt = ?
-     WHERE id = ?`,
-    [
-      fromAccountId,
-      toAccountId,
-      toMinorUnits(amount),
-      toMinorUnits(feeAmount ?? 0),
-      feeAccountId ?? null,
-      note ?? null,
-      now,
-      id,
-    ],
-  );
+  await db.withExclusiveTransactionAsync(async () => {
+    await db.runAsync(
+      `UPDATE transfers
+       SET fromAccountId = ?, toAccountId = ?, amountMinor = ?, feeAmountMinor = ?, feeAccountId = ?,
+           note = ?, updatedAt = ?
+       WHERE id = ?`,
+      [
+        fromAccountId,
+        toAccountId,
+        toMinorUnits(amount),
+        toMinorUnits(feeAmount ?? 0),
+        feeAccountId ?? null,
+        note ?? null,
+        now,
+        id,
+      ],
+    );
 
-  const affected = new Set<number>();
-  affected.add(old.fromAccountId);
-  affected.add(old.toAccountId);
-  if (old.feeAccountId != null) affected.add(old.feeAccountId);
-  affected.add(fromAccountId);
-  affected.add(toAccountId);
-  if (feeAccountId != null) affected.add(feeAccountId);
-  for (const accId of affected) await recalculateBalance(accId);
+    const affected = new Set<number>();
+    affected.add(old.fromAccountId);
+    affected.add(old.toAccountId);
+    if (old.feeAccountId != null) affected.add(old.feeAccountId);
+    affected.add(fromAccountId);
+    affected.add(toAccountId);
+    if (feeAccountId != null) affected.add(feeAccountId);
+    for (const accId of affected) await recalculateBalance(accId);
+  });
 }
 
 export async function addTransfer(
@@ -96,28 +99,35 @@ export async function addTransfer(
 ): Promise<number> {
   const db = await getDb();
   const timestamp = createdAt ?? nowIso();
+  const uuid = generateUuidV7();
 
-  const result = await db.runAsync(
-    `INSERT INTO transfers
-       (fromAccountId, toAccountId, amountMinor, currencyCode, feeAmountMinor, feeAccountId, note, transferDate, createdAt, updatedAt, deletedAt)
-     VALUES (?, ?, ?, 'EGP', ?, ?, ?, ?, ?, ?, NULL)`,
-    [
-      fromAccountId,
-      toAccountId,
-      toMinorUnits(amount),
-      toMinorUnits(feeAmount ?? 0),
-      feeAccountId ?? null,
-      note ?? null,
-      timestamp,
-      timestamp,
-      timestamp,
-    ],
-  );
+  let newId = 0;
+  await db.withExclusiveTransactionAsync(async () => {
+    const result = await db.runAsync(
+      `INSERT INTO transfers
+         (uuid, fromAccountId, toAccountId, amountMinor, currencyCode, feeAmountMinor, feeAccountId, note, transferDate, createdAt, updatedAt, deletedAt)
+       VALUES (?, ?, ?, ?, 'EGP', ?, ?, ?, ?, ?, ?, NULL)`,
+      [
+        uuid,
+        fromAccountId,
+        toAccountId,
+        toMinorUnits(amount),
+        toMinorUnits(feeAmount ?? 0),
+        feeAccountId ?? null,
+        note ?? null,
+        timestamp,
+        timestamp,
+        timestamp,
+      ],
+    );
+    newId = result.lastInsertRowId;
 
-  await recalculateBalance(fromAccountId);
-  await recalculateBalance(toAccountId);
-  if (feeAccountId != null) await recalculateBalance(feeAccountId);
-  return result.lastInsertRowId;
+    await recalculateBalance(fromAccountId);
+    await recalculateBalance(toAccountId);
+    if (feeAccountId != null) await recalculateBalance(feeAccountId);
+  });
+
+  return newId;
 }
 
 export async function deleteTransfer(id: number): Promise<void> {
@@ -130,21 +140,24 @@ export async function deleteTransfer(id: number): Promise<void> {
   if (!transfer) return;
 
   const now = nowIso();
-  await db.runAsync(
-    'UPDATE transfers SET deletedAt = ?, updatedAt = ? WHERE id = ?',
-    [now, now, id],
-  );
+  await db.withExclusiveTransactionAsync(async () => {
+    await db.runAsync(
+      'UPDATE transfers SET deletedAt = ?, updatedAt = ? WHERE id = ?',
+      [now, now, id],
+    );
 
-  await recalculateBalance(transfer.fromAccountId);
-  await recalculateBalance(transfer.toAccountId);
-  if (transfer.feeAccountId != null) await recalculateBalance(transfer.feeAccountId);
+    await recalculateBalance(transfer.fromAccountId);
+    await recalculateBalance(transfer.toAccountId);
+    if (transfer.feeAccountId != null) await recalculateBalance(transfer.feeAccountId);
+  });
 }
 
 export async function getTransfersByMonth(monthKey: string): Promise<Transfer[]> {
   const db = await getDb();
+  const { startIso, endIso } = getMonthDateRange(monthKey);
   return db.getAllAsync<TransferRow>(
-    `${TRANSFER_SELECT} AND ${tzMonthKey('transferDate')} = ? ORDER BY transferDate DESC, id DESC`,
-    [monthKey],
+    `${TRANSFER_SELECT} AND transferDate >= ? AND transferDate < ? ORDER BY transferDate DESC, id DESC`,
+    [startIso, endIso],
   );
 }
 
@@ -159,6 +172,7 @@ const TRANSFER_FEE_CATEGORY_NAME = 'Transfer Fee';
 
 export async function getTransferFeesByMonth(monthKey: string): Promise<Expense[]> {
   const db = await getDb();
+  const { startIso, endIso } = getMonthDateRange(monthKey);
   const rows = await db.getAllAsync<{
     id: number;
     feeAmount: number;
@@ -173,9 +187,9 @@ export async function getTransferFeesByMonth(monthKey: string): Promise<Expense[
       note,
       feeAccountId AS accountId
     FROM transfers
-    WHERE deletedAt IS NULL AND feeAmountMinor > 0 AND ${tzMonthKey('transferDate')} = ?
+    WHERE deletedAt IS NULL AND feeAmountMinor > 0 AND transferDate >= ? AND transferDate < ?
     ORDER BY transferDate DESC, id DESC`,
-    [monthKey],
+    [startIso, endIso],
   );
   return rows.map((r) => ({
     id: r.id,
