@@ -51,9 +51,10 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const baseColors = isDark ? NEUTRAL_DARK : NEUTRAL_LIGHT;
   const palette = COLOR_PALETTES[colorPalette] || COLOR_PALETTES.grey;
 
-  // High-contrast text on primary across Yellow, Grey (Dark), Orange, Green, Teal vs Dark palettes
+  // High-contrast text on primary across Yellow, Lime, Grey (Dark), Orange, Green, Teal vs Dark palettes
   const isLightPrimary =
     colorPalette === 'yellow' ||
+    colorPalette === 'lime' ||
     (isDark && colorPalette === 'grey') ||
     (!isDark && (colorPalette === 'orange' || colorPalette === 'green' || colorPalette === 'teal'));
   const onPrimary = isLightPrimary ? '#111827' : '#FFFFFF';

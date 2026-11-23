@@ -89,6 +89,16 @@ export const COLOR_PALETTES = {
     inputFill: '#FFFBEB',
     inputFillDark: '#1A1812',
   },
+  lime: {
+    primary: '#65A30D',       // Energetic lime with light-mode WCAG contrast
+    primaryDark: '#84CC16',   // Radiant vibrant lime
+    subtle: '#F7FEE7',
+    subtleDark: '#365314',
+    darkBg: '#141416',
+    cardDark: '#1A2114',
+    inputFill: '#F9FEEB',
+    inputFillDark: '#141A11',
+  },
 };
 
 // Neutral backgrounds that don't depend on color palette (fallback)
@@ -142,6 +152,7 @@ export const PALETTE_COLORS: Record<ColorPaletteName, string> = {
   teal: '#0D9488',
   pink: '#DB2777',
   yellow: '#D97706',
+  lime: '#65A30D',
 };
 
 export const PALETTE_COLORS_DARK: Record<ColorPaletteName, string> = {
@@ -154,6 +165,7 @@ export const PALETTE_COLORS_DARK: Record<ColorPaletteName, string> = {
   teal: '#14B8A6',
   pink: '#F472B6',
   yellow: '#FBBF24',
+  lime: '#84CC16',
 };
 
 // ── Fallback ───────────────────────────────────
