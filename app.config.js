@@ -32,5 +32,9 @@ module.exports = ({ config }) => {
       ...(config.ios || {}),
       bundleIdentifier: getUniqueIdentifier(),
     },
+    extra: {
+      ...(config.extra || {}),
+      appEnv: process.env.APP_ENV || 'development',
+    },
   };
 };

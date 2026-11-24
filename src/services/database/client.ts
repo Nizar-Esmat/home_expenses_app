@@ -1,5 +1,5 @@
 import * as SQLite from 'expo-sqlite';
-import { DEFAULT_CATEGORY_COLORS } from '@/services/constants';
+import { DEFAULT_CATEGORY_COLORS, IS_PRODUCTION } from '@/services/constants';
 import { nowIso } from './helpers';
 import { populateSampleData } from './seedSampleData';
 import { runMigrations, SCHEMA_VERSION } from './migrations';
@@ -110,9 +110,9 @@ async function initDb(db: SQLite.SQLiteDatabase, dbFileName: string): Promise<vo
     "SELECT value FROM settings WHERE key = 'hasSeededSampleData'",
   );
   if (!sampleSeeded) {
-    // Only the initial legacy profile auto-seeds sample data on a brand new install.
-    // Additional user profiles always start clean.
-    if (dbFileName === LEGACY_USER_DB_NAME) {
+    // Only auto-seed sample data in non-production builds for the initial profile.
+    // Production installs and additional user profiles always start clean.
+    if (!IS_PRODUCTION && dbFileName === LEGACY_USER_DB_NAME) {
       const txCount = await db.getFirstAsync<{ n: number }>('SELECT COUNT(*) AS n FROM transactions');
       if (!txCount || txCount.n === 0) {
         await populateSampleData(db);

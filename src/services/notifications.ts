@@ -1,6 +1,7 @@
 import { Platform } from 'react-native';
 import type * as ExpoNotifications from 'expo-notifications';
 import { ReminderSettings } from '@/types';
+import { IS_PRODUCTION } from './constants';
 import {
   getReminderSettings,
   saveReminderSettings,
@@ -207,7 +208,7 @@ export async function scheduleExpenseReminder(
 export async function sendTestNotification(
   user?: { uuid: string; name: string },
 ): Promise<boolean> {
-  if (!Notifications || !isNotificationAvailable) return false;
+  if (IS_PRODUCTION || !Notifications || !isNotificationAvailable) return false;
 
   const hasPermission = await requestNotificationPermissions();
   if (!hasPermission) {

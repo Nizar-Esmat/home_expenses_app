@@ -25,6 +25,7 @@ import {
   pickAndParseBackupFile,
   importBackupDataIntoCurrentProfile,
 } from '@/services/sync';
+import { IS_PRODUCTION } from '@/services/constants';
 import { seedActiveDatabaseWithSampleData, DatabaseBackupData } from '@/services/database';
 import { useAppDialog } from '@/components/AppDialog';
 import { ReminderSettings, UserProfile } from '@/types';
@@ -964,51 +965,53 @@ export default function SettingsScreen() {
                   </View>
                 )}
 
-                <View style={styles.testContainer}>
-                  <TouchableOpacity
-                    style={[
-                      styles.testButton,
-                      {
-                        backgroundColor: colors.inputFill,
-                        borderColor: colors.border,
-                      },
-                    ]}
-                    onPress={handleSendTest}
-                    disabled={isSendingTest}
-                    activeOpacity={0.7}
-                  >
-                    {isSendingTest ? (
-                      <ActivityIndicator
-                        size='small'
-                        color={colors.primary}
-                      />
-                    ) : (
-                      <>
-                        <Ionicons
-                          name='paper-plane-outline'
-                          size={15}
+                {!IS_PRODUCTION && (
+                  <View style={styles.testContainer}>
+                    <TouchableOpacity
+                      style={[
+                        styles.testButton,
+                        {
+                          backgroundColor: colors.inputFill,
+                          borderColor: colors.border,
+                        },
+                      ]}
+                      onPress={handleSendTest}
+                      disabled={isSendingTest}
+                      activeOpacity={0.7}
+                    >
+                      {isSendingTest ? (
+                        <ActivityIndicator
+                          size='small'
                           color={colors.primary}
                         />
-                        <Text
-                          style={[
-                            styles.testButtonText,
-                            { color: colors.primary },
-                          ]}
-                        >
-                          Send Test Notification (2s)
-                        </Text>
-                      </>
-                    )}
-                  </TouchableOpacity>
-                  <Text
-                    style={[
-                      styles.testHint,
-                      { color: colors.textSecondary },
-                    ]}
-                  >
-                    Tapping the notification will immediately open Add Expense
-                  </Text>
-                </View>
+                      ) : (
+                        <>
+                          <Ionicons
+                            name='paper-plane-outline'
+                            size={15}
+                            color={colors.primary}
+                          />
+                          <Text
+                            style={[
+                              styles.testButtonText,
+                              { color: colors.primary },
+                            ]}
+                          >
+                            Send Test Notification (2s)
+                          </Text>
+                        </>
+                      )}
+                    </TouchableOpacity>
+                    <Text
+                      style={[
+                        styles.testHint,
+                        { color: colors.textSecondary },
+                      ]}
+                    >
+                      Tapping the notification will immediately open Add Expense
+                    </Text>
+                  </View>
+                )}
               </View>
             </>
           )}
@@ -1183,45 +1186,49 @@ export default function SettingsScreen() {
               />
             )}
           </TouchableOpacity>
-          <View style={[styles.divider, { backgroundColor: colors.border }]} />
-          <TouchableOpacity
-            style={styles.navRowNoBorder}
-            onPress={handleSeedSampleData}
-            activeOpacity={0.6}
-            disabled={syncingAction !== null}
-          >
-            <View style={styles.navRowLeft}>
-              <View
-                style={[
-                  styles.navIcon,
-                  { backgroundColor: colors.primary + '33' },
-                ]}
+          {!IS_PRODUCTION && (
+            <>
+              <View style={[styles.divider, { backgroundColor: colors.border }]} />
+              <TouchableOpacity
+                style={styles.navRowNoBorder}
+                onPress={handleSeedSampleData}
+                activeOpacity={0.6}
+                disabled={syncingAction !== null}
               >
-                <Ionicons
-                  name='flask-outline'
-                  size={16}
-                  color={colors.primary}
-                />
-              </View>
-              <View>
-                <Text style={[styles.navLabel, { color: colors.textPrimary }]}>
-                  Load Sample Data
-                </Text>
-                <Text style={[styles.navSub, { color: colors.textSecondary }]}>
-                  Populate demo accounts, transactions & loans
-                </Text>
-              </View>
-            </View>
-            {syncingAction === 'sample' ? (
-              <ActivityIndicator color={colors.primary} size='small' />
-            ) : (
-              <Ionicons
-                name='chevron-forward'
-                size={18}
-                color={colors.textSecondary}
-              />
-            )}
-          </TouchableOpacity>
+                <View style={styles.navRowLeft}>
+                  <View
+                    style={[
+                      styles.navIcon,
+                      { backgroundColor: colors.primary + '33' },
+                    ]}
+                  >
+                    <Ionicons
+                      name='flask-outline'
+                      size={16}
+                      color={colors.primary}
+                    />
+                  </View>
+                  <View>
+                    <Text style={[styles.navLabel, { color: colors.textPrimary }]}>
+                      Load Sample Data
+                    </Text>
+                    <Text style={[styles.navSub, { color: colors.textSecondary }]}>
+                      Populate demo accounts, transactions & loans
+                    </Text>
+                  </View>
+                </View>
+                {syncingAction === 'sample' ? (
+                  <ActivityIndicator color={colors.primary} size='small' />
+                ) : (
+                  <Ionicons
+                    name='chevron-forward'
+                    size={18}
+                    color={colors.textSecondary}
+                  />
+                )}
+              </TouchableOpacity>
+            </>
+          )}
         </View>
 
         <View style={{ height: 150 }} />

@@ -1,3 +1,11 @@
+import Constants from 'expo-constants';
+
+export const APP_ENV: string =
+  (Constants.expoConfig?.extra?.appEnv as string | undefined) ??
+  (__DEV__ ? 'development' : 'production');
+
+export const IS_PRODUCTION = APP_ENV === 'production';
+
 export const DEFAULT_CATEGORIES = ['Food', 'Bills', 'Transport', 'Shopping', 'Home', 'Other'];
 
 export const CURRENCY_OPTIONS = ['EGP', 'USD', 'EUR', 'GBP', 'SAR', 'AED'];
