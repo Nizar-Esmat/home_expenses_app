@@ -22,11 +22,14 @@ import {
 import {
   exportBackupAndShare,
   exportDatabaseFileAndShare,
-  pickAndImportBackupMerge,
+  pickAndParseBackupFile,
+  importBackupDataIntoCurrentProfile,
 } from '@/services/sync';
-import { populateSampleData } from '@/services/database';
+import { seedActiveDatabaseWithSampleData, DatabaseBackupData } from '@/services/database';
 import { useAppDialog } from '@/components/AppDialog';
-import { ReminderSettings } from '@/types';
+import { ReminderSettings, UserProfile } from '@/types';
+import { useUser } from '@/contexts/UserContext';
+import { ProfileNameModal } from '@/components/ProfileSwitcherModal';
 import {
   getReminderSettings,
   saveReminderSettings,
@@ -66,11 +69,27 @@ export default function SettingsScreen() {
     useTheme();
   const router = useRouter();
   const { showDialog } = useAppDialog();
+  const {
+    users,
+    activeUser,
+    switchUser,
+    createUser,
+    renameUser,
+    deleteUser,
+    importAsNewUser,
+  } = useUser();
 
   const ringColor = colors.textPrimary;
 
   const [syncingAction, setSyncingAction] = useState<
     'export_json' | 'export_db' | 'import' | 'sample' | null
+  >(null);
+
+  const [profileModal, setProfileModal] = useState<
+    | { mode: 'create' }
+    | { mode: 'rename'; target: UserProfile }
+    | { mode: 'import'; data: DatabaseBackupData; suggestedName: string }
+    | null
   >(null);
 
   const [reminderSettings, setReminderSettings] = useState<ReminderSettings>(
@@ -121,12 +140,12 @@ export default function SettingsScreen() {
       const updated: ReminderSettings = { ...reminderSettings, enabled: true };
       setReminderSettings(updated);
       await saveReminderSettings(updated);
-      await scheduleExpenseReminder(updated);
+      await scheduleExpenseReminder(updated, activeUser ?? undefined);
     } else {
       const updated: ReminderSettings = { ...reminderSettings, enabled: false };
       setReminderSettings(updated);
       await saveReminderSettings(updated);
-      await cancelExpenseReminder();
+      await cancelExpenseReminder(activeUser?.uuid);
     }
   };
 
@@ -135,7 +154,7 @@ export default function SettingsScreen() {
     setReminderSettings(updated);
     await saveReminderSettings(updated);
     if (updated.enabled) {
-      await scheduleExpenseReminder(updated);
+      await scheduleExpenseReminder(updated, activeUser ?? undefined);
     }
   };
 
@@ -155,7 +174,7 @@ export default function SettingsScreen() {
       setReminderSettings(updated);
       await saveReminderSettings(updated);
       if (updated.enabled) {
-        await scheduleExpenseReminder(updated);
+        await scheduleExpenseReminder(updated, activeUser ?? undefined);
       }
     }
   };
@@ -168,7 +187,7 @@ export default function SettingsScreen() {
     setReminderSettings(updated);
     await saveReminderSettings(updated);
     if (updated.enabled) {
-      await scheduleExpenseReminder(updated);
+      await scheduleExpenseReminder(updated, activeUser ?? undefined);
     }
   };
 
@@ -187,7 +206,7 @@ export default function SettingsScreen() {
     }
     setIsSendingTest(true);
     try {
-      const sent = await sendTestNotification();
+      const sent = await sendTestNotification(activeUser ?? undefined);
       if (sent) {
         showDialog({
           title: 'Test Reminder Sent',
@@ -300,33 +319,42 @@ export default function SettingsScreen() {
     });
   };
 
-  const startImport = async () => {
-    if (syncingAction) return;
+  const formatImportSummary = (result: {
+    categoriesAdded: number;
+    incomeCategoriesAdded: number;
+    expensesAdded: number;
+    expensesSkipped: number;
+    incomesAdded: number;
+    incomesSkipped: number;
+    accountsAdded: number;
+    transfersAdded: number;
+    settingsMerged: number;
+  }) =>
+    [
+      `Categories added: ${result.categoriesAdded}`,
+      `Income categories added: ${result.incomeCategoriesAdded}`,
+      `Expenses added: ${result.expensesAdded}`,
+      `Expenses skipped: ${result.expensesSkipped}`,
+      `Income added: ${result.incomesAdded}`,
+      `Income skipped: ${result.incomesSkipped}`,
+      `Accounts added: ${result.accountsAdded}`,
+      `Transfers added: ${result.transfersAdded}`,
+      `Settings merged: ${result.settingsMerged}`,
+    ].join('\n');
+
+  const mergeIntoCurrent = async (data: DatabaseBackupData) => {
     try {
       setSyncingAction('import');
-      const result = await pickAndImportBackupMerge();
+      const result = await importBackupDataIntoCurrentProfile(data);
       showDialog({
         title: 'Import Complete',
-        message: [
-          `Categories added: ${result.categoriesAdded}`,
-          `Income categories added: ${result.incomeCategoriesAdded}`,
-          `Expenses added: ${result.expensesAdded}`,
-          `Expenses skipped: ${result.expensesSkipped}`,
-          `Income added: ${result.incomesAdded}`,
-          `Income skipped: ${result.incomesSkipped}`,
-          `Accounts added: ${result.accountsAdded}`,
-          `Transfers added: ${result.transfersAdded}`,
-          `Settings merged: ${result.settingsMerged}`,
-          '',
-          'Imported settings overwrite local settings. Reopen the app if theme/palette does not update instantly.',
-        ].join('\n'),
+        message: `${formatImportSummary(result)}\n\nImported settings overwrite local settings for "${activeUser?.name ?? 'current profile'}".`,
         icon: '✅',
         type: 'success',
         buttons: [{ text: 'OK', style: 'default' }],
       });
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Import failed.';
-      if (msg === 'Import cancelled.') return;
       showDialog({
         title: 'Import Failed',
         message: msg,
@@ -339,20 +367,78 @@ export default function SettingsScreen() {
     }
   };
 
-  const handleImport = () => {
+  const handleImport = async () => {
+    if (syncingAction) return;
+    try {
+      setSyncingAction('import');
+      const { fileName, data } = await pickAndParseBackupFile();
+      setSyncingAction(null);
+
+      const baseName = fileName.replace(/\.json$/i, '').slice(0, 24) || 'Imported';
+      showDialog({
+        title: 'Choose Import Mode',
+        message: `How would you like to import "${fileName}"?`,
+        icon: '📥',
+        type: 'info',
+        buttons: [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: `Merge into "${activeUser?.name ?? 'Current'}"`,
+            style: 'default',
+            onPress: () => {
+              mergeIntoCurrent(data);
+            },
+          },
+          {
+            text: 'Import as New Profile',
+            style: 'default',
+            onPress: () => {
+              setProfileModal({
+                mode: 'import',
+                data,
+                suggestedName: baseName,
+              });
+            },
+          },
+        ],
+      });
+    } catch (e) {
+      setSyncingAction(null);
+      const msg = e instanceof Error ? e.message : 'Import failed.';
+      if (msg === 'Import cancelled.') return;
+      showDialog({
+        title: 'Import Failed',
+        message: msg,
+        icon: '❌',
+        type: 'danger',
+        buttons: [{ text: 'OK', style: 'default' }],
+      });
+    }
+  };
+
+  const handleDeleteProfile = (profile: UserProfile) => {
+    if (users.length <= 1) return;
     showDialog({
-      title: 'Import Backup',
-      message:
-        'This will merge data from the backup into your current device. Existing matching records are skipped; imported settings overwrite local settings.',
-      icon: '📥',
-      type: 'info',
+      title: `Delete "${profile.name}"?`,
+      message: `This will permanently delete "${profile.name}" and all of its accounts, transactions, loans, and settings. This cannot be undone.`,
+      icon: '🗑️',
+      type: 'danger',
       buttons: [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Import',
-          style: 'default',
-          onPress: () => {
-            startImport();
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deleteUser(profile.id);
+            } catch (e) {
+              showDialog({
+                title: 'Error',
+                message: e instanceof Error ? e.message : 'Failed to delete profile.',
+                type: 'danger',
+                buttons: [{ text: 'OK', style: 'default' }],
+              });
+            }
           },
         },
       ],
@@ -373,7 +459,7 @@ export default function SettingsScreen() {
           onPress: async () => {
             try {
               setSyncingAction('sample');
-              await populateSampleData();
+              await seedActiveDatabaseWithSampleData();
               showDialog({
                 title: 'Data Loaded!',
                 message: 'Sample accounts, expenses, incomes, transfers, and loans have been created. Switch to Home or Statistics to explore!',
@@ -408,9 +494,117 @@ export default function SettingsScreen() {
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
-        {/* ── Appearance ─────────────────────────────────── */}
+        {/* ── Profiles ───────────────────────────────────── */}
 
         <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>
+          Profiles
+        </Text>
+
+        <View style={[styles.card, { backgroundColor: colors.card }]}>
+          {users.map((profile, idx) => {
+            const isActive = profile.id === activeUser?.id;
+            return (
+              <React.Fragment key={profile.id}>
+                {idx > 0 && (
+                  <View style={[styles.divider, { backgroundColor: colors.border }]} />
+                )}
+                <TouchableOpacity
+                  style={styles.navRow}
+                  onPress={() => {
+                    if (!isActive) switchUser(profile.id);
+                  }}
+                  activeOpacity={isActive ? 1 : 0.65}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Profile ${profile.name}${isActive ? ', active' : '. Tap to switch'}`}
+                >
+                  <View style={styles.navRowLeft}>
+                    <View
+                      style={[
+                        styles.navIcon,
+                        {
+                          backgroundColor: isActive
+                            ? colors.primary + '33'
+                            : colors.inputFill,
+                        },
+                      ]}
+                    >
+                      <Ionicons
+                        name={isActive ? 'person' : 'person-outline'}
+                        size={16}
+                        color={isActive ? colors.primary : colors.textSecondary}
+                      />
+                    </View>
+                    <View style={styles.profileNameWrap}>
+                      <Text
+                        style={[styles.navLabel, { color: colors.textPrimary }]}
+                        numberOfLines={1}
+                      >
+                        {profile.name}
+                      </Text>
+                      <Text style={[styles.navSub, { color: isActive ? colors.primary : colors.textSecondary }]}>
+                        {isActive ? 'Active profile' : 'Tap to switch'}
+                      </Text>
+                    </View>
+                  </View>
+                  <View style={styles.profileActions}>
+                    <TouchableOpacity
+                      style={styles.profileIconBtn}
+                      onPress={() => setProfileModal({ mode: 'rename', target: profile })}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Rename profile ${profile.name}`}
+                    >
+                      <Ionicons name="pencil-outline" size={18} color={colors.textSecondary} />
+                    </TouchableOpacity>
+                    {users.length > 1 && (
+                      <TouchableOpacity
+                        style={styles.profileIconBtn}
+                        onPress={() => handleDeleteProfile(profile)}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Delete profile ${profile.name}`}
+                      >
+                        <Ionicons name="trash-outline" size={18} color={colors.danger} />
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                </TouchableOpacity>
+              </React.Fragment>
+            );
+          })}
+          <View style={[styles.divider, { backgroundColor: colors.border }]} />
+          <TouchableOpacity
+            style={styles.navRowNoBorder}
+            onPress={() => setProfileModal({ mode: 'create' })}
+            activeOpacity={0.6}
+            accessibilityRole="button"
+            accessibilityLabel="Add new profile"
+          >
+            <View style={styles.navRowLeft}>
+              <View
+                style={[
+                  styles.navIcon,
+                  { backgroundColor: colors.primary + '33' },
+                ]}
+              >
+                <Ionicons name="add" size={18} color={colors.primary} />
+              </View>
+              <View>
+                <Text style={[styles.navLabel, { color: colors.primary }]}>
+                  Add New Profile
+                </Text>
+                <Text style={[styles.navSub, { color: colors.textSecondary }]}>
+                  Start a clean separate workspace
+                </Text>
+              </View>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
+          </TouchableOpacity>
+        </View>
+
+        {/* ── Appearance ─────────────────────────────────── */}
+
+        <Text style={[styles.sectionLabel, { color: colors.textSecondary, marginTop: 24 }]}>
           Appearance
         </Text>
 
@@ -1032,6 +1226,59 @@ export default function SettingsScreen() {
 
         <View style={{ height: 150 }} />
       </ScrollView>
+
+      <ProfileNameModal
+        visible={profileModal !== null}
+        title={
+          profileModal?.mode === 'rename'
+            ? 'Rename Profile'
+            : profileModal?.mode === 'import'
+              ? 'New Profile Name'
+              : 'Create New Profile'
+        }
+        subtitle={
+          profileModal?.mode === 'import'
+            ? 'Enter a name for the new profile that will receive this backup.'
+            : profileModal?.mode === 'create'
+              ? 'Each profile has completely separate accounts, transactions, theme, and reminders.'
+              : undefined
+        }
+        initialValue={
+          profileModal?.mode === 'rename'
+            ? profileModal.target.name
+            : profileModal?.mode === 'import'
+              ? profileModal.suggestedName
+              : ''
+        }
+        confirmLabel={
+          profileModal?.mode === 'rename'
+            ? 'Save'
+            : profileModal?.mode === 'import'
+              ? 'Create & Import'
+              : 'Create'
+        }
+        onCancel={() => setProfileModal(null)}
+        onConfirm={async (name) => {
+          if (!profileModal) return;
+          if (profileModal.mode === 'create') {
+            await createUser(name, true);
+            setProfileModal(null);
+          } else if (profileModal.mode === 'rename') {
+            await renameUser(profileModal.target.id, name);
+            setProfileModal(null);
+          } else if (profileModal.mode === 'import') {
+            const summary = await importAsNewUser(name, profileModal.data);
+            setProfileModal(null);
+            showDialog({
+              title: 'Profile Imported',
+              message: `Created "${name}" and imported backup:\n\n${formatImportSummary(summary)}`,
+              icon: '✅',
+              type: 'success',
+              buttons: [{ text: 'OK', style: 'default' }],
+            });
+          }
+        }}
+      />
     </View>
   );
 }
@@ -1247,5 +1494,19 @@ const styles = StyleSheet.create({
     fontSize: 11,
     marginTop: 6,
     textAlign: 'center',
+  },
+  profileNameWrap: {
+    flex: 1,
+  },
+  profileActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  profileIconBtn: {
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

@@ -11,6 +11,8 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/theme/ThemeContext';
 import { useMonth } from '@/contexts/MonthContext';
+import { useUser } from '@/contexts/UserContext';
+import { ProfileSwitcherModal } from '@/components/ProfileSwitcherModal';
 import {
   getSettings,
   getActiveAccounts,
@@ -49,6 +51,8 @@ export default function HomeScreen() {
   const router = useRouter();
   const currentMonth = currentMonthKey();
   const { selectedMonthKey, setSelectedMonthKey } = useMonth();
+  const { activeUser } = useUser();
+  const [profileSheetOpen, setProfileSheetOpen] = useState(false);
 
   const [settings, setSettings] = useState<Settings | null>(null);
   const [accountMap, setAccountMap] = useState<Record<number, Account>>({});
@@ -190,6 +194,28 @@ export default function HomeScreen() {
           <Text style={[styles.pageTitle, { color: colors.textPrimary }]} accessibilityRole="header">
             Home
           </Text>
+          {activeUser && (
+            <TouchableOpacity
+              style={[
+                styles.profilePill,
+                { backgroundColor: colors.card, borderColor: colors.border },
+              ]}
+              onPress={() => setProfileSheetOpen(true)}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              activeOpacity={0.75}
+              accessibilityRole="button"
+              accessibilityLabel={`Current profile: ${activeUser.name}. Tap to switch profiles.`}
+            >
+              <Ionicons name="person-circle-outline" size={18} color={colors.primary} />
+              <Text
+                style={[styles.profilePillText, { color: colors.textPrimary }]}
+                numberOfLines={1}
+              >
+                {activeUser.name}
+              </Text>
+              <Ionicons name="chevron-down" size={14} color={colors.textSecondary} />
+            </TouchableOpacity>
+          )}
         </View>
 
         {/* Total Balance */}
@@ -399,6 +425,11 @@ export default function HomeScreen() {
       </ScrollView>
 
       <FloatingAddButton bottomOffset={110} />
+
+      <ProfileSwitcherModal
+        visible={profileSheetOpen}
+        onClose={() => setProfileSheetOpen(false)}
+      />
     </View>
   );
 }
@@ -406,7 +437,29 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   screen: { flex: 1 },
   content: { padding: 20 },
-  headerRow: { marginBottom: 20 },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 20,
+    gap: 12,
+  },
+  profilePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 20,
+    borderWidth: 1,
+    minHeight: 36,
+    maxWidth: 180,
+  },
+  profilePillText: {
+    fontSize: 13,
+    fontWeight: '600',
+    flexShrink: 1,
+  },
   summaryContainer: {
     gap: 12,
   },
