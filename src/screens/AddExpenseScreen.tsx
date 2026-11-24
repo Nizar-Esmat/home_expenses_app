@@ -8,10 +8,13 @@ import {
   StyleSheet,
   KeyboardAvoidingView,
   Platform,
+  Modal,
+  Pressable,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/theme/ThemeContext';
+import { SPLIT_CATEGORY_NAME } from '@/services/constants';
 import {
   addExpense,
   updateExpense,
@@ -34,6 +37,7 @@ interface SubItem {
   localId: string;
   title: string;
   amount: string;
+  categoryId: number | null;
 }
 
 export default function AddExpenseScreen() {
@@ -61,6 +65,8 @@ export default function AddExpenseScreen() {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [selectedAccount, setSelectedAccount] = useState<Account | null>(null);
   const [showAllCategories, setShowAllCategories] = useState(false);
+  const [perItemCategoryMode, setPerItemCategoryMode] = useState(false);
+  const [pickerItemId, setPickerItemId] = useState<string | null>(null);
 
   const subItemCounter = useRef(0);
   const makeLocalId = () => String(++subItemCounter.current);
@@ -71,7 +77,8 @@ export default function AddExpenseScreen() {
         getCategories(),
         getActiveAccounts(),
       ]);
-      setCategories(cats);
+      const selectableCats = cats.filter((c) => c.name !== SPLIT_CATEGORY_NAME);
+      setCategories(selectableCats);
       setAccounts(accts);
 
       if (expenseId) {
@@ -84,18 +91,33 @@ export default function AddExpenseScreen() {
           setPrice(String(expense.price));
           setNote(expense.note ?? '');
           setDate(new Date(expense.createdAt));
-          const cat = cats.find((c) => c.name === expense.category);
-          setSelectedCategory(cat ?? cats[0] ?? null);
           const acct = accts.find((a) => a.id === expense.accountId);
           setSelectedAccount(acct ?? accts[0] ?? null);
           if (existingSubs.length > 0) {
-            setSubItems(
-              existingSubs.map((s) => ({
-                localId: makeLocalId(),
-                title: s.title,
-                amount: String(s.amount),
-              })),
+            const mappedSubs = existingSubs.map((s) => ({
+              localId: makeLocalId(),
+              title: s.title,
+              amount: String(s.amount),
+              categoryId: s.categoryId ?? null,
+            }));
+            setSubItems(mappedSubs);
+            const uniqueCatIds = new Set(
+              mappedSubs
+                .map((s) => s.categoryId)
+                .filter((id): id is number => id != null),
             );
+            const isSplit =
+              expense.category === SPLIT_CATEGORY_NAME || uniqueCatIds.size > 1;
+            setPerItemCategoryMode(isSplit);
+            const fallbackCat =
+              selectableCats.find((c) => c.name === expense.category) ??
+              selectableCats.find((c) => c.id === mappedSubs[0]?.categoryId) ??
+              selectableCats[0] ??
+              null;
+            setSelectedCategory(fallbackCat);
+          } else {
+            const cat = selectableCats.find((c) => c.name === expense.category);
+            setSelectedCategory(cat ?? selectableCats[0] ?? null);
           }
           return;
         }
@@ -112,7 +134,7 @@ export default function AddExpenseScreen() {
         return;
       }
 
-      setSelectedCategory(cats[0] ?? null);
+      setSelectedCategory(selectableCats[0] ?? null);
       const defaultAcct =
         accts.find((a) => a.isDefault === 1) ?? accts[0] ?? null;
       setSelectedAccount(defaultAcct);
@@ -135,11 +157,37 @@ export default function AddExpenseScreen() {
 
   const addSubItem = () => {
     const initialAmount = subItems.length === 0 ? price : '';
+    const defaultCategoryId = selectedCategory?.id ?? categories[0]?.id ?? null;
     setSubItems((prev) => [
       ...prev,
-      { localId: makeLocalId(), title: '', amount: initialAmount },
+      {
+        localId: makeLocalId(),
+        title: '',
+        amount: initialAmount,
+        categoryId: defaultCategoryId,
+      },
     ]);
     setSubItemErrors({});
+  };
+
+  const toggleCategoryMode = (perItem: boolean) => {
+    setPerItemCategoryMode(perItem);
+    if (perItem) {
+      const fallbackId = selectedCategory?.id ?? categories[0]?.id ?? null;
+      setSubItems((prev) =>
+        prev.map((item) => ({
+          ...item,
+          categoryId: item.categoryId ?? fallbackId,
+        })),
+      );
+    }
+  };
+
+  const updateSubItemCategory = (localId: string, categoryId: number) => {
+    setSubItems((prev) =>
+      prev.map((i) => (i.localId === localId ? { ...i, categoryId } : i)),
+    );
+    setPickerItemId(null);
   };
 
   const removeSubItem = (localId: string) => {
@@ -187,9 +235,13 @@ export default function AddExpenseScreen() {
       setSubItemErrors(errors);
       return null;
     }
+    const fallbackCategoryId = selectedCategory?.id ?? categories[0]?.id ?? null;
     return subItems.map((item) => ({
       title: item.title.trim(),
       amount: parseFloat(item.amount.replace(',', '.')),
+      categoryId: perItemCategoryMode
+        ? (item.categoryId ?? fallbackCategoryId)
+        : fallbackCategoryId,
     }));
   };
 
@@ -375,8 +427,62 @@ export default function AddExpenseScreen() {
           Items (optional)
         </Text>
 
+        {hasSubItems && (
+          <View
+            style={[
+              styles.modeToggleRow,
+              { backgroundColor: colors.inputFill, borderColor: colors.border },
+            ]}
+            accessibilityRole="radiogroup"
+            accessibilityLabel="Item category mode"
+          >
+            <TouchableOpacity
+              style={[
+                styles.modeOption,
+                !perItemCategoryMode && { backgroundColor: colors.primary },
+              ]}
+              onPress={() => toggleCategoryMode(false)}
+              activeOpacity={0.8}
+              accessibilityRole="radio"
+              accessibilityState={{ selected: !perItemCategoryMode }}
+            >
+              <Text
+                style={[
+                  styles.modeOptionText,
+                  { color: !perItemCategoryMode ? '#fff' : colors.textSecondary },
+                ]}
+              >
+                Same category for all
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.modeOption,
+                perItemCategoryMode && { backgroundColor: colors.primary },
+              ]}
+              onPress={() => toggleCategoryMode(true)}
+              activeOpacity={0.8}
+              accessibilityRole="radio"
+              accessibilityState={{ selected: perItemCategoryMode }}
+            >
+              <Text
+                style={[
+                  styles.modeOptionText,
+                  { color: perItemCategoryMode ? '#fff' : colors.textSecondary },
+                ]}
+              >
+                Category per item
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
         {subItems.map((item) => {
           const errs = subItemErrors[item.localId];
+          const itemCat =
+            categories.find((c) => c.id === item.categoryId) ??
+            selectedCategory ??
+            categories[0];
           return (
             <View key={item.localId} style={styles.subItemBlock}>
               <View style={styles.subItemRow}>
@@ -418,6 +524,8 @@ export default function AddExpenseScreen() {
                 <TouchableOpacity
                   onPress={() => removeSubItem(item.localId)}
                   hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Remove item ${item.title || 'row'}`}
                 >
                   <Ionicons
                     name='close-circle'
@@ -426,6 +534,31 @@ export default function AddExpenseScreen() {
                   />
                 </TouchableOpacity>
               </View>
+              {perItemCategoryMode && itemCat && (
+                <TouchableOpacity
+                  style={[
+                    styles.itemCatChip,
+                    {
+                      backgroundColor: itemCat.color + '1A',
+                      borderColor: itemCat.color + '55',
+                    },
+                  ]}
+                  onPress={() => setPickerItemId(item.localId)}
+                  activeOpacity={0.75}
+                  hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Category for ${item.title || 'item'}: ${itemCat.name}. Tap to change.`}
+                >
+                  <Text style={styles.itemCatEmoji}>{itemCat.emoji}</Text>
+                  <Text
+                    style={[styles.itemCatLabel, { color: colors.textPrimary }]}
+                    numberOfLines={1}
+                  >
+                    {itemCat.name}
+                  </Text>
+                  <Ionicons name='chevron-down' size={14} color={colors.textSecondary} />
+                </TouchableOpacity>
+              )}
               {(errs?.title || errs?.amount) && (
                 <View style={styles.subItemErrorRow}>
                   {errs?.title && (
@@ -459,55 +592,59 @@ export default function AddExpenseScreen() {
         </TouchableOpacity>
 
         {/* ── Category ────────────────────────────────────────── */}
-        <Text
-          style={[
-            styles.sectionLabel,
-            { color: colors.textSecondary, marginTop: 8 },
-          ]}
-        >
-          Category
-        </Text>
-        <View style={styles.categoryGrid}>
-          {categories
-            .slice(0, showAllCategories ? categories.length : 6)
-            .map((cat) => {
-              const selected = selectedCategory?.id === cat.id;
-              return (
+        {!(hasSubItems && perItemCategoryMode) && (
+          <>
+            <Text
+              style={[
+                styles.sectionLabel,
+                { color: colors.textSecondary, marginTop: 8 },
+              ]}
+            >
+              {hasSubItems ? 'Category (all items)' : 'Category'}
+            </Text>
+            <View style={styles.categoryGrid}>
+              {categories
+                .slice(0, showAllCategories ? categories.length : 6)
+                .map((cat) => {
+                  const selected = selectedCategory?.id === cat.id;
+                  return (
+                    <TouchableOpacity
+                      key={cat.id}
+                      style={[
+                        styles.categoryPill,
+                        {
+                          backgroundColor: selected ? cat.color : colors.inputFill,
+                          borderColor: selected ? cat.color : colors.border,
+                        },
+                      ]}
+                      onPress={() => setSelectedCategory(cat)}
+                    >
+                      <Text style={styles.pillEmoji}>{cat.emoji}</Text>
+                      <Text
+                        style={[
+                          styles.pillLabel,
+                          { color: selected ? '#fff' : colors.textPrimary },
+                        ]}
+                      >
+                        {cat.name}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              {categories.length > 6 && !showAllCategories && (
                 <TouchableOpacity
-                  key={cat.id}
-                  style={[
-                    styles.categoryPill,
-                    {
-                      backgroundColor: selected ? cat.color : colors.inputFill,
-                      borderColor: selected ? cat.color : colors.border,
-                    },
-                  ]}
-                  onPress={() => setSelectedCategory(cat)}
+                  style={[styles.showMoreBtn, { borderColor: colors.primary }]}
+                  onPress={() => setShowAllCategories(true)}
                 >
-                  <Text style={styles.pillEmoji}>{cat.emoji}</Text>
-                  <Text
-                    style={[
-                      styles.pillLabel,
-                      { color: selected ? '#fff' : colors.textPrimary },
-                    ]}
-                  >
-                    {cat.name}
+                  <Ionicons name='chevron-down' size={12} color={colors.primary} />
+                  <Text style={[styles.showMoreLabel, { color: colors.primary }]}>
+                    More
                   </Text>
                 </TouchableOpacity>
-              );
-            })}
-          {categories.length > 6 && !showAllCategories && (
-            <TouchableOpacity
-              style={[styles.showMoreBtn, { borderColor: colors.primary }]}
-              onPress={() => setShowAllCategories(true)}
-            >
-              <Ionicons name='chevron-down' size={12} color={colors.primary} />
-              <Text style={[styles.showMoreLabel, { color: colors.primary }]}>
-                More
-              </Text>
-            </TouchableOpacity>
-          )}
-        </View>
+              )}
+            </View>
+          </>
+        )}
 
         {/* ── Account ─────────────────────────────────────────── */}
         {accounts.length > 0 && (
@@ -556,6 +693,89 @@ export default function AddExpenseScreen() {
           loading={loading}
         />
       </View>
+
+      <Modal
+        visible={pickerItemId !== null}
+        transparent
+        animationType='slide'
+        onRequestClose={() => setPickerItemId(null)}
+      >
+        <Pressable
+          style={styles.sheetBackdrop}
+          onPress={() => setPickerItemId(null)}
+        >
+          <Pressable
+            style={[
+              styles.sheetContainer,
+              {
+                backgroundColor: colors.card,
+                borderTopColor: colors.border,
+                paddingBottom: Math.max(insets.bottom, 20),
+              },
+            ]}
+            onPress={() => {}}
+          >
+            <View
+              style={[styles.sheetHandle, { backgroundColor: colors.border }]}
+            />
+            <View style={styles.sheetHeader}>
+              <Text style={[styles.sheetTitle, { color: colors.textPrimary }]}>
+                Select Item Category
+              </Text>
+              <TouchableOpacity
+                onPress={() => setPickerItemId(null)}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                accessibilityRole='button'
+                accessibilityLabel='Close category picker'
+              >
+                <Ionicons name='close' size={22} color={colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
+            <ScrollView
+              contentContainerStyle={styles.sheetGrid}
+              showsVerticalScrollIndicator={false}
+            >
+              {categories.map((cat) => {
+                const activeItem = subItems.find(
+                  (s) => s.localId === pickerItemId,
+                );
+                const isSelected = activeItem?.categoryId === cat.id;
+                return (
+                  <TouchableOpacity
+                    key={cat.id}
+                    style={[
+                      styles.categoryPill,
+                      {
+                        backgroundColor: isSelected
+                          ? cat.color
+                          : colors.inputFill,
+                        borderColor: isSelected ? cat.color : colors.border,
+                      },
+                    ]}
+                    onPress={() => {
+                      if (pickerItemId) {
+                        updateSubItemCategory(pickerItemId, cat.id);
+                      }
+                    }}
+                    accessibilityRole='button'
+                    accessibilityState={{ selected: isSelected }}
+                  >
+                    <Text style={styles.pillEmoji}>{cat.emoji}</Text>
+                    <Text
+                      style={[
+                        styles.pillLabel,
+                        { color: isSelected ? '#fff' : colors.textPrimary },
+                      ]}
+                    >
+                      {cat.name}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
@@ -659,4 +879,75 @@ const styles = StyleSheet.create({
   showMoreLabel: { fontSize: 14, fontWeight: '600' },
   pillEmoji: { fontSize: 16, marginRight: 6 },
   pillLabel: { fontSize: 14, fontWeight: '600' },
+  modeToggleRow: {
+    flexDirection: 'row',
+    borderRadius: 12,
+    borderWidth: 1,
+    padding: 4,
+    marginBottom: 12,
+    gap: 4,
+  },
+  modeOption: {
+    flex: 1,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: 9,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 38,
+  },
+  modeOptionText: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  itemCatChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: 6,
+    marginTop: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 10,
+    borderWidth: 1,
+    minHeight: 34,
+  },
+  itemCatEmoji: { fontSize: 14 },
+  itemCatLabel: { fontSize: 13, fontWeight: '600', maxWidth: 160 },
+  sheetBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    justifyContent: 'flex-end',
+  },
+  sheetContainer: {
+    borderTopLeftRadius: 22,
+    borderTopRightRadius: 22,
+    borderTopWidth: 1,
+    paddingHorizontal: 20,
+    paddingTop: 10,
+    maxHeight: '65%',
+  },
+  sheetHandle: {
+    width: 38,
+    height: 4,
+    borderRadius: 2,
+    alignSelf: 'center',
+    marginBottom: 12,
+  },
+  sheetHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  sheetTitle: {
+    fontSize: 17,
+    fontWeight: '700',
+  },
+  sheetGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    paddingBottom: 12,
+  },
 });
