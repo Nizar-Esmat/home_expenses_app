@@ -1,10 +1,8 @@
 import * as SQLite from 'expo-sqlite';
-import { getDb } from './client';
 import { nowIso, toMinorUnits } from './helpers';
-import { recalculateBalance } from './accounts';
+import { recalculateBalanceOnDb } from './balance';
 
-export async function populateSampleData(db?: SQLite.SQLiteDatabase): Promise<void> {
-  const database = db ?? (await getDb());
+export async function populateSampleData(database: SQLite.SQLiteDatabase): Promise<void> {
 
   // 1. Get or create accounts
   const now = nowIso();
@@ -405,7 +403,7 @@ export async function populateSampleData(db?: SQLite.SQLiteDatabase): Promise<vo
   );
 
   // 8. Recalculate all account balances to ensure mathematical accuracy
-  await recalculateBalance(cashAccount.id);
-  await recalculateBalance(bankAccount.id);
-  await recalculateBalance(walletAccount.id);
+  await recalculateBalanceOnDb(database, cashAccount.id);
+  await recalculateBalanceOnDb(database, bankAccount.id);
+  await recalculateBalanceOnDb(database, walletAccount.id);
 }
