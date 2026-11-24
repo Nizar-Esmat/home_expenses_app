@@ -25,6 +25,8 @@ export const CATEGORY_COLORS = [
   '#2ECC71', // lime
 ];
 
+export const SPLIT_CATEGORY_NAME = 'Split';
+
 /** Default seed colors per built-in category */
 export const DEFAULT_CATEGORY_COLORS: Record<string, string> = {
   Food:      '#E2844A',
@@ -33,6 +35,7 @@ export const DEFAULT_CATEGORY_COLORS: Record<string, string> = {
   Shopping:  '#E91E63',
   Home:      '#408A71',
   Other:     '#7F8C8D',
+  Split:     '#6366F1',
 };
 
 /** 10-color accent palette for income categories */

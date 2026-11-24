@@ -1,7 +1,7 @@
 import * as SQLite from 'expo-sqlite';
 import { generateUuidV7 } from './uuid';
 
-export const SCHEMA_VERSION = 6;
+export const SCHEMA_VERSION = 7;
 
 export interface MigrationStep {
   version: number;
@@ -232,6 +232,16 @@ export const MIGRATIONS: MigrationStep[] = [
           SELECT RAISE(ABORT, 'Transfer source and target accounts cannot be identical');
         END;
       `);
+    },
+  },
+  {
+    version: 7,
+    description: 'Add built-in Split category for multi-category itemized expenses',
+    up: async (db) => {
+      await db.runAsync(
+        `INSERT OR IGNORE INTO categories (name, type, icon, color, isDefault, sortOrder, createdAt, updatedAt)
+         VALUES ('Split', 'EXPENSE', '🔀', '#6366F1', 1, 99, datetime('now'), datetime('now'))`,
+      );
     },
   },
 ];

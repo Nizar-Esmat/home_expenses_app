@@ -274,6 +274,7 @@ const BUILT_IN: { name: string; emoji: string; sortOrder: number }[] = [
   { name: 'Shopping', emoji: '🛍️', sortOrder: 3 },
   { name: 'Home', emoji: '🏠', sortOrder: 4 },
   { name: 'Other', emoji: '📦', sortOrder: 5 },
+  { name: 'Split', emoji: '🔀', sortOrder: 99 },
 ];
 
 async function seedCategories(db: SQLite.SQLiteDatabase): Promise<void> {

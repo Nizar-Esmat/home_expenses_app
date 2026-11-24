@@ -49,11 +49,16 @@ export interface SubExpense {
   title: string;
   amount: number;
   sortOrder: number;
+  categoryId?: number | null;
+  categoryName?: string | null;
+  categoryEmoji?: string | null;
+  categoryColor?: string | null;
 }
 
 export interface SubExpenseInput {
   title: string;
   amount: number;
+  categoryId?: number | null;
 }
 
 export interface Expense {
@@ -147,6 +152,7 @@ export interface HomeTransaction {
   accountIcon: string | null;
   accountColor?: string | null;
   subExpenses?: SubExpense[];
+  subItemId?: number | null;
   loanId?: number | null;
   contactName?: string | null;
 }
