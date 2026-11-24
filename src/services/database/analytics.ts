@@ -1,6 +1,8 @@
 import { getDb } from './client';
 import { getMonthDateRange, tzMonthKey } from './helpers';
+import { attachSubExpenses } from './expenses';
 import { Expense } from '@/types';
+import { SPLIT_CATEGORY_NAME } from '@/services/constants';
 import {
   DailyExpenseItem,
   DailySpendingSummary,
@@ -11,8 +13,31 @@ import {
 
 const TRANSFER_FEE_CATEGORY_NAME = 'Transfer Fee';
 
+function buildUnifiedCategoryCte(txWhere: string): string {
+  return `
+    WITH unified_expense_items AS (
+      SELECT
+        t.categoryId,
+        t.amountMinor
+      FROM transactions t
+      WHERE ${txWhere}
+        AND NOT EXISTS (SELECT 1 FROM transaction_items ti WHERE ti.transactionId = t.id)
+
+      UNION ALL
+
+      SELECT
+        COALESCE(ti.categoryId, t.categoryId) AS categoryId,
+        ti.amountMinor
+      FROM transaction_items ti
+      JOIN transactions t ON t.id = ti.transactionId
+      WHERE ${txWhere}
+    )
+  `;
+}
+
 /**
  * Computes category spending breakdown directly inside SQLite.
+ * Splits multi-item transactions into their individual item categories without double counting.
  * Returns aggregated category summaries with percentage of total spending.
  */
 export async function getCategorySpendingSql(monthKey?: string): Promise<SpendingCategoryItem[]> {
@@ -23,7 +48,7 @@ export async function getCategorySpendingSql(monthKey?: string): Promise<Spendin
   const txWhere = isAllTime
     ? "t.type = 'EXPENSE' AND t.deletedAt IS NULL"
     : "t.type = 'EXPENSE' AND t.deletedAt IS NULL AND t.transactionDate >= ? AND t.transactionDate < ?";
-  const txParams = isAllTime ? [] : [startIso, endIso];
+  const txParams = isAllTime ? [] : [startIso, endIso, startIso, endIso];
 
   const catRows = await db.getAllAsync<{
     category: string;
@@ -31,18 +56,19 @@ export async function getCategorySpendingSql(monthKey?: string): Promise<Spendin
     categoryColor: string;
     total: number;
   }>(
-    `SELECT
+    `${buildUnifiedCategoryCte(txWhere)}
+     SELECT
        c.name AS category,
        c.icon AS categoryEmoji,
        c.color AS categoryColor,
-       COALESCE(SUM(t.amountMinor), 0) / 100.0 AS total
-     FROM transactions t
-     JOIN categories c ON c.id = t.categoryId
-     WHERE ${txWhere}
+       COALESCE(SUM(u.amountMinor), 0) / 100.0 AS total
+     FROM unified_expense_items u
+     JOIN categories c ON c.id = u.categoryId
+     WHERE c.name != ?
      GROUP BY c.id
      HAVING total > 0
      ORDER BY total DESC`,
-    txParams,
+    [...txParams, SPLIT_CATEGORY_NAME],
   );
 
   // Check transfer fees for the same period
@@ -184,19 +210,21 @@ export async function getQuickInsightsSql(monthKey?: string): Promise<QuickInsig
     txParams,
   );
 
-  // Top category
+  // Top category (using unified item-level category attribution)
   const topCatWhere = isAllTime
     ? "t.type = 'EXPENSE' AND t.deletedAt IS NULL"
     : "t.type = 'EXPENSE' AND t.deletedAt IS NULL AND t.transactionDate >= ? AND t.transactionDate < ?";
+  const topCatParams = isAllTime ? [] : [startIso, endIso, startIso, endIso];
   const topCat = await db.getFirstAsync<{ name: string; total: number }>(
-    `SELECT c.name, COALESCE(SUM(t.amountMinor), 0) / 100.0 AS total
-     FROM transactions t
-     JOIN categories c ON c.id = t.categoryId
-     WHERE ${topCatWhere}
+    `${buildUnifiedCategoryCte(topCatWhere)}
+     SELECT c.name, COALESCE(SUM(u.amountMinor), 0) / 100.0 AS total
+     FROM unified_expense_items u
+     JOIN categories c ON c.id = u.categoryId
+     WHERE c.name != ?
      GROUP BY c.id
      ORDER BY total DESC
      LIMIT 1`,
-    txParams,
+    [...topCatParams, SPLIT_CATEGORY_NAME],
   );
 
   const feeWhere = isAllTime
@@ -270,7 +298,7 @@ export async function getTopExpensesSql(monthKey?: string, limit: number = 5): P
     txParams,
   );
 
-  return rows.map((r) => ({
+  const expenses: Expense[] = rows.map((r) => ({
     id: r.id,
     price: r.price,
     category: r.category,
@@ -280,4 +308,6 @@ export async function getTopExpensesSql(monthKey?: string, limit: number = 5): P
     accountId: r.accountId,
     subExpenses: [],
   }));
+  await attachSubExpenses(expenses);
+  return expenses;
 }

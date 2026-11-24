@@ -164,11 +164,19 @@ export async function deleteCategory(
 export async function getCategoryUsageCounts(): Promise<Record<string, number>> {
   const db = await getDb();
   const rows = await db.getAllAsync<{ category: string; cnt: number }>(
-    `SELECT c.name AS category, COUNT(*) AS cnt
-     FROM transactions t
-     JOIN categories c ON c.id = t.categoryId
-     WHERE t.type = 'EXPENSE' AND t.deletedAt IS NULL
-     GROUP BY c.name`,
+    `SELECT category, COUNT(DISTINCT txId) AS cnt FROM (
+       SELECT c.name AS category, t.id AS txId
+       FROM transactions t
+       JOIN categories c ON c.id = t.categoryId
+       WHERE t.type = 'EXPENSE' AND t.deletedAt IS NULL AND c.name != 'Split'
+       UNION ALL
+       SELECT c.name AS category, t.id AS txId
+       FROM transaction_items ti
+       JOIN transactions t ON t.id = ti.transactionId
+       JOIN categories c ON c.id = ti.categoryId
+       WHERE t.type = 'EXPENSE' AND t.deletedAt IS NULL
+     )
+     GROUP BY category`,
   );
   const map: Record<string, number> = {};
   rows.forEach((r) => (map[r.category] = r.cnt));

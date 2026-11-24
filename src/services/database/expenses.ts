@@ -1,4 +1,5 @@
 import { Expense, SubExpense, SubExpenseInput } from '@/types';
+import { SPLIT_CATEGORY_NAME } from '@/services/constants';
 import { getDb } from './client';
 import { getMonthDateRange, nowIso, toMinorUnits, tzMonthKey } from './helpers';
 import { recalculateBalance } from './accounts';
@@ -20,6 +21,10 @@ interface SubExpenseRow {
   title: string;
   amount: number;
   sortOrder: number;
+  categoryId: number | null;
+  categoryName: string | null;
+  categoryEmoji: string | null;
+  categoryColor: string | null;
 }
 
 const EXPENSE_SELECT = `
@@ -52,6 +57,80 @@ async function getCategoryIdByName(name: string): Promise<number> {
   return fallback.id;
 }
 
+async function getSplitCategoryId(): Promise<number> {
+  const db = await getDb();
+  const row = await db.getFirstAsync<{ id: number }>(
+    "SELECT id FROM categories WHERE type = 'EXPENSE' AND name = ? LIMIT 1",
+    [SPLIT_CATEGORY_NAME],
+  );
+  if (row) return row.id;
+
+  const now = nowIso();
+  const res = await db.runAsync(
+    "INSERT OR IGNORE INTO categories (name, type, icon, color, isDefault, sortOrder, createdAt, updatedAt) VALUES (?, 'EXPENSE', '🔀', '#6366F1', 1, 99, ?, ?)",
+    [SPLIT_CATEGORY_NAME, now, now],
+  );
+  if (res.lastInsertRowId) return res.lastInsertRowId;
+
+  const retry = await db.getFirstAsync<{ id: number }>(
+    "SELECT id FROM categories WHERE type = 'EXPENSE' AND name = ? LIMIT 1",
+    [SPLIT_CATEGORY_NAME],
+  );
+  if (!retry) throw new Error('Split category not found.');
+  return retry.id;
+}
+
+async function resolveParentAndItemCategories(
+  fallbackCategoryName: string,
+  subExpenses?: SubExpenseInput[],
+): Promise<{
+  parentCategoryId: number;
+  parentTitle: string;
+  itemCategoryIds: number[];
+}> {
+  const db = await getDb();
+  const fallbackId = await getCategoryIdByName(fallbackCategoryName);
+
+  if (!subExpenses || subExpenses.length === 0) {
+    return {
+      parentCategoryId: fallbackId,
+      parentTitle: fallbackCategoryName,
+      itemCategoryIds: [],
+    };
+  }
+
+  const itemCategoryIds = subExpenses.map((s) => s.categoryId ?? fallbackId);
+  const uniqueIds = new Set(itemCategoryIds);
+
+  if (uniqueIds.size > 1) {
+    const splitId = await getSplitCategoryId();
+    return {
+      parentCategoryId: splitId,
+      parentTitle: SPLIT_CATEGORY_NAME,
+      itemCategoryIds,
+    };
+  }
+
+  const singleId = itemCategoryIds[0]!;
+  if (singleId === fallbackId) {
+    return {
+      parentCategoryId: fallbackId,
+      parentTitle: fallbackCategoryName,
+      itemCategoryIds,
+    };
+  }
+
+  const catRow = await db.getFirstAsync<{ name: string }>(
+    'SELECT name FROM categories WHERE id = ?',
+    [singleId],
+  );
+  return {
+    parentCategoryId: singleId,
+    parentTitle: catRow?.name ?? fallbackCategoryName,
+    itemCategoryIds,
+  };
+}
+
 async function getTransactionAccountId(accountId?: number | null): Promise<number> {
   if (accountId != null) return accountId;
   const db = await getDb();
@@ -62,21 +141,26 @@ async function getTransactionAccountId(accountId?: number | null): Promise<numbe
   return account.id;
 }
 
-async function attachSubExpenses(expenses: Expense[]): Promise<void> {
+export async function attachSubExpenses(expenses: Expense[]): Promise<void> {
   if (expenses.length === 0) return;
   const db = await getDb();
   const ids = expenses.map((e) => e.id);
   const placeholders = ids.map(() => '?').join(',');
   const rows = await db.getAllAsync<SubExpenseRow>(
     `SELECT
-       id,
-       transactionId AS expenseId,
-       name AS title,
-       amountMinor / 100.0 AS amount,
-       sortOrder
-     FROM transaction_items
-     WHERE transactionId IN (${placeholders})
-     ORDER BY transactionId ASC, sortOrder ASC`,
+       ti.id,
+       ti.transactionId AS expenseId,
+       ti.name AS title,
+       ti.amountMinor / 100.0 AS amount,
+       ti.sortOrder,
+       ti.categoryId,
+       c.name AS categoryName,
+       c.icon AS categoryEmoji,
+       c.color AS categoryColor
+     FROM transaction_items ti
+     LEFT JOIN categories c ON c.id = ti.categoryId
+     WHERE ti.transactionId IN (${placeholders})
+     ORDER BY ti.transactionId ASC, ti.sortOrder ASC`,
     ids,
   );
   const byId = new Map<number, SubExpense[]>();
@@ -96,14 +180,19 @@ export async function getSubExpenses(expenseId: number): Promise<SubExpense[]> {
   const db = await getDb();
   return db.getAllAsync<SubExpense>(
     `SELECT
-       id,
-       transactionId AS expenseId,
-       name AS title,
-       amountMinor / 100.0 AS amount,
-       sortOrder
-     FROM transaction_items
-     WHERE transactionId=?
-     ORDER BY sortOrder ASC`,
+       ti.id,
+       ti.transactionId AS expenseId,
+       ti.name AS title,
+       ti.amountMinor / 100.0 AS amount,
+       ti.sortOrder,
+       ti.categoryId,
+       c.name AS categoryName,
+       c.icon AS categoryEmoji,
+       c.color AS categoryColor
+     FROM transaction_items ti
+     LEFT JOIN categories c ON c.id = ti.categoryId
+     WHERE ti.transactionId=?
+     ORDER BY ti.sortOrder ASC`,
     [expenseId],
   );
 }
@@ -120,7 +209,8 @@ export async function addExpense(
 ): Promise<number> {
   const db = await getDb();
   const timestamp = createdAt ?? nowIso();
-  const categoryId = await getCategoryIdByName(category);
+  const { parentCategoryId, parentTitle, itemCategoryIds } =
+    await resolveParentAndItemCategories(category, subExpenses);
   const resolvedAccountId = await getTransactionAccountId(accountId);
   const amountMinor = toMinorUnits(price);
   const uuid = generateUuidV7();
@@ -138,7 +228,7 @@ export async function addExpense(
       `INSERT INTO transactions
          (uuid, accountId, categoryId, type, amountMinor, currencyCode, title, note, transactionDate, createdAt, updatedAt, deletedAt)
        VALUES (?, ?, ?, 'EXPENSE', ?, 'EGP', ?, ?, ?, ?, ?, NULL)`,
-      [uuid, resolvedAccountId, categoryId, amountMinor, category, note ?? null, timestamp, timestamp, timestamp],
+      [uuid, resolvedAccountId, parentCategoryId, amountMinor, parentTitle, note ?? null, timestamp, timestamp, timestamp],
     );
     newId = result.lastInsertRowId;
 
@@ -149,7 +239,7 @@ export async function addExpense(
           `INSERT INTO transaction_items
              (transactionId, categoryId, name, amountMinor, quantity, note, sortOrder, createdAt, updatedAt)
            VALUES (?, ?, ?, ?, NULL, NULL, ?, ?, ?)`,
-          [newId, categoryId, sub.title, toMinorUnits(sub.amount), i, timestamp, timestamp],
+          [newId, itemCategoryIds[i]!, sub.title, toMinorUnits(sub.amount), i, timestamp, timestamp],
         );
       }
     }
@@ -170,7 +260,8 @@ export async function updateExpense(
   accountId?: number | null,
 ): Promise<void> {
   const db = await getDb();
-  const categoryId = await getCategoryIdByName(category);
+  const { parentCategoryId, parentTitle, itemCategoryIds } =
+    await resolveParentAndItemCategories(category, subExpenses);
   const resolvedAccountId = await getTransactionAccountId(accountId);
   const now = nowIso();
   const amountMinor = toMinorUnits(price);
@@ -190,7 +281,7 @@ export async function updateExpense(
   await db.withExclusiveTransactionAsync(async () => {
     await db.runAsync(
       'UPDATE transactions SET amountMinor=?, categoryId=?, title=?, note=?, accountId=?, updatedAt=? WHERE id=? AND type=?',
-      [amountMinor, categoryId, category, note ?? null, resolvedAccountId, now, id, 'EXPENSE'],
+      [amountMinor, parentCategoryId, parentTitle, note ?? null, resolvedAccountId, now, id, 'EXPENSE'],
     );
 
     await db.runAsync('DELETE FROM transaction_items WHERE transactionId=?', [id]);
@@ -201,7 +292,7 @@ export async function updateExpense(
           `INSERT INTO transaction_items
              (transactionId, categoryId, name, amountMinor, quantity, note, sortOrder, createdAt, updatedAt)
            VALUES (?, ?, ?, ?, NULL, NULL, ?, ?, ?)`,
-          [id, categoryId, sub.title, toMinorUnits(sub.amount), i, now, now],
+          [id, itemCategoryIds[i]!, sub.title, toMinorUnits(sub.amount), i, now, now],
         );
       }
     }

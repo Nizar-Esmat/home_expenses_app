@@ -8,20 +8,34 @@ interface SubExpenseRow {
   title: string;
   amount: number;
   sortOrder: number;
+  categoryId: number | null;
+  categoryName: string | null;
+  categoryEmoji: string | null;
+  categoryColor: string | null;
 }
 
 async function attachSubExpensesToHomeTransactions(
   txs: HomeTransaction[],
 ): Promise<void> {
-  const expenseIds = txs.filter((t) => t.type === 'expense').map((t) => t.id);
+  const expenseIds = txs.filter((t) => t.type === 'expense' && t.subItemId == null).map((t) => t.id);
   if (expenseIds.length === 0) return;
 
   const db = await getDb();
   const rows = await db.getAllAsync<SubExpenseRow>(
-    `SELECT id, transactionId, name AS title, amountMinor / 100.0 AS amount, sortOrder
-     FROM transaction_items
-     WHERE transactionId IN (${expenseIds.map(() => '?').join(',')})
-     ORDER BY transactionId ASC, sortOrder ASC`,
+    `SELECT
+       ti.id,
+       ti.transactionId,
+       ti.name AS title,
+       ti.amountMinor / 100.0 AS amount,
+       ti.sortOrder,
+       ti.categoryId,
+       c.name AS categoryName,
+       c.icon AS categoryEmoji,
+       c.color AS categoryColor
+     FROM transaction_items ti
+     LEFT JOIN categories c ON c.id = ti.categoryId
+     WHERE ti.transactionId IN (${expenseIds.map(() => '?').join(',')})
+     ORDER BY ti.transactionId ASC, ti.sortOrder ASC`,
     expenseIds,
   );
 
@@ -34,12 +48,16 @@ async function attachSubExpensesToHomeTransactions(
       title: r.title,
       amount: r.amount,
       sortOrder: r.sortOrder,
+      categoryId: r.categoryId,
+      categoryName: r.categoryName,
+      categoryEmoji: r.categoryEmoji,
+      categoryColor: r.categoryColor,
     });
     byId.set(r.transactionId, list);
   }
 
   for (const tx of txs) {
-    if (tx.type === 'expense' && byId.has(tx.id)) {
+    if (tx.type === 'expense' && tx.subItemId == null && byId.has(tx.id)) {
       tx.subExpenses = byId.get(tx.id)!;
     }
   }
@@ -265,9 +283,11 @@ export async function getTransactionsByCategory(
   const txDateClause = hasMonthFilter ? `AND t.transactionDate >= '${startIso}' AND t.transactionDate < '${endIso}'` : '';
 
   const sql = `
-  SELECT id, type, category, emoji, amount, feeAmount, note, createdAt, accountId, accountName, accountIcon, accountColor FROM (
+  SELECT id, subItemId, type, category, emoji, amount, feeAmount, note, createdAt, accountId, accountName, accountIcon, accountColor FROM (
+    -- Standalone expenses without sub-items
     SELECT
       t.id,
+      NULL AS subItemId,
       'expense' AS type,
       c.name AS category,
       c.icon AS emoji,
@@ -284,10 +304,70 @@ export async function getTransactionsByCategory(
     LEFT JOIN accounts a ON a.id = t.accountId
     WHERE t.type = 'EXPENSE' AND t.deletedAt IS NULL
       AND c.name = ?
+      AND NOT EXISTS (SELECT 1 FROM transaction_items ti WHERE ti.transactionId = t.id)
       ${txDateClause}
+
     UNION ALL
+
+    -- Uniform (non-split) multi-item expenses belonging to this category
     SELECT
       t.id,
+      NULL AS subItemId,
+      'expense' AS type,
+      c.name AS category,
+      c.icon AS emoji,
+      t.amountMinor / 100.0 AS amount,
+      NULL AS feeAmount,
+      t.note,
+      t.transactionDate AS createdAt,
+      t.accountId,
+      COALESCE(a.name, 'Deleted account') AS accountName,
+      a.icon AS accountIcon,
+      a.color AS accountColor
+    FROM transactions t
+    JOIN categories c ON c.id = t.categoryId
+    LEFT JOIN accounts a ON a.id = t.accountId
+    WHERE t.type = 'EXPENSE' AND t.deletedAt IS NULL
+      AND c.name = ?
+      AND c.name != 'Split'
+      AND EXISTS (SELECT 1 FROM transaction_items ti WHERE ti.transactionId = t.id)
+      ${txDateClause}
+
+    UNION ALL
+
+    -- Individual items from Split expenses matching this category
+    SELECT
+      t.id,
+      ti.id AS subItemId,
+      'expense' AS type,
+      c.name AS category,
+      c.icon AS emoji,
+      ti.amountMinor / 100.0 AS amount,
+      NULL AS feeAmount,
+      CASE
+        WHEN t.note IS NOT NULL AND t.note != '' THEN ti.name || ' · ' || t.note
+        ELSE ti.name
+      END AS note,
+      t.transactionDate AS createdAt,
+      t.accountId,
+      COALESCE(a.name, 'Deleted account') AS accountName,
+      a.icon AS accountIcon,
+      a.color AS accountColor
+    FROM transaction_items ti
+    JOIN transactions t ON t.id = ti.transactionId
+    JOIN categories pc ON pc.id = t.categoryId
+    JOIN categories c ON c.id = COALESCE(ti.categoryId, t.categoryId)
+    LEFT JOIN accounts a ON a.id = t.accountId
+    WHERE t.type = 'EXPENSE' AND t.deletedAt IS NULL
+      AND pc.name = 'Split'
+      AND c.name = ?
+      ${txDateClause}
+
+    UNION ALL
+
+    SELECT
+      t.id,
+      NULL AS subItemId,
       'income' AS type,
       c.name AS category,
       c.icon AS emoji,
@@ -309,7 +389,7 @@ export async function getTransactionsByCategory(
   ORDER BY src.createdAt DESC
   `;
 
-  const txs = await db.getAllAsync<HomeTransaction>(sql, [categoryName, categoryName]);
+  const txs = await db.getAllAsync<HomeTransaction>(sql, [categoryName, categoryName, categoryName, categoryName]);
   await attachSubExpensesToHomeTransactions(txs);
   return txs;
 }
