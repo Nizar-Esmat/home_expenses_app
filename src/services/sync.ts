@@ -6,6 +6,7 @@ import {
   mergeBackupIntoDatabase,
   DatabaseBackupData,
   MergeBackupSummary,
+  getActiveUser,
 } from '@/services/database';
 import { getDb } from '@/services/database/client';
 
@@ -22,24 +23,31 @@ interface BackupPayload {
   data: DatabaseBackupData;
 }
 
-function makeBackupFileName(): string {
-  const now = new Date();
-  const yyyy = now.getFullYear();
-  const mm = String(now.getMonth() + 1).padStart(2, '0');
-  const dd = String(now.getDate()).padStart(2, '0');
-  const hh = String(now.getHours()).padStart(2, '0');
-  const min = String(now.getMinutes()).padStart(2, '0');
-  return `budgetbuddy-backup-${yyyy}${mm}${dd}-${hh}${min}.json`;
+function sanitizeSlug(name: string): string {
+  const cleaned = name
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  return cleaned || 'profile';
 }
 
-function makeDatabaseFileName(): string {
+function makeTimestampSuffix(): string {
   const now = new Date();
   const yyyy = now.getFullYear();
   const mm = String(now.getMonth() + 1).padStart(2, '0');
   const dd = String(now.getDate()).padStart(2, '0');
   const hh = String(now.getHours()).padStart(2, '0');
   const min = String(now.getMinutes()).padStart(2, '0');
-  return `budgetbuddy-database-${yyyy}${mm}${dd}-${hh}${min}.db`;
+  return `${yyyy}${mm}${dd}-${hh}${min}`;
+}
+
+function makeBackupFileName(profileName: string): string {
+  return `budgetbuddy-backup-${sanitizeSlug(profileName)}-${makeTimestampSuffix()}.json`;
+}
+
+function makeDatabaseFileName(profileName: string): string {
+  return `budgetbuddy-database-${sanitizeSlug(profileName)}-${makeTimestampSuffix()}.db`;
 }
 
 function toFileUri(path: string): string {
@@ -83,7 +91,7 @@ function validatePayload(raw: unknown): BackupPayload {
 }
 
 export async function exportBackupAndShare(): Promise<{ uri: string; fileName: string }> {
-  const data = await exportDatabaseBackupData();
+  const [data, activeUser] = await Promise.all([exportDatabaseBackupData(), getActiveUser()]);
   const payload: BackupPayload = {
     schemaVersion: BACKUP_VERSION,
     exportedAt: new Date().toISOString(),
@@ -94,7 +102,7 @@ export async function exportBackupAndShare(): Promise<{ uri: string; fileName: s
     data,
   };
 
-  const fileName = makeBackupFileName();
+  const fileName = makeBackupFileName(activeUser.name);
   const dir = FileSystem.documentDirectory;
   if (!dir) throw new Error('Could not access local file system.');
   const uri = `${dir}${fileName}`;
@@ -107,7 +115,7 @@ export async function exportBackupAndShare(): Promise<{ uri: string; fileName: s
   if (canShare) {
     await Sharing.shareAsync(uri, {
       mimeType: 'application/json',
-      dialogTitle: 'Export Budget Buddy Backup',
+      dialogTitle: `Export ${activeUser.name} Backup`,
       UTI: 'public.json',
     });
   }
@@ -116,10 +124,10 @@ export async function exportBackupAndShare(): Promise<{ uri: string; fileName: s
 }
 
 export async function exportDatabaseFileAndShare(): Promise<{ uri: string; fileName: string }> {
-  const db = await getDb();
+  const [db, activeUser] = await Promise.all([getDb(), getActiveUser()]);
   await db.execAsync('PRAGMA wal_checkpoint(FULL);');
 
-  const fileName = makeDatabaseFileName();
+  const fileName = makeDatabaseFileName(activeUser.name);
   const dir = FileSystem.documentDirectory;
   if (!dir) throw new Error('Could not access local file system.');
   const uri = `${dir}${fileName}`;
@@ -133,7 +141,7 @@ export async function exportDatabaseFileAndShare(): Promise<{ uri: string; fileN
   if (canShare) {
     await Sharing.shareAsync(uri, {
       mimeType: 'application/vnd.sqlite3',
-      dialogTitle: 'Export Budget Buddy Database',
+      dialogTitle: `Export ${activeUser.name} Database`,
       UTI: 'public.database',
     });
   }
@@ -141,7 +149,10 @@ export async function exportDatabaseFileAndShare(): Promise<{ uri: string; fileN
   return { uri, fileName };
 }
 
-export async function pickAndImportBackupMerge(): Promise<MergeBackupSummary> {
+export async function pickAndParseBackupFile(): Promise<{
+  fileName: string;
+  data: DatabaseBackupData;
+}> {
   const picked = await DocumentPicker.getDocumentAsync({
     type: ['application/json', 'text/plain'],
     copyToCacheDirectory: true,
@@ -152,8 +163,8 @@ export async function pickAndImportBackupMerge(): Promise<MergeBackupSummary> {
     throw new Error('Import cancelled.');
   }
 
-  const fileUri = picked.assets[0].uri;
-  const raw = await FileSystem.readAsStringAsync(fileUri, {
+  const asset = picked.assets[0];
+  const raw = await FileSystem.readAsStringAsync(asset.uri, {
     encoding: FileSystem.EncodingType.UTF8,
   });
 
@@ -165,5 +176,19 @@ export async function pickAndImportBackupMerge(): Promise<MergeBackupSummary> {
   }
 
   const payload = validatePayload(parsed);
-  return mergeBackupIntoDatabase(payload.data);
+  return {
+    fileName: asset.name ?? 'backup.json',
+    data: payload.data,
+  };
+}
+
+export async function importBackupDataIntoCurrentProfile(
+  data: DatabaseBackupData,
+): Promise<MergeBackupSummary> {
+  return mergeBackupIntoDatabase(data);
+}
+
+export async function pickAndImportBackupMerge(): Promise<MergeBackupSummary> {
+  const { data } = await pickAndParseBackupFile();
+  return mergeBackupIntoDatabase(data);
 }

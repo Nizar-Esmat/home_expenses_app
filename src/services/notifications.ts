@@ -6,8 +6,13 @@ import {
   saveReminderSettings,
   DEFAULT_REMINDER_SETTINGS,
 } from './database/settings';
+import { getActiveUser } from './database/users';
 
 export const REMINDER_CHANNEL_ID = 'expense-reminders';
+
+function getUserReminderId(userUuid: string): string {
+  return `expense-reminder-${userUuid}`;
+}
 
 let Notifications: typeof ExpoNotifications | null = null;
 let isNotificationAvailable = false;
@@ -100,28 +105,45 @@ export async function requestNotificationPermissions(): Promise<boolean> {
 }
 
 /**
- * Cancels all scheduled reminder notifications.
+ * Cancels scheduled reminder notifications for a specific user (or all if omitted).
+ * Also cleans up any legacy un-tagged notifications lacking a userUuid.
  */
-export async function cancelExpenseReminder(): Promise<void> {
+export async function cancelExpenseReminder(userUuid?: string): Promise<void> {
   if (!Notifications || !isNotificationAvailable) return;
   try {
-    await Notifications.cancelAllScheduledNotificationsAsync();
+    if (!userUuid) {
+      await Notifications.cancelAllScheduledNotificationsAsync();
+      return;
+    }
+
+    await Notifications.cancelScheduledNotificationAsync(getUserReminderId(userUuid));
+
+    const scheduled = await Notifications.getAllScheduledNotificationsAsync();
+    for (const item of scheduled) {
+      const data = item.content?.data as Record<string, unknown> | undefined;
+      if (!data?.userUuid) {
+        await Notifications.cancelScheduledNotificationAsync(item.identifier);
+      }
+    }
   } catch (error) {
     console.warn('[BudgetBuddy] Failed to cancel notifications:', error);
   }
 }
 
 /**
- * Schedules an expense reminder according to user settings.
- * Clears previously scheduled reminders before setting the new one.
+ * Schedules an expense reminder for a specific user profile.
+ * Preserves other profiles' scheduled reminders.
  */
 export async function scheduleExpenseReminder(
-  settings: ReminderSettings
+  settings: ReminderSettings,
+  user?: { uuid: string; name: string },
 ): Promise<boolean> {
   if (!Notifications || !isNotificationAvailable) return false;
 
-  // Always clear previous schedules first
-  await cancelExpenseReminder();
+  const targetUser = user ?? (await getActiveUser());
+  const identifier = getUserReminderId(targetUser.uuid);
+
+  await cancelExpenseReminder(targetUser.uuid);
 
   if (!settings.enabled) {
     return true;
@@ -133,9 +155,9 @@ export async function scheduleExpenseReminder(
   }
 
   const content: ExpoNotifications.NotificationContentInput = {
-    title: 'BudgetBuddy Reminder 💰',
+    title: `BudgetBuddy (${targetUser.name}) 💰`,
     body: 'Time to record your expenses! Keep your budget accurate.',
-    data: { action: 'add-expense' },
+    data: { action: 'add-expense', userUuid: targetUser.uuid },
     sound: 'default',
   };
 
@@ -149,6 +171,7 @@ export async function scheduleExpenseReminder(
     const minute = parseInt(parts[1] ?? '0', 10);
 
     await Notifications.scheduleNotificationAsync({
+      identifier,
       content,
       trigger: {
         type: Notifications.SchedulableTriggerInputTypes.DAILY,
@@ -163,6 +186,7 @@ export async function scheduleExpenseReminder(
     const seconds = hours * 3600;
 
     await Notifications.scheduleNotificationAsync({
+      identifier,
       content,
       trigger: {
         type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
@@ -178,9 +202,11 @@ export async function scheduleExpenseReminder(
 
 /**
  * Sends an immediate test notification (2 seconds delay) to verify banner,
- * sound, and permission setup.
+ * sound, and permission setup for the active profile.
  */
-export async function sendTestNotification(): Promise<boolean> {
+export async function sendTestNotification(
+  user?: { uuid: string; name: string },
+): Promise<boolean> {
   if (!Notifications || !isNotificationAvailable) return false;
 
   const hasPermission = await requestNotificationPermissions();
@@ -188,10 +214,12 @@ export async function sendTestNotification(): Promise<boolean> {
     return false;
   }
 
+  const targetUser = user ?? (await getActiveUser());
+
   const content: ExpoNotifications.NotificationContentInput = {
-    title: 'BudgetBuddy Test Reminder 🔔',
+    title: `BudgetBuddy (${targetUser.name}) Test 🔔`,
     body: 'Notifications are working! Tap here to add an expense.',
-    data: { action: 'add-expense' },
+    data: { action: 'add-expense', userUuid: targetUser.uuid },
     sound: 'default',
   };
 
@@ -213,14 +241,19 @@ export async function sendTestNotification(): Promise<boolean> {
 }
 
 /**
- * Checks database settings and applies the reminder schedule.
+ * Checks database settings for the active user and applies the reminder schedule.
  */
-export async function syncReminderSchedule(): Promise<void> {
+export async function syncReminderSchedule(
+  user?: { uuid: string; name: string },
+): Promise<void> {
   if (!Notifications || !isNotificationAvailable) return;
   try {
+    const targetUser = user ?? (await getActiveUser());
     const settings = await getReminderSettings();
     if (settings.enabled) {
-      await scheduleExpenseReminder(settings);
+      await scheduleExpenseReminder(settings, targetUser);
+    } else {
+      await cancelExpenseReminder(targetUser.uuid);
     }
   } catch (error) {
     console.warn('[BudgetBuddy] Failed to sync reminder schedule:', error);
@@ -229,30 +262,33 @@ export async function syncReminderSchedule(): Promise<void> {
 
 /**
  * Registers response listener for when user taps a notification.
- * Returns an unsubscription function.
+ * Passes both action and target userUuid (if set) so the app can switch profiles first.
  */
 export function addNotificationResponseListener(
-  onAction: (action: string) => void
+  onAction: (action: string, userUuid?: string) => void
 ): () => void {
   if (!Notifications || !isNotificationAvailable) {
     return () => {};
   }
 
+  const extractAndDispatch = (response: ExpoNotifications.NotificationResponse | null) => {
+    const data = response?.notification.request.content.data as Record<string, unknown> | undefined;
+    const action = data?.action;
+    const userUuid = data?.userUuid;
+    if (typeof action === 'string') {
+      onAction(action, typeof userUuid === 'string' ? userUuid : undefined);
+    }
+  };
+
   try {
     const subscription = Notifications.addNotificationResponseReceivedListener(
       (response) => {
-        const action = response.notification.request.content.data?.action;
-        if (typeof action === 'string') {
-          onAction(action);
-        }
+        extractAndDispatch(response);
       }
     );
 
     Notifications.getLastNotificationResponseAsync().then((response) => {
-      const action = response?.notification.request.content.data?.action;
-      if (typeof action === 'string') {
-        onAction(action);
-      }
+      extractAndDispatch(response);
     });
 
     return () => {
