@@ -3,11 +3,32 @@ import { DEFAULT_CATEGORY_COLORS } from '@/services/constants';
 import { nowIso } from './helpers';
 import { populateSampleData } from './seedSampleData';
 import { runMigrations, SCHEMA_VERSION } from './migrations';
+import { getActiveUser, LEGACY_USER_DB_NAME } from './users';
 
 const DEFAULT_CURRENCY = 'EGP';
 
 let _db: SQLite.SQLiteDatabase | null = null;
 let _initPromise: Promise<SQLite.SQLiteDatabase> | null = null;
+let _activeDbName: string | null = null;
+let _sessionEpoch = 0;
+let _switchLock: Promise<void> = Promise.resolve();
+
+function withSwitchLock<T>(task: () => Promise<T>): Promise<T> {
+  const next = _switchLock.then(task, task);
+  _switchLock = next.then(
+    () => undefined,
+    () => undefined,
+  );
+  return next;
+}
+
+export function getSessionEpoch(): number {
+  return _sessionEpoch;
+}
+
+export function getActiveDbFileName(): string | null {
+  return _activeDbName;
+}
 
 export async function getDb(): Promise<SQLite.SQLiteDatabase> {
   if (_db) {
@@ -15,8 +36,10 @@ export async function getDb(): Promise<SQLite.SQLiteDatabase> {
   }
   if (!_initPromise) {
     _initPromise = (async () => {
-      const db = await SQLite.openDatabaseAsync('budgetbuddy.db');
-      await initDb(db);
+      const targetDbName = _activeDbName ?? (await getActiveUser()).dbFileName;
+      _activeDbName = targetDbName;
+      const db = await SQLite.openDatabaseAsync(targetDbName);
+      await initDb(db, targetDbName);
       _db = db;
       return db;
     })().catch((err) => {
@@ -28,9 +51,51 @@ export async function getDb(): Promise<SQLite.SQLiteDatabase> {
   return _initPromise;
 }
 
+/**
+ * Atomically closes any active database handle and opens the target user's database.
+ */
+export async function switchDatabase(dbFileName: string): Promise<SQLite.SQLiteDatabase> {
+  return withSwitchLock(async () => {
+    if (_initPromise) {
+      try {
+        await _initPromise;
+      } catch {
+        // Ignore previous failed init before switching
+      }
+    }
+    if (_db) {
+      try {
+        await _db.closeAsync();
+      } catch (err) {
+        console.warn('[Database] Failed closing previous DB cleanly:', err);
+      }
+      _db = null;
+    }
+    _initPromise = null;
+    _activeDbName = dbFileName;
+    _sessionEpoch += 1;
+    return getDb();
+  });
+}
+
+/**
+ * Deletes an inactive user's SQLite database file and WAL/SHM sidecars.
+ */
+export async function deleteUserDatabaseFile(dbFileName: string): Promise<void> {
+  if (dbFileName === _activeDbName) {
+    throw new Error('Cannot delete the currently active database.');
+  }
+  await SQLite.deleteDatabaseAsync(dbFileName);
+}
+
+export async function seedActiveDatabaseWithSampleData(): Promise<void> {
+  const db = await getDb();
+  await populateSampleData(db);
+}
+
 // ── Schema ────────────────────────────────────────────────────
 
-async function initDb(db: SQLite.SQLiteDatabase): Promise<void> {
+async function initDb(db: SQLite.SQLiteDatabase, dbFileName: string): Promise<void> {
   await db.execAsync(`
     PRAGMA journal_mode = WAL;
     PRAGMA foreign_keys = ON;
@@ -45,9 +110,13 @@ async function initDb(db: SQLite.SQLiteDatabase): Promise<void> {
     "SELECT value FROM settings WHERE key = 'hasSeededSampleData'",
   );
   if (!sampleSeeded) {
-    const txCount = await db.getFirstAsync<{ n: number }>('SELECT COUNT(*) AS n FROM transactions');
-    if (!txCount || txCount.n === 0) {
-      await populateSampleData(db);
+    // Only the initial legacy profile auto-seeds sample data on a brand new install.
+    // Additional user profiles always start clean.
+    if (dbFileName === LEGACY_USER_DB_NAME) {
+      const txCount = await db.getFirstAsync<{ n: number }>('SELECT COUNT(*) AS n FROM transactions');
+      if (!txCount || txCount.n === 0) {
+        await populateSampleData(db);
+      }
     }
     await db.runAsync(
       "INSERT OR REPLACE INTO settings (key, value) VALUES ('hasSeededSampleData', '1')",

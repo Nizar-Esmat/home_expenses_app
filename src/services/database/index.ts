@@ -12,3 +12,5 @@ export * from './seedSampleData';
 export * from './migrations';
 export * from './uuid';
 export * from './analytics';
+export * from './users';
+export { seedActiveDatabaseWithSampleData } from './client';

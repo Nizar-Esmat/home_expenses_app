@@ -194,3 +194,12 @@ export interface MonthSummary {
   totalIncome: number;
   count: number;
 }
+
+export interface UserProfile {
+  id: number;
+  uuid: string;
+  name: string;
+  dbFileName: string;
+  createdAt: string;
+  updatedAt: string | null;
+}
