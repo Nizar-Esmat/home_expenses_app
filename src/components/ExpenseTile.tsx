@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Expense } from '@/types';
-import { formatCurrency, formatDate } from '@/services/constants';
+import { formatCurrency, formatDate, SPLIT_CATEGORY_NAME } from '@/services/constants';
 import { useTheme } from '@/theme/ThemeContext';
 import { useAppDialog } from '@/components/AppDialog';
 
@@ -141,19 +141,26 @@ export default function ExpenseTile({
           </TouchableOpacity>
 
           {expanded &&
-            subs.map((sub, i) => (
-              <View key={i} style={styles.subRow}>
-                <Text
-                  style={[styles.subTitle, { color: colors.textSecondary }]}
-                  numberOfLines={1}
-                >
-                  {sub.title}
-                </Text>
-                <Text style={[styles.subAmount, { color: colors.danger }]}>
-                  -{formatCurrency(sub.amount, currency)}
-                </Text>
-              </View>
-            ))}
+            subs.map((sub, i) => {
+              const showItemCategory =
+                expense.category === SPLIT_CATEGORY_NAME ||
+                (sub.categoryName && sub.categoryName !== expense.category);
+              return (
+                <View key={sub.id ?? i} style={styles.subRow}>
+                  <Text
+                    style={[styles.subTitle, { color: colors.textSecondary }]}
+                    numberOfLines={1}
+                  >
+                    {showItemCategory && sub.categoryEmoji ? `${sub.categoryEmoji} ` : ''}
+                    {sub.title}
+                    {showItemCategory && sub.categoryName ? ` · ${sub.categoryName}` : ''}
+                  </Text>
+                  <Text style={[styles.subAmount, { color: colors.danger }]}>
+                    -{formatCurrency(sub.amount, currency)}
+                  </Text>
+                </View>
+              );
+            })}
         </View>
       )}
     </View>

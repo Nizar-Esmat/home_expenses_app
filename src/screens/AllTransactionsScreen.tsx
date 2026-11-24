@@ -66,6 +66,27 @@ const initialFilterState: FilterState = {
   sortOrder: 'desc',
 };
 
+function matchesTransactionSearch(t: HomeTransaction, q: string): boolean {
+  if (t.category.toLowerCase().includes(q) || (t.note ?? '').toLowerCase().includes(q)) {
+    return true;
+  }
+  return (
+    t.subExpenses?.some(
+      (s) =>
+        s.title.toLowerCase().includes(q) ||
+        (s.categoryName ?? '').toLowerCase().includes(q),
+    ) ?? false
+  );
+}
+
+function matchesSelectedCategories(t: HomeTransaction, selectedCategories: Set<string>): boolean {
+  if (selectedCategories.has(t.category)) return true;
+  return (
+    t.subExpenses?.some((s) => s.categoryName != null && selectedCategories.has(s.categoryName)) ??
+    false
+  );
+}
+
 function getSortLabel(field: SortField, order: SortOrder): string {
   if (field === 'date')
     return `Date · ${order === 'desc' ? 'Newest → Oldest' : 'Oldest → Newest'}`;
@@ -560,16 +581,12 @@ export default function AllTransactionsScreen() {
 
     const q = search.trim().toLowerCase();
     if (q.length > 0) {
-      result = result.filter(
-        (t) =>
-          t.category.toLowerCase().includes(q) ||
-          (t.note ?? '').toLowerCase().includes(q),
-      );
+      result = result.filter((t) => matchesTransactionSearch(t, q));
     }
 
     if (activeFilters.selectedCategories.size > 0) {
       result = result.filter((t) =>
-        activeFilters.selectedCategories.has(t.category),
+        matchesSelectedCategories(t, activeFilters.selectedCategories),
       );
     }
 
@@ -692,16 +709,12 @@ export default function AllTransactionsScreen() {
 
     const q = search.trim().toLowerCase();
     if (q.length > 0) {
-      result = result.filter(
-        (t) =>
-          t.category.toLowerCase().includes(q) ||
-          (t.note ?? '').toLowerCase().includes(q),
-      );
+      result = result.filter((t) => matchesTransactionSearch(t, q));
     }
 
     if (deferredTempFilters.selectedCategories.size > 0) {
       result = result.filter((t) =>
-        deferredTempFilters.selectedCategories.has(t.category),
+        matchesSelectedCategories(t, deferredTempFilters.selectedCategories),
       );
     }
 

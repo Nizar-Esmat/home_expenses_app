@@ -1,27 +1,55 @@
 import React, { useCallback, useState } from 'react';
 import {
-  View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  Modal, TextInput, KeyboardAvoidingView, Platform,
+  View,
+  Text,
+  ScrollView,
+  TouchableOpacity,
+  StyleSheet,
+  Modal,
+  TextInput,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/theme/ThemeContext';
 import {
-  getCategories, addCategory, updateCategory, deleteCategory,
+  getCategories,
+  addCategory,
+  updateCategory,
+  deleteCategory,
   getCategoryUsageCounts,
 } from '@/services/database';
-import { CATEGORY_COLORS } from '@/services/constants';
+import { CATEGORY_COLORS, SPLIT_CATEGORY_NAME } from '@/services/constants';
 import { Category } from '@/types';
 import CategoryCard from '@/components/CategoryCard';
 import { useAppDialog } from '@/components/AppDialog';
 import ScreenHeader from '@/components/ScreenHeader';
-import { EmojiKeyboard, type EmojiType } from '@softwhere-uz/react-native-emoji-keyboard';
+import {
+  EmojiKeyboard,
+  type EmojiType,
+} from '@softwhere-uz/react-native-emoji-keyboard';
 import { getEmojiKeyboardTheme } from '@/components/AppEmojiPicker';
 
 const QUICK_CATEGORY_EMOJIS = [
-  '🍔', '💡', '🚗', '🛍️', '🏠', '📦',
-  '☕', '🍕', '🎮', '💊', '✈️', '🎬',
-  '📚', '🏋️', '💼', '💰', '🐾', '🎁',
+  '🍔',
+  '💡',
+  '🚗',
+  '🛍️',
+  '🏠',
+  '📦',
+  '☕',
+  '🍕',
+  '🎮',
+  '💊',
+  '✈️',
+  '🎬',
+  '📚',
+  '🏋️',
+  '💼',
+  '💰',
+  '🐾',
+  '🎁',
 ];
 
 // ── Modal state type ──────────────────────────────────────────
@@ -60,10 +88,12 @@ export default function CategoryManagerScreen() {
   // ── Load data ───────────────────────────────────────────────
 
   const load = useCallback(() => {
-    Promise.all([getCategories(), getCategoryUsageCounts()]).then(([cats, counts]) => {
-      setCategories(cats);
-      setUsageCounts(counts);
-    });
+    Promise.all([getCategories(), getCategoryUsageCounts()]).then(
+      ([cats, counts]) => {
+        setCategories(cats.filter((c) => c.name !== SPLIT_CATEGORY_NAME));
+        setUsageCounts(counts);
+      },
+    );
   }, []);
 
   useFocusEffect(load);
@@ -114,7 +144,10 @@ export default function CategoryManagerScreen() {
       load();
     } catch (err: unknown) {
       setField('saving', false);
-      setField('nameError', err instanceof Error ? err.message : 'Something went wrong.');
+      setField(
+        'nameError',
+        err instanceof Error ? err.message : 'Something went wrong.',
+      );
     }
   };
 
@@ -153,23 +186,29 @@ export default function CategoryManagerScreen() {
   // ── Sections ────────────────────────────────────────────────
 
   const builtIn = categories.filter((c) => c.isDefault === 1);
-  const custom  = categories.filter((c) => c.isDefault === 0);
+  const custom = categories.filter((c) => c.isDefault === 0);
 
   // ── Render ──────────────────────────────────────────────────
 
   return (
     <View style={[styles.screen, { backgroundColor: colors.background }]}>
       <ScreenHeader
-        title="Categories"
+        title='Categories'
         subtitle={`${categories.length} total · ${custom.length} custom`}
-        alignTitle="left"
+        alignTitle='left'
       />
 
       {/* List */}
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-
+      <ScrollView
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+      >
         {/* Built-in */}
-        <SectionHeader label="Built-in" subtitle="Default categories" colors={colors} />
+        <SectionHeader
+          label='Built-in'
+          subtitle='Default categories'
+          colors={colors}
+        />
         {builtIn.map((cat) => (
           <CategoryCard
             key={cat.id}
@@ -181,7 +220,12 @@ export default function CategoryManagerScreen() {
         ))}
 
         {/* Custom */}
-        <SectionHeader label="Custom" subtitle="Your categories" colors={colors} style={{ marginTop: 10 }} />
+        <SectionHeader
+          label='Custom'
+          subtitle='Your categories'
+          colors={colors}
+          style={{ marginTop: 10 }}
+        />
         {custom.length === 0 ? (
           <EmptyCustom colors={colors} onAdd={openAdd} />
         ) : (
@@ -203,19 +247,27 @@ export default function CategoryManagerScreen() {
       <TouchableOpacity
         style={[styles.fab, { backgroundColor: colors.primary }]}
         onPress={openAdd}
-        accessibilityRole="button"
-        accessibilityLabel="Add category"
+        accessibilityRole='button'
+        accessibilityLabel='Add category'
       >
-        <Ionicons name="add" size={28} color={colors.onPrimary} />
+        <Ionicons name='add' size={28} color={colors.onPrimary} />
       </TouchableOpacity>
 
       {/* Add / Edit modal */}
-      <Modal visible={modalVisible} transparent animationType="slide" onRequestClose={closeModal}>
+      <Modal
+        visible={modalVisible}
+        transparent
+        animationType='slide'
+        onRequestClose={closeModal}
+      >
         <KeyboardAvoidingView
           style={styles.modalOverlay}
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         >
-          <TouchableOpacity style={StyleSheet.absoluteFill} onPress={closeModal} />
+          <TouchableOpacity
+            style={StyleSheet.absoluteFill}
+            onPress={closeModal}
+          />
           <View style={[styles.sheet, { backgroundColor: colors.card }]}>
             <CategoryForm
               form={form}
@@ -234,8 +286,16 @@ export default function CategoryManagerScreen() {
 // ── Sub-components ────────────────────────────────────────────
 
 function SectionHeader({
-  label, subtitle, colors, style,
-}: { label: string; subtitle: string; colors: ReturnType<typeof useTheme>['colors']; style?: object }) {
+  label,
+  subtitle,
+  colors,
+  style,
+}: {
+  label: string;
+  subtitle: string;
+  colors: ReturnType<typeof useTheme>['colors'];
+  style?: object;
+}) {
   return (
     <View style={[styles.sectionRow, style]}>
       <View>
@@ -252,11 +312,21 @@ function SectionHeader({
 
 function EmptyCustom({
   colors,
-}: { colors: ReturnType<typeof useTheme>['colors']; onAdd: () => void }) {
+}: {
+  colors: ReturnType<typeof useTheme>['colors'];
+  onAdd: () => void;
+}) {
   return (
-    <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+    <View
+      style={[
+        styles.emptyCard,
+        { backgroundColor: colors.card, borderColor: colors.border },
+      ]}
+    >
       <Text style={styles.emptyEmoji}>🏷️</Text>
-      <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>No custom categories yet</Text>
+      <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>
+        No custom categories yet
+      </Text>
       <Text style={[styles.emptyDesc, { color: colors.textSecondary }]}>
         Tap the + button to create one
       </Text>
@@ -290,13 +360,17 @@ function CategoryForm({ form, setField, onSave, onClose, colors }: FormProps) {
             onPress={() => setIsBrowsingEmojis(false)}
             style={styles.backBtn}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            accessibilityRole="button"
-            accessibilityLabel="Back to Category"
+            accessibilityRole='button'
+            accessibilityLabel='Back to Category'
           >
-            <Ionicons name="arrow-back" size={20} color={colors.primary} />
-            <Text style={[styles.backBtnText, { color: colors.primary }]}>Back</Text>
+            <Ionicons name='arrow-back' size={20} color={colors.primary} />
+            <Text style={[styles.backBtnText, { color: colors.primary }]}>
+              Back
+            </Text>
           </TouchableOpacity>
-          <Text style={[styles.sheetTitle, { color: colors.textPrimary }]}>Choose Emoji</Text>
+          <Text style={[styles.sheetTitle, { color: colors.textPrimary }]}>
+            Choose Emoji
+          </Text>
           <View style={{ width: 44 }} />
         </View>
 
@@ -308,7 +382,7 @@ function CategoryForm({ form, setField, onSave, onClose, colors }: FormProps) {
             }}
             enableSearchBar
             enableRecentlyUsed
-            categoryPosition="top"
+            categoryPosition='top'
             defaultHeight={380}
             theme={getEmojiKeyboardTheme(colors)}
           />
@@ -318,24 +392,29 @@ function CategoryForm({ form, setField, onSave, onClose, colors }: FormProps) {
   }
 
   return (
-    <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-
+    <ScrollView
+      showsVerticalScrollIndicator={false}
+      keyboardShouldPersistTaps='handled'
+    >
       {/* Sheet handle */}
       <View style={[styles.handle, { backgroundColor: colors.border }]} />
 
       {/* Title row */}
       <View style={styles.sheetHeader}>
-        <Text style={[styles.sheetTitle, { color: colors.textPrimary }]} accessibilityRole="header">
+        <Text
+          style={[styles.sheetTitle, { color: colors.textPrimary }]}
+          accessibilityRole='header'
+        >
           {form.mode === 'add' ? 'New Category' : 'Edit Category'}
         </Text>
         <TouchableOpacity
           onPress={onClose}
           hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           style={styles.closeBtn}
-          accessibilityRole="button"
-          accessibilityLabel="Close"
+          accessibilityRole='button'
+          accessibilityLabel='Close'
         >
-          <Ionicons name="close" size={22} color={colors.textSecondary} />
+          <Ionicons name='close' size={22} color={colors.textSecondary} />
         </TouchableOpacity>
       </View>
 
@@ -344,13 +423,18 @@ function CategoryForm({ form, setField, onSave, onClose, colors }: FormProps) {
         <TouchableOpacity
           onPress={() => setIsBrowsingEmojis(true)}
           style={[styles.previewBadge, { backgroundColor: form.color }]}
-          accessibilityRole="button"
-          accessibilityLabel="Browse all emojis"
+          accessibilityRole='button'
+          accessibilityLabel='Browse all emojis'
         >
           <Text style={styles.previewEmoji}>{form.emoji}</Text>
         </TouchableOpacity>
         <View style={styles.previewInfo}>
-          <Text style={[styles.previewName, { color: colors.textPrimary, textAlign: 'auto' }]}>
+          <Text
+            style={[
+              styles.previewName,
+              { color: colors.textPrimary, textAlign: 'auto' },
+            ]}
+          >
             {form.name || 'Category Name'}
           </Text>
           {isBuiltIn ? (
@@ -359,7 +443,12 @@ function CategoryForm({ form, setField, onSave, onClose, colors }: FormProps) {
             </Text>
           ) : (
             <TouchableOpacity onPress={() => setIsBrowsingEmojis(true)}>
-              <Text style={[styles.previewSub, { color: colors.primary, fontWeight: '600' }]}>
+              <Text
+                style={[
+                  styles.previewSub,
+                  { color: colors.primary, fontWeight: '600' },
+                ]}
+              >
                 Tap badge to search all emojis →
               </Text>
             </TouchableOpacity>
@@ -370,7 +459,9 @@ function CategoryForm({ form, setField, onSave, onClose, colors }: FormProps) {
       {/* Name input */}
       {!isBuiltIn && (
         <View style={styles.field}>
-          <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>Name</Text>
+          <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>
+            Name
+          </Text>
           <TextInput
             style={[
               styles.textInput,
@@ -381,27 +472,39 @@ function CategoryForm({ form, setField, onSave, onClose, colors }: FormProps) {
                 textAlign: 'auto',
               },
             ]}
-            placeholder="e.g. Gym, Pets, Travel…"
+            placeholder='e.g. Gym, Pets, Travel…'
             placeholderTextColor={colors.textSecondary}
             value={form.name}
-            onChangeText={(v) => { setField('name', v); setField('nameError', ''); }}
-            onBlur={() => {
-              if (!form.name.trim()) setField('nameError', 'Category name is required.');
+            onChangeText={(v) => {
+              setField('name', v);
+              setField('nameError', '');
             }}
-            autoCapitalize="words"
+            onBlur={() => {
+              if (!form.name.trim())
+                setField('nameError', 'Category name is required.');
+            }}
+            autoCapitalize='words'
             maxLength={24}
-            accessibilityLabel="Category name"
+            accessibilityLabel='Category name'
           />
           {!!form.nameError && (
-            <Text style={[styles.errorText, { color: colors.danger }]}>{form.nameError}</Text>
+            <Text style={[styles.errorText, { color: colors.danger }]}>
+              {form.nameError}
+            </Text>
           )}
         </View>
       )}
 
       {/* Color picker */}
       <View style={styles.field}>
-        <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>Accent Color</Text>
-        <View style={styles.colorRow} accessibilityRole="radiogroup" accessibilityLabel="Accent color">
+        <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>
+          Accent Color
+        </Text>
+        <View
+          style={styles.colorRow}
+          accessibilityRole='radiogroup'
+          accessibilityLabel='Accent color'
+        >
           {CATEGORY_COLORS.map((c) => {
             const isSelected = form.color === c;
             return (
@@ -411,15 +514,18 @@ function CategoryForm({ form, setField, onSave, onClose, colors }: FormProps) {
                 style={[
                   styles.colorSwatch,
                   { backgroundColor: c },
-                  isSelected && { borderWidth: 2.5, borderColor: colors.textPrimary },
+                  isSelected && {
+                    borderWidth: 2.5,
+                    borderColor: colors.textPrimary,
+                  },
                 ]}
                 hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
-                accessibilityRole="radio"
+                accessibilityRole='radio'
                 accessibilityState={{ selected: isSelected }}
                 accessibilityLabel={`Color ${c}`}
               >
                 {isSelected && (
-                  <Ionicons name="checkmark" size={18} color="#FFFFFF" />
+                  <Ionicons name='checkmark' size={18} color='#FFFFFF' />
                 )}
               </TouchableOpacity>
             );
@@ -433,16 +539,25 @@ function CategoryForm({ form, setField, onSave, onClose, colors }: FormProps) {
       {/* Emoji picker */}
       <View style={styles.field}>
         <View style={styles.iconFieldHeader}>
-          <Text style={[styles.fieldLabel, { color: colors.textSecondary, marginBottom: 0 }]}>Icon</Text>
+          <Text
+            style={[
+              styles.fieldLabel,
+              { color: colors.textSecondary, marginBottom: 0 },
+            ]}
+          >
+            Icon
+          </Text>
           <TouchableOpacity
             onPress={() => setIsBrowsingEmojis(true)}
             style={[styles.browseAllBtn, { backgroundColor: colors.inputFill }]}
             hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-            accessibilityRole="button"
-            accessibilityLabel="Search all emojis"
+            accessibilityRole='button'
+            accessibilityLabel='Search all emojis'
           >
-            <Ionicons name="search" size={14} color={colors.primary} />
-            <Text style={[styles.browseAllText, { color: colors.primary }]}>Search All Emojis</Text>
+            <Ionicons name='search' size={14} color={colors.primary} />
+            <Text style={[styles.browseAllText, { color: colors.primary }]}>
+              Search All Emojis
+            </Text>
           </TouchableOpacity>
         </View>
 
@@ -459,7 +574,7 @@ function CategoryForm({ form, setField, onSave, onClose, colors }: FormProps) {
                   isSelected && styles.emojiCellSelected,
                   isSelected && { borderColor: colors.primary },
                 ]}
-                accessibilityRole="button"
+                accessibilityRole='button'
                 accessibilityLabel={`Emoji ${em}`}
               >
                 <Text style={styles.emojiCellText}>{em}</Text>
@@ -478,11 +593,17 @@ function CategoryForm({ form, setField, onSave, onClose, colors }: FormProps) {
         ]}
         onPress={onSave}
         disabled={form.saving}
-        accessibilityRole="button"
-        accessibilityLabel={form.mode === 'add' ? 'Create Category' : 'Save Changes'}
+        accessibilityRole='button'
+        accessibilityLabel={
+          form.mode === 'add' ? 'Create Category' : 'Save Changes'
+        }
       >
         <Text style={[styles.saveBtnText, { color: colors.onPrimary }]}>
-          {form.saving ? 'Saving…' : form.mode === 'add' ? 'Create Category' : 'Save Changes'}
+          {form.saving
+            ? 'Saving…'
+            : form.mode === 'add'
+              ? 'Create Category'
+              : 'Save Changes'}
         </Text>
       </TouchableOpacity>
 
@@ -504,52 +625,106 @@ const styles = StyleSheet.create({
   },
 
   content: { padding: 20 },
-  sectionRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 12, marginTop: 4 },
+  sectionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+    marginTop: 4,
+  },
   sectionLabel: { fontSize: 15, fontWeight: '700' },
   sectionSub: { fontSize: 12, marginTop: 2 },
 
   emptyCard: {
-    borderRadius: 16, padding: 28, alignItems: 'center',
-    borderWidth: 1.5, borderStyle: 'dashed',
+    borderRadius: 16,
+    padding: 28,
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
   },
   emptyEmoji: { fontSize: 36, marginBottom: 10 },
   emptyTitle: { fontSize: 15, fontWeight: '700', marginBottom: 4 },
   emptyDesc: { fontSize: 13, textAlign: 'center', lineHeight: 18 },
 
   fab: {
-    position: 'absolute', bottom: 28, right: 24,
-    width: 56, height: 56, borderRadius: 28,
-    alignItems: 'center', justifyContent: 'center',
-    elevation: 4, shadowOpacity: 0.25, shadowRadius: 4,
+    position: 'absolute',
+    bottom: 28,
+    right: 24,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 4,
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
     shadowOffset: { width: 0, height: 2 },
   },
 
-  modalOverlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: '#00000055' },
-  sheet: { borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 20, paddingBottom: 20, maxHeight: '90%' },
-  handle: { width: 40, height: 4, borderRadius: 2, alignSelf: 'center', marginTop: 12, marginBottom: 8 },
-  sheetHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 },
+  modalOverlay: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: '#00000055',
+  },
+  sheet: {
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: 20,
+    paddingBottom: 20,
+    maxHeight: '90%',
+  },
+  handle: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    alignSelf: 'center',
+    marginTop: 12,
+    marginBottom: 8,
+  },
+  sheetHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
   sheetTitle: { fontSize: 18, fontWeight: '700' },
 
   previewRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 20 },
-  previewBadge: { width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center', marginRight: 14 },
+  previewBadge: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 14,
+  },
   previewEmoji: { fontSize: 28 },
   previewInfo: { flex: 1 },
   previewName: { fontSize: 17, fontWeight: '700' },
   previewSub: { fontSize: 12, marginTop: 3 },
 
   field: { marginBottom: 20 },
-  fieldLabel: { fontSize: 12, fontWeight: '600', marginBottom: 8, letterSpacing: 0.5 },
+  fieldLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    marginBottom: 8,
+    letterSpacing: 0.5,
+  },
   textInput: {
-    borderWidth: 1.5, borderRadius: 12,
-    paddingHorizontal: 14, paddingVertical: 12,
+    borderWidth: 1.5,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
     fontSize: 16,
   },
   errorText: { fontSize: 12, marginTop: 4 },
 
   colorRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   colorSwatch: {
-    width: 44, height: 44, borderRadius: 22,
-    alignItems: 'center', justifyContent: 'center',
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   colorHex: { fontSize: 11, marginTop: 8, letterSpacing: 0.5 },
 
@@ -582,13 +757,26 @@ const styles = StyleSheet.create({
 
   emojiGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   emojiCell: {
-    width: '14.5%', aspectRatio: 1, minHeight: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 10,
+    width: '14.5%',
+    aspectRatio: 1,
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 10,
   },
   emojiCellSelected: {
-    borderWidth: 2, backgroundColor: '#00000015',
+    borderWidth: 2,
+    backgroundColor: '#00000015',
   },
   emojiCellText: { fontSize: 24 },
 
-  saveBtn: { borderRadius: 14, minHeight: 48, paddingVertical: 14, alignItems: 'center', justifyContent: 'center', marginTop: 8 },
+  saveBtn: {
+    borderRadius: 14,
+    minHeight: 48,
+    paddingVertical: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 8,
+  },
   saveBtnText: { fontSize: 16, fontWeight: '700' },
 });

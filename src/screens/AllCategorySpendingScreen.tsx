@@ -87,9 +87,12 @@ export default function AllCategorySpendingScreen() {
 
   const handleDeleteConfirm = useCallback(
     (tx: HomeTransaction) => {
+      const isSplitItem = tx.subItemId != null;
       showDialog({
-        title: 'Delete Transaction',
-        message: 'Are you sure you want to delete this transaction?',
+        title: isSplitItem ? 'Delete Split Expense?' : 'Delete Transaction',
+        message: isSplitItem
+          ? 'This item is part of a split expense. Deleting will remove the entire expense. To remove only this item, tap Edit instead.'
+          : 'Are you sure you want to delete this transaction?',
         type: 'danger',
         buttons: [
           { text: 'Cancel', style: 'cancel' },
@@ -182,7 +185,7 @@ export default function AllCategorySpendingScreen() {
                 ) : categoryTransactions.length > 0 ? (
                   categoryTransactions.map((tx, i) => (
                     <TransactionRow
-                      key={`${tx.type}-${tx.id}`}
+                      key={`${tx.type}-${tx.id}-${tx.subItemId ?? 'main'}`}
                       tx={tx}
                       currency={currency}
                       onEdit={() => handleEdit(tx)}

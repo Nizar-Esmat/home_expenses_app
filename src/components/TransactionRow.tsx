@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { HomeTransaction } from '@/types';
-import { formatDate } from '@/services/constants';
+import { formatDate, SPLIT_CATEGORY_NAME } from '@/services/constants';
 import SwipeableTransactionRow from '@/components/SwipeableTransactionRow';
 import { useTheme } from '@/theme/ThemeContext';
 
@@ -171,14 +171,35 @@ export default function TransactionRow({
             </TouchableOpacity>
 
             {expanded &&
-              subs.map((sub, i) => (
-                <View key={i} style={styles.subRow}>
-                  <Text style={[styles.subTitle, { color: colors.textPrimary, textAlign: 'auto' }]} numberOfLines={1}>{sub.title}</Text>
-                  <Text style={[styles.subAmount, { color: colors.danger }]}>
-                    {'−'}{fmtAmt(sub.amount, currency)}
-                  </Text>
-                </View>
-              ))}
+              subs.map((sub, i) => {
+                const showItemCategory =
+                  tx.category === SPLIT_CATEGORY_NAME ||
+                  (sub.categoryName && sub.categoryName !== tx.category);
+                return (
+                  <View key={sub.id ?? i} style={styles.subRow}>
+                    <View style={styles.subLeft}>
+                      <Text
+                        style={[styles.subTitle, { color: colors.textPrimary, textAlign: 'auto' }]}
+                        numberOfLines={1}
+                      >
+                        {showItemCategory && sub.categoryEmoji ? `${sub.categoryEmoji} ` : ''}
+                        {sub.title}
+                      </Text>
+                      {showItemCategory && sub.categoryName ? (
+                        <Text
+                          style={[styles.subCatLabel, { color: colors.textSecondary }]}
+                          numberOfLines={1}
+                        >
+                          {sub.categoryName}
+                        </Text>
+                      ) : null}
+                    </View>
+                    <Text style={[styles.subAmount, { color: colors.danger }]}>
+                      {'−'}{fmtAmt(sub.amount, currency)}
+                    </Text>
+                  </View>
+                );
+              })}
           </View>
         )}
       </SwipeableTransactionRow>
@@ -297,7 +318,9 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: 5,
   },
-  subTitle: { flex: 1, fontSize: 13, marginRight: 8 },
+  subLeft: { flex: 1, marginRight: 8 },
+  subTitle: { fontSize: 13 },
+  subCatLabel: { fontSize: 11, marginTop: 1 },
   subAmount: { fontSize: 13, fontWeight: '600' },
 
   divider: { height: 1, marginHorizontal: 16 },
