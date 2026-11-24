@@ -6,6 +6,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useFonts } from 'expo-font';
 import { Ionicons } from '@expo/vector-icons';
 import { ThemeProvider, useTheme } from '@/theme/ThemeContext';
+import { UserProvider, useUser } from '@/contexts/UserContext';
 import { StatusBar } from 'expo-status-bar';
 import { DialogProvider } from '@/components/AppDialog';
 import {
@@ -16,22 +17,36 @@ import {
 
 function RootLayoutNav() {
   const { colors, isDark } = useTheme();
+  const { activeUser, switchUserByUuid, consumePendingRoute } = useUser();
   const router = useRouter();
 
   useEffect(() => {
-    initNotifications();
-    syncReminderSchedule();
+    const pending = consumePendingRoute();
+    if (pending) {
+      router.push(pending as never);
+    }
+  }, [consumePendingRoute, router]);
 
-    const unsubscribe = addNotificationResponseListener((action) => {
+  useEffect(() => {
+    initNotifications();
+    if (activeUser) {
+      syncReminderSchedule(activeUser);
+    }
+
+    const unsubscribe = addNotificationResponseListener(async (action, userUuid) => {
       if (action === 'add-expense') {
-        router.push('/add-expense');
+        if (userUuid && activeUser && userUuid !== activeUser.uuid) {
+          await switchUserByUuid(userUuid, '/add-expense');
+        } else {
+          router.push('/add-expense');
+        }
       }
     });
 
     return () => {
       unsubscribe();
     };
-  }, [router]);
+  }, [activeUser, router, switchUserByUuid]);
 
   return (
     <DialogProvider>
@@ -58,6 +73,24 @@ function RootLayoutNav() {
   );
 }
 
+function UserScopedApp() {
+  const { activeUser, ready } = useUser();
+
+  if (!ready || !activeUser) {
+    return (
+      <View style={{ flex: 1, backgroundColor: '#091413', alignItems: 'center', justifyContent: 'center' }}>
+        <ActivityIndicator color="#408A71" size="large" />
+      </View>
+    );
+  }
+
+  return (
+    <ThemeProvider key={activeUser.uuid}>
+      <RootLayoutNav />
+    </ThemeProvider>
+  );
+}
+
 export default function RootLayout() {
   const [fontsLoaded] = useFonts({
     ...Ionicons.font,
@@ -75,9 +108,9 @@ export default function RootLayout() {
     <View style={{ flex: 1, backgroundColor: '#091413' }}>
       <SafeAreaProvider>
         <GestureHandlerRootView style={{ flex: 1, backgroundColor: '#091413' }}>
-          <ThemeProvider>
-            <RootLayoutNav />
-          </ThemeProvider>
+          <UserProvider>
+            <UserScopedApp />
+          </UserProvider>
         </GestureHandlerRootView>
       </SafeAreaProvider>
     </View>
