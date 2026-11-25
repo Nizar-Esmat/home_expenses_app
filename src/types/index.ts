@@ -133,6 +133,7 @@ export interface Settings {
   customCategoryEmojis: Record<string, string>;
   homeAccountIds?: number[];
   reminder?: ReminderSettings;
+  routineCategoryIds?: number[];
 }
 
 export interface HomeTransaction {

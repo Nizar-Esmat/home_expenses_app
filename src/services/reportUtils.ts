@@ -44,6 +44,8 @@ export interface DailySpendingSummary {
   allDays: DailyExpenseItem[];
   maxTotal: number;
   totalSpent: number;
+  daysInPeriod?: number;
+  activeSpendingDays?: number;
 }
 
 export type TransactionSort = 'date_desc' | 'date_asc' | 'category_asc' | 'amount_desc' | 'amount_asc';

@@ -46,6 +46,15 @@ export async function getSettings(): Promise<Settings> {
     }
   }
 
+  let routineCategoryIds: unknown = undefined;
+  if (map['routineCategoryIds']) {
+    try {
+      routineCategoryIds = JSON.parse(map['routineCategoryIds']);
+    } catch {
+      routineCategoryIds = undefined;
+    }
+  }
+
   return {
     currency: map['currency'] ?? 'EGP',
     themeMode: (map['themeMode'] as Settings['themeMode']) ?? 'dark',
@@ -54,6 +63,9 @@ export async function getSettings(): Promise<Settings> {
     customCategoryEmojis: map['customCategoryEmojis'] ? JSON.parse(map['customCategoryEmojis']) : {},
     homeAccountIds: Array.isArray(homeAccountIds)
       ? homeAccountIds.map((id: unknown) => Number(id)).filter((id: number) => Number.isFinite(id))
+      : undefined,
+    routineCategoryIds: Array.isArray(routineCategoryIds)
+      ? routineCategoryIds.map((id: unknown) => Number(id)).filter((id: number) => Number.isFinite(id))
       : undefined,
     reminder,
   };
