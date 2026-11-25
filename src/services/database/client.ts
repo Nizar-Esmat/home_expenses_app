@@ -154,15 +154,16 @@ async function createSchema(db: SQLite.SQLiteDatabase): Promise<void> {
     CREATE UNIQUE INDEX IF NOT EXISTS idx_accounts_uuid ON accounts(uuid);
 
     CREATE TABLE IF NOT EXISTS categories (
-      id        INTEGER PRIMARY KEY AUTOINCREMENT,
-      name      TEXT    NOT NULL,
-      type      TEXT    NOT NULL CHECK(type IN ('EXPENSE', 'INCOME')),
-      icon      TEXT,
-      color     TEXT,
-      isDefault INTEGER NOT NULL DEFAULT 0 CHECK(isDefault IN (0, 1)),
-      sortOrder INTEGER NOT NULL DEFAULT 0,
-      createdAt TEXT    NOT NULL,
-      updatedAt TEXT,
+      id               INTEGER PRIMARY KEY AUTOINCREMENT,
+      name             TEXT    NOT NULL,
+      type             TEXT    NOT NULL CHECK(type IN ('EXPENSE', 'INCOME')),
+      icon             TEXT,
+      color            TEXT,
+      isDefault        INTEGER NOT NULL DEFAULT 0 CHECK(isDefault IN (0, 1)),
+      sortOrder        INTEGER NOT NULL DEFAULT 0,
+      budgetLimitMinor INTEGER DEFAULT NULL,
+      createdAt        TEXT    NOT NULL,
+      updatedAt        TEXT,
       UNIQUE(type, name)
     );
 

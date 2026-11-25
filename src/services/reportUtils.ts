@@ -145,6 +145,8 @@ export interface SpendingCategoryItem {
   percentage: number;
   categoryEmoji: string;
   categoryColor: string;
+  budgetLimit?: number | null;
+  budgetPercentage?: number | null; // spent / budgetLimit (e.g. 0.95 = 95%)
 }
 
 export function buildSpendingByCategory(

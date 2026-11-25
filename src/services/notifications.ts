@@ -301,3 +301,40 @@ export function addNotificationResponseListener(
 }
 
 export { getReminderSettings, saveReminderSettings, DEFAULT_REMINDER_SETTINGS };
+
+/**
+ * Triggers a high-priority budget warning push notification if native notifications are supported.
+ */
+export async function notifyBudgetWarning(
+  categoryName: string,
+  percentage: number,
+  spent: number,
+  limit: number,
+  currency: string = 'EGP',
+): Promise<boolean> {
+  if (!Notifications || !isNotificationAvailable) return false;
+  try {
+    const isExceeded = percentage > 1.0;
+    const pctLabel = `${Math.round(percentage * 100)}%`;
+    const title = isExceeded
+      ? `🚨 Budget Exceeded: ${categoryName}`
+      : `⚠️ Budget Warning: ${categoryName} at ${pctLabel}`;
+    const body = isExceeded
+      ? `You spent ${spent.toLocaleString(undefined, { maximumFractionDigits: 0 })} / ${limit.toLocaleString(undefined, { maximumFractionDigits: 0 })} ${currency} (${pctLabel}).`
+      : `You reached ${pctLabel} of your ${limit.toLocaleString(undefined, { maximumFractionDigits: 0 })} ${currency} monthly limit.`;
+
+    await Notifications.scheduleNotificationAsync({
+      content: {
+        title,
+        body,
+        sound: true,
+        data: { action: 'budget_warning', categoryName },
+      },
+      trigger: null, // deliver immediately
+    });
+    return true;
+  } catch (err) {
+    console.warn('[BudgetBuddy] Failed to dispatch budget warning notification:', err);
+    return false;
+  }
+}

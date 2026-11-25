@@ -60,6 +60,7 @@ interface FormState {
   name: string;
   emoji: string;
   color: string;
+  budgetLimit: string;
   saving: boolean;
   nameError: string;
 }
@@ -70,6 +71,7 @@ const INITIAL_FORM: FormState = {
   name: '',
   emoji: '📦',
   color: CATEGORY_COLORS[0],
+  budgetLimit: '',
   saving: false,
   nameError: '',
 };
@@ -112,6 +114,7 @@ export default function CategoryManagerScreen() {
       name: cat.name,
       emoji: cat.emoji,
       color: cat.color,
+      budgetLimit: cat.budgetLimit != null && cat.budgetLimit > 0 ? String(cat.budgetLimit) : '',
       saving: false,
       nameError: '',
     });
@@ -135,10 +138,18 @@ export default function CategoryManagerScreen() {
     }
     setField('saving', true);
     try {
+      const parsedBudget = form.budgetLimit.trim()
+        ? parseFloat(form.budgetLimit.trim().replace(',', '.'))
+        : null;
+      const validBudget =
+        parsedBudget != null && !isNaN(parsedBudget) && parsedBudget > 0
+          ? parsedBudget
+          : null;
+
       if (form.mode === 'add') {
-        await addCategory(name, form.emoji, form.color);
+        await addCategory(name, form.emoji, form.color, validBudget);
       } else if (form.target) {
-        await updateCategory(form.target.id, name, form.emoji, form.color);
+        await updateCategory(form.target.id, name, form.emoji, form.color, validBudget);
       }
       setModalVisible(false);
       load();
@@ -494,6 +505,39 @@ function CategoryForm({ form, setField, onSave, onClose, colors }: FormProps) {
           )}
         </View>
       )}
+
+      {/* Monthly Budget Limit */}
+      <View style={styles.field}>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+          <Text style={[styles.fieldLabel, { color: colors.textSecondary, marginBottom: 0 }]}>
+            Monthly Budget Limit (Optional)
+          </Text>
+          {form.budgetLimit ? (
+            <TouchableOpacity onPress={() => setField('budgetLimit', '')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Text style={{ fontSize: 12, color: colors.danger, fontWeight: '600' }}>Clear</Text>
+            </TouchableOpacity>
+          ) : null}
+        </View>
+        <TextInput
+          style={[
+            styles.textInput,
+            {
+              color: colors.textPrimary,
+              backgroundColor: colors.inputFill,
+              borderColor: colors.border,
+            },
+          ]}
+          placeholder='e.g. 5000'
+          placeholderTextColor={colors.textSecondary}
+          value={form.budgetLimit}
+          onChangeText={(v) => setField('budgetLimit', v.replace(/[^0-9.]/g, ''))}
+          keyboardType='decimal-pad'
+          accessibilityLabel='Monthly budget limit'
+        />
+        <Text style={{ fontSize: 11, color: colors.textSecondary, marginTop: 4 }}>
+          BudgetBuddy will warn you when your spending reaches 90% of this limit.
+        </Text>
+      </View>
 
       {/* Color picker */}
       <View style={styles.field}>

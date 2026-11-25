@@ -8,6 +8,8 @@ export interface Category {
   color: string;
   isDefault: number; // 1 = built-in (no rename/delete), 0 = custom
   sortOrder: number;
+  budgetLimit?: number | null; // major units (e.g. 5000 EGP)
+  budgetLimitMinor?: number | null; // minor units (e.g. 500000 cents)
   createdAt: string;
   updatedAt?: string | null;
 }

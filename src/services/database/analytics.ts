@@ -109,6 +109,7 @@ export async function getCategorySpendingSql(
     category: string;
     categoryEmoji: string;
     categoryColor: string;
+    budgetLimitMinor: number | null;
     total: number;
   }>(
     `${buildUnifiedCategoryCte(txWhere)}
@@ -116,6 +117,7 @@ export async function getCategorySpendingSql(
        c.name AS category,
        c.icon AS categoryEmoji,
        c.color AS categoryColor,
+       c.budgetLimitMinor,
        COALESCE(SUM(u.amountMinor), 0) / 100.0 AS total
      FROM unified_expense_items u
      JOIN categories c ON c.id = u.categoryId
@@ -141,13 +143,19 @@ export async function getCategorySpendingSql(
     feeTotal = feeRow?.feeTotal ?? 0;
   }
 
-  const items: SpendingCategoryItem[] = catRows.map((r) => ({
-    category: r.category,
-    total: r.total,
-    percentage: 0,
-    categoryEmoji: r.categoryEmoji ?? '📦',
-    categoryColor: r.categoryColor ?? '#408A71',
-  }));
+  const items: SpendingCategoryItem[] = catRows.map((r) => {
+    const budgetLimit = r.budgetLimitMinor != null && r.budgetLimitMinor > 0 ? r.budgetLimitMinor / 100.0 : null;
+    const budgetPercentage = budgetLimit && budgetLimit > 0 ? r.total / budgetLimit : null;
+    return {
+      category: r.category,
+      total: r.total,
+      percentage: 0,
+      categoryEmoji: r.categoryEmoji ?? '📦',
+      categoryColor: r.categoryColor ?? '#408A71',
+      budgetLimit,
+      budgetPercentage,
+    };
+  });
 
   if (feeTotal > 0) {
     items.push({
@@ -450,4 +458,88 @@ export async function getFilteredExpenseTotalSql(
   );
 
   return row?.total ?? 0;
+}
+
+/**
+ * Computes monthly spent amount for a specific category.
+ */
+export async function getCategoryMonthSpendingSql(
+  categoryId: number,
+  monthKey?: string,
+): Promise<number> {
+  const db = await getDb();
+  const isAllTime = !monthKey || monthKey === 'ALL';
+  const { startIso, endIso } = !isAllTime ? getMonthDateRange(monthKey) : { startIso: '', endIso: '' };
+
+  const txWhere = isAllTime
+    ? "t.type = 'EXPENSE' AND t.deletedAt IS NULL"
+    : "t.type = 'EXPENSE' AND t.deletedAt IS NULL AND t.transactionDate >= ? AND t.transactionDate < ?";
+  const txParams = isAllTime ? [categoryId] : [startIso, endIso, startIso, endIso, categoryId];
+
+  const row = await db.getFirstAsync<{ total: number }>(
+    `${buildUnifiedCategoryCte(txWhere)}
+     SELECT COALESCE(SUM(u.amountMinor), 0) / 100.0 AS total
+     FROM unified_expense_items u
+     WHERE u.categoryId = ?`,
+    txParams,
+  );
+  return row?.total ?? 0;
+}
+
+export interface CategoryBudgetCheckResult {
+  hasBudget: boolean;
+  budgetLimit: number;
+  currentSpent: number;
+  projectedSpent: number;
+  percentage: number;
+  isWarning: boolean; // >= 90%
+  isExceeded: boolean; // > 100%
+  categoryName: string;
+}
+
+/**
+ * Checks whether an expense will cause a category to reach or exceed 90% of its monthly budget limit.
+ */
+export async function checkCategoryBudgetWarning(
+  categoryId: number,
+  additionalAmount: number,
+  monthKey?: string,
+  excludeExpenseId?: number,
+): Promise<CategoryBudgetCheckResult | null> {
+  const db = await getDb();
+  const cat = await db.getFirstAsync<{ name: string; budgetLimitMinor: number | null }>(
+    'SELECT name, budgetLimitMinor FROM categories WHERE id = ?',
+    [categoryId],
+  );
+  if (!cat || cat.budgetLimitMinor == null || cat.budgetLimitMinor <= 0) {
+    return null;
+  }
+
+  const budgetLimit = cat.budgetLimitMinor / 100.0;
+  let currentSpent = await getCategoryMonthSpendingSql(categoryId, monthKey);
+
+  // If editing an existing transaction, subtract its old contribution
+  if (excludeExpenseId) {
+    const oldTx = await db.getFirstAsync<{ amountMinor: number }>(
+      'SELECT amountMinor FROM transactions WHERE id = ?',
+      [excludeExpenseId],
+    );
+    if (oldTx) {
+      currentSpent = Math.max(0, currentSpent - oldTx.amountMinor / 100.0);
+    }
+  }
+
+  const projectedSpent = currentSpent + additionalAmount;
+  const percentage = budgetLimit > 0 ? projectedSpent / budgetLimit : 0;
+
+  return {
+    hasBudget: true,
+    budgetLimit,
+    currentSpent,
+    projectedSpent,
+    percentage,
+    isWarning: percentage >= 0.9,
+    isExceeded: percentage > 1.0,
+    categoryName: cat.name,
+  };
 }

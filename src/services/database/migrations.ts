@@ -1,7 +1,7 @@
 import * as SQLite from 'expo-sqlite';
 import { generateUuidV7 } from './uuid';
 
-export const SCHEMA_VERSION = 7;
+export const SCHEMA_VERSION = 8;
 
 export interface MigrationStep {
   version: number;
@@ -242,6 +242,18 @@ export const MIGRATIONS: MigrationStep[] = [
         `INSERT OR IGNORE INTO categories (name, type, icon, color, isDefault, sortOrder, createdAt, updatedAt)
          VALUES ('Split', 'EXPENSE', '🔀', '#6366F1', 1, 99, datetime('now'), datetime('now'))`,
       );
+    },
+  },
+  {
+    version: 8,
+    description: 'Add budgetLimitMinor column to categories table',
+    up: async (db) => {
+      if (await tableExists(db, 'categories')) {
+        const hasCol = await columnExists(db, 'categories', 'budgetLimitMinor');
+        if (!hasCol) {
+          await db.execAsync('ALTER TABLE categories ADD COLUMN budgetLimitMinor INTEGER DEFAULT NULL;');
+        }
+      }
     },
   },
 ];
