@@ -44,6 +44,8 @@ export interface DailySpendingSummary {
   allDays: DailyExpenseItem[];
   maxTotal: number;
   totalSpent: number;
+  daysInPeriod?: number;
+  activeSpendingDays?: number;
 }
 
 export type TransactionSort = 'date_desc' | 'date_asc' | 'category_asc' | 'amount_desc' | 'amount_asc';
@@ -143,6 +145,8 @@ export interface SpendingCategoryItem {
   percentage: number;
   categoryEmoji: string;
   categoryColor: string;
+  budgetLimit?: number | null;
+  budgetPercentage?: number | null; // spent / budgetLimit (e.g. 0.95 = 95%)
 }
 
 export function buildSpendingByCategory(

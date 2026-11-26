@@ -10,11 +10,29 @@ interface Props {
   categoryEmoji: string;
   categoryColor: string;
   currency: string;
+  budgetLimit?: number | null;
+  budgetPercentage?: number | null;
   isLast?: boolean;
 }
 
-export default function CategoryStatRow({ category, total, percentage, categoryEmoji, categoryColor, currency, isLast = false }: Props) {
+export default function CategoryStatRow({
+  category,
+  total,
+  percentage,
+  categoryEmoji,
+  categoryColor,
+  currency,
+  budgetLimit,
+  budgetPercentage,
+  isLast = false,
+}: Props) {
   const { colors, isDark } = useTheme();
+
+  const hasBudget = budgetLimit != null && budgetLimit > 0;
+  const isExceeded = hasBudget && (budgetPercentage ?? 0) > 1.0;
+  const isWarning = hasBudget && (budgetPercentage ?? 0) >= 0.9 && !isExceeded;
+
+  const barColor = isExceeded ? colors.danger : isWarning ? '#F59E0B' : categoryColor;
 
   return (
     <View
@@ -27,13 +45,42 @@ export default function CategoryStatRow({ category, total, percentage, categoryE
           <Text style={styles.emoji}>{categoryEmoji}</Text>
         </View>
         <View style={styles.info}>
-          <Text style={[styles.name, { color: colors.textPrimary }]} numberOfLines={1}>{category}</Text>
-          <Text style={[styles.percentage, { color: colors.textSecondary }]}>{(percentage * 100).toFixed(1)}% of spending</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <Text style={[styles.name, { color: colors.textPrimary }]} numberOfLines={1}>
+              {category}
+            </Text>
+            {isExceeded && (
+              <View style={[styles.warningBadge, { backgroundColor: colors.dangerBg }]}>
+                <Text style={[styles.warningBadgeText, { color: colors.danger }]}>Exceeded</Text>
+              </View>
+            )}
+            {isWarning && (
+              <View style={[styles.warningBadge, { backgroundColor: '#FEF3C7' }]}>
+                <Text style={[styles.warningBadgeText, { color: '#B45309' }]}>Near limit</Text>
+              </View>
+            )}
+          </View>
+
+          <Text style={[styles.percentage, { color: colors.textSecondary }]}>
+            {(percentage * 100).toFixed(1)}% of spending
+            {hasBudget && (
+              <Text
+                style={{
+                  color: isExceeded ? colors.danger : isWarning ? '#F59E0B' : colors.textSecondary,
+                  fontWeight: isExceeded || isWarning ? '700' : '400',
+                }}
+              >
+                {' '}· {Math.round((budgetPercentage ?? 0) * 100)}% of {formatCurrency(budgetLimit!, currency)}
+              </Text>
+            )}
+          </Text>
         </View>
-        <Text style={[styles.amount, { color: colors.textPrimary }]} numberOfLines={1} adjustsFontSizeToFit>{formatCurrency(total, currency)}</Text>
+        <Text style={[styles.amount, { color: colors.textPrimary }]} numberOfLines={1} adjustsFontSizeToFit>
+          {formatCurrency(total, currency)}
+        </Text>
       </View>
       <View style={[styles.track, { backgroundColor: isDark ? '#1A2332' : '#E2E8F0' }]}>
-        <View style={[styles.fill, { width: `${Math.min(percentage * 100, 100)}%`, backgroundColor: categoryColor }]} />
+        <View style={[styles.fill, { width: `${Math.min(percentage * 100, 100)}%`, backgroundColor: barColor }]} />
       </View>
     </View>
   );
@@ -73,6 +120,15 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     marginBottom: 2,
     textAlign: 'auto',
+  },
+  warningBadge: {
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 4,
+  },
+  warningBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
   },
   percentage: {
     fontSize: 13,

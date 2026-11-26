@@ -1,6 +1,6 @@
 import { Category, TransactionType } from '@/types';
 import { getDb } from './client';
-import { nowIso } from './helpers';
+import { nowIso, toMinorUnits, fromMinorUnits } from './helpers';
 
 interface CategoryRow {
   id: number;
@@ -10,12 +10,13 @@ interface CategoryRow {
   color: string | null;
   isDefault: number;
   sortOrder: number;
+  budgetLimitMinor: number | null;
   createdAt: string;
   updatedAt: string | null;
 }
 
 const CATEGORY_SELECT = `
-  SELECT id, name, type, icon, color, isDefault, sortOrder, createdAt, updatedAt
+  SELECT id, name, type, icon, color, isDefault, sortOrder, budgetLimitMinor, createdAt, updatedAt
   FROM categories
 `;
 
@@ -28,6 +29,8 @@ function toCategory(row: CategoryRow): Category {
     color: row.color ?? (row.type === 'INCOME' ? '#10B981' : '#408A71'),
     isDefault: row.isDefault,
     sortOrder: row.sortOrder,
+    budgetLimitMinor: row.budgetLimitMinor ?? null,
+    budgetLimit: row.budgetLimitMinor != null ? fromMinorUnits(row.budgetLimitMinor) : null,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
@@ -47,6 +50,7 @@ async function addCategoryByType(
   name: string,
   emoji: string,
   color: string,
+  budgetLimit?: number | null,
 ): Promise<number> {
   const db = await getDb();
   const trimmed = name.trim();
@@ -63,10 +67,13 @@ async function addCategoryByType(
   );
   const sortOrder = (maxSort?.m ?? -1) + 1;
   const now = nowIso();
+  const budgetLimitMinor = budgetLimit != null && !isNaN(budgetLimit) && budgetLimit > 0
+    ? toMinorUnits(budgetLimit)
+    : null;
 
   const result = await db.runAsync(
-    'INSERT INTO categories (name, type, icon, color, isDefault, sortOrder, createdAt, updatedAt) VALUES (?, ?, ?, ?, 0, ?, ?, ?)',
-    [trimmed, type, emoji, color, sortOrder, now, now],
+    'INSERT INTO categories (name, type, icon, color, isDefault, sortOrder, budgetLimitMinor, createdAt, updatedAt) VALUES (?, ?, ?, ?, 0, ?, ?, ?, ?)',
+    [trimmed, type, emoji, color, sortOrder, budgetLimitMinor, now, now],
   );
   return result.lastInsertRowId;
 }
@@ -77,6 +84,7 @@ async function updateCategoryByType(
   name: string,
   emoji: string,
   color: string,
+  budgetLimit?: number | null,
 ): Promise<void> {
   const db = await getDb();
   const trimmed = name.trim();
@@ -95,9 +103,13 @@ async function updateCategoryByType(
     if (dup && dup.n > 0) throw new Error('A category with this name already exists.');
   }
 
+  const budgetLimitMinor = budgetLimit !== undefined
+    ? (budgetLimit != null && !isNaN(budgetLimit) && budgetLimit > 0 ? toMinorUnits(budgetLimit) : null)
+    : cat.budgetLimitMinor;
+
   await db.runAsync(
-    'UPDATE categories SET icon=?, color=?, name=?, updatedAt=? WHERE id=? AND type=?',
-    [emoji, color, cat.isDefault ? cat.name : trimmed, nowIso(), id, type],
+    'UPDATE categories SET icon=?, color=?, name=?, budgetLimitMinor=?, updatedAt=? WHERE id=? AND type=?',
+    [emoji, color, cat.isDefault ? cat.name : trimmed, budgetLimitMinor, nowIso(), id, type],
   );
 }
 
@@ -141,8 +153,9 @@ export async function addCategory(
   name: string,
   emoji: string,
   color: string,
+  budgetLimit?: number | null,
 ): Promise<number> {
-  return addCategoryByType('EXPENSE', name, emoji, color);
+  return addCategoryByType('EXPENSE', name, emoji, color, budgetLimit);
 }
 
 export async function updateCategory(
@@ -150,8 +163,23 @@ export async function updateCategory(
   name: string,
   emoji: string,
   color: string,
+  budgetLimit?: number | null,
 ): Promise<void> {
-  return updateCategoryByType('EXPENSE', id, name, emoji, color);
+  return updateCategoryByType('EXPENSE', id, name, emoji, color, budgetLimit);
+}
+
+export async function updateCategoryBudget(
+  id: number,
+  budgetLimit: number | null,
+): Promise<void> {
+  const db = await getDb();
+  const budgetLimitMinor = budgetLimit != null && !isNaN(budgetLimit) && budgetLimit > 0
+    ? toMinorUnits(budgetLimit)
+    : null;
+  await db.runAsync(
+    'UPDATE categories SET budgetLimitMinor=?, updatedAt=? WHERE id=?',
+    [budgetLimitMinor, nowIso(), id],
+  );
 }
 
 export async function deleteCategory(

@@ -32,11 +32,21 @@ export default function CategoryCard({ category, expenseCount, onEdit, onDelete 
           <Text style={[styles.name, { color: colors.textPrimary, textAlign: 'auto' }]} numberOfLines={1}>
             {category.name}
           </Text>
-          <Text style={[styles.meta, { color: colors.textSecondary }]}>
-            {expenseCount > 0
-              ? `${expenseCount} expense${expenseCount > 1 ? 's' : ''}`
-              : 'No expenses yet'}
-          </Text>
+          <View style={styles.metaRow}>
+            <Text style={[styles.meta, { color: colors.textSecondary }]}>
+              {expenseCount > 0
+                ? `${expenseCount} expense${expenseCount > 1 ? 's' : ''}`
+                : 'No expenses yet'}
+            </Text>
+            {category.budgetLimit != null && category.budgetLimit > 0 && (
+              <View style={[styles.budgetBadge, { backgroundColor: colors.primary + '18' }]}>
+                <Ionicons name="pie-chart-outline" size={10} color={colors.primary} />
+                <Text style={[styles.budgetText, { color: colors.primary }]}>
+                  {category.budgetLimit.toLocaleString()}
+                </Text>
+              </View>
+            )}
+          </View>
         </View>
 
         {isBuiltIn && (
@@ -91,7 +101,17 @@ const styles = StyleSheet.create({
   badgeEmoji: { fontSize: 22 },
   info: { flex: 1, marginRight: 8 },
   name: { fontSize: 15, fontWeight: '700', marginBottom: 2 },
+  metaRow: { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
   meta: { fontSize: 12 },
+  budgetBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    gap: 3,
+  },
+  budgetText: { fontSize: 10, fontWeight: '700' },
   lockBadge: {
     flexDirection: 'row',
     alignItems: 'center',

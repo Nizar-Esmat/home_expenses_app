@@ -23,7 +23,10 @@ import {
   getSubExpenses,
   getActiveAccounts,
   getAccountById,
+  checkCategoryBudgetWarning,
+  CategoryBudgetCheckResult,
 } from '@/services/database';
+import { notifyBudgetWarning } from '@/services/notifications';
 import { Account, Category, Expense, SubExpenseInput } from '@/types';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AppInput from '@/components/AppInput';
@@ -67,6 +70,7 @@ export default function AddExpenseScreen() {
   const [showAllCategories, setShowAllCategories] = useState(false);
   const [perItemCategoryMode, setPerItemCategoryMode] = useState(false);
   const [pickerItemId, setPickerItemId] = useState<string | null>(null);
+  const [budgetStatus, setBudgetStatus] = useState<CategoryBudgetCheckResult | null>(null);
 
   const subItemCounter = useRef(0);
   const makeLocalId = () => String(++subItemCounter.current);
@@ -154,6 +158,26 @@ export default function AddExpenseScreen() {
     }
     return Math.round(total * 1e10) / 1e10;
   }, [subItems, hasSubItems]);
+
+  useEffect(() => {
+    if (!selectedCategory?.id || !selectedCategory.budgetLimit) {
+      setBudgetStatus(null);
+      return;
+    }
+    const amt =
+      hasSubItems && subTotal != null
+        ? subTotal
+        : parseFloat(price.replace(',', '.')) || 0;
+
+    checkCategoryBudgetWarning(
+      selectedCategory.id,
+      amt,
+      undefined,
+      editExpense?.id,
+    )
+      .then(setBudgetStatus)
+      .catch(() => setBudgetStatus(null));
+  }, [selectedCategory, price, subTotal, hasSubItems, editExpense]);
 
   const addSubItem = () => {
     const initialAmount = subItems.length === 0 ? price : '';
@@ -302,43 +326,90 @@ export default function AddExpenseScreen() {
       }
     }
 
-    setLoading(true);
-    try {
-      const catName = selectedCategory?.name ?? 'Other';
-      const createdAt = useCustomDate
-        ? date.toISOString()
-        : new Date().toISOString();
-      if (editExpense) {
-        await updateExpense(
-          editExpense.id,
-          finalPrice,
-          catName,
-          note.trim() || null,
-          subExpensesInput,
-          selectedAccount?.id ?? null,
-        );
-      } else {
-        await addExpense(
-          finalPrice,
-          catName,
-          note.trim() || null,
-          createdAt,
-          subExpensesInput,
-          selectedAccount?.id ?? null,
-        );
+    const executeSave = async () => {
+      setLoading(true);
+      try {
+        const catName = selectedCategory?.name ?? 'Other';
+        const createdAt = useCustomDate
+          ? date.toISOString()
+          : new Date().toISOString();
+        if (editExpense) {
+          await updateExpense(
+            editExpense.id,
+            finalPrice,
+            catName,
+            note.trim() || null,
+            subExpensesInput,
+            selectedAccount?.id ?? null,
+          );
+        } else {
+          await addExpense(
+            finalPrice,
+            catName,
+            note.trim() || null,
+            createdAt,
+            subExpensesInput,
+            selectedAccount?.id ?? null,
+          );
+        }
+        router.back();
+      } catch {
+        showDialog({
+          title: 'Error',
+          message: 'Failed to save expense. Please try again.',
+          icon: '❌',
+          type: 'danger',
+          buttons: [{ text: 'OK', style: 'default' }],
+        });
+      } finally {
+        setLoading(false);
       }
-      router.back();
-    } catch {
-      showDialog({
-        title: 'Error',
-        message: 'Failed to save expense. Please try again.',
-        icon: '❌',
-        type: 'danger',
-        buttons: [{ text: 'OK', style: 'default' }],
-      });
-    } finally {
-      setLoading(false);
+    };
+
+    // Budget limit check & warning
+    if (selectedCategory?.id) {
+      const budgetCheck = await checkCategoryBudgetWarning(
+        selectedCategory.id,
+        finalPrice,
+        undefined,
+        editExpense?.id,
+      );
+
+      if (budgetCheck && budgetCheck.isWarning) {
+        const pctLabel = `${Math.round(budgetCheck.percentage * 100)}%`;
+        const isExceeded = budgetCheck.isExceeded;
+        const alertTitle = isExceeded ? 'Budget Exceeded!' : 'Budget Warning!';
+        const alertMsg = isExceeded
+          ? `This expense will exceed the monthly budget for "${budgetCheck.categoryName}" by ${(budgetCheck.projectedSpent - budgetCheck.budgetLimit).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}.\n\nProjected: ${budgetCheck.projectedSpent.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} / ${budgetCheck.budgetLimit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (${pctLabel}).`
+          : `This expense will bring "${budgetCheck.categoryName}" spending to ${pctLabel} of its monthly budget.\n\nProjected: ${budgetCheck.projectedSpent.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} / ${budgetCheck.budgetLimit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}.`;
+
+        // Send push notification in background
+        notifyBudgetWarning(
+          budgetCheck.categoryName,
+          budgetCheck.percentage,
+          budgetCheck.projectedSpent,
+          budgetCheck.budgetLimit,
+        ).catch(() => {});
+
+        showDialog({
+          title: alertTitle,
+          message: alertMsg,
+          icon: isExceeded ? '🚨' : '⚠️',
+          type: 'warning',
+          buttons: [
+            { text: 'Cancel', style: 'cancel' },
+            {
+              text: 'Save Anyway',
+              style: 'default',
+              onPress: executeSave,
+            },
+          ],
+        });
+        return;
+      }
     }
+
+    await executeSave();
   };
 
   return (
@@ -643,6 +714,71 @@ export default function AddExpenseScreen() {
                 </TouchableOpacity>
               )}
             </View>
+
+            {/* Live Budget Warning / Status Indicator */}
+            {budgetStatus && budgetStatus.hasBudget && (
+              <View
+                style={[
+                  styles.budgetBanner,
+                  {
+                    backgroundColor: budgetStatus.isExceeded
+                      ? colors.dangerBg
+                      : budgetStatus.isWarning
+                        ? colors.inputFill
+                        : colors.inputFill,
+                    borderColor: budgetStatus.isExceeded
+                      ? colors.danger
+                      : budgetStatus.isWarning
+                        ? '#F59E0B'
+                        : colors.primary,
+                  },
+                ]}
+              >
+                <Ionicons
+                  name={
+                    budgetStatus.isExceeded
+                      ? 'alert-circle'
+                      : budgetStatus.isWarning
+                        ? 'warning'
+                        : 'pie-chart'
+                  }
+                  size={20}
+                  color={
+                    budgetStatus.isExceeded
+                      ? colors.danger
+                      : budgetStatus.isWarning
+                        ? '#F59E0B'
+                        : colors.primary
+                  }
+                />
+                <View style={{ flex: 1 }}>
+                  <Text
+                    style={[
+                      styles.budgetBannerTitle,
+                      {
+                        color: budgetStatus.isExceeded
+                          ? colors.danger
+                          : budgetStatus.isWarning
+                            ? '#F59E0B'
+                            : colors.textPrimary,
+                      },
+                    ]}
+                  >
+                    {budgetStatus.isExceeded
+                      ? `Budget Exceeded (${Math.round(budgetStatus.percentage * 100)}%)`
+                      : budgetStatus.isWarning
+                        ? `Budget Warning (${Math.round(budgetStatus.percentage * 100)}%)`
+                        : `Monthly Budget (${Math.round(budgetStatus.percentage * 100)}%)`}
+                  </Text>
+                  <Text style={[styles.budgetBannerSub, { color: colors.textSecondary }]}>
+                    {budgetStatus.projectedSpent.toLocaleString(undefined, { maximumFractionDigits: 1 })} / {budgetStatus.budgetLimit.toLocaleString(undefined, { maximumFractionDigits: 1 })} EGP
+                    {budgetStatus.isExceeded
+                      ? ` · Over by ${(budgetStatus.projectedSpent - budgetStatus.budgetLimit).toLocaleString(undefined, { maximumFractionDigits: 1 })} EGP`
+                      : ` · ${(budgetStatus.budgetLimit - budgetStatus.projectedSpent).toLocaleString(undefined, { maximumFractionDigits: 1 })} EGP left`}
+                  </Text>
+                </View>
+              </View>
+            )}
           </>
         )}
 
@@ -949,5 +1085,23 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: 10,
     paddingBottom: 12,
+  },
+  budgetBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginTop: 10,
+  },
+  budgetBannerTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    marginBottom: 2,
+  },
+  budgetBannerSub: {
+    fontSize: 12,
+    fontWeight: '500',
   },
 });

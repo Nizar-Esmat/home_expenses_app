@@ -11,10 +11,9 @@ import { useTheme } from '@/theme/ThemeContext';
 import { useMonth } from '@/contexts/MonthContext';
 import {
   getSettings,
+  saveSettings,
   getCategories,
   getMonthHistory,
-  getExpenseTotalByMonth,
-  getExpenseTotalAll,
   getIncomeTotalByMonth,
   getIncomeTotalAll,
   getAccounts,
@@ -22,6 +21,7 @@ import {
   getDailySpendingSummarySql,
   getQuickInsightsSql,
   getTopExpensesSql,
+  getFilteredExpenseTotalSql,
 } from '@/services/database';
 import { currentMonthKey, formatCurrency } from '@/services/constants';
 import { Account, Category, Expense, Settings } from '@/types';
@@ -31,6 +31,7 @@ import {
   DailySpendingSummary,
 } from '@/services/reportUtils';
 import PeriodSelector from '@/components/statistics/PeriodSelector';
+import CategoryFilterBar from '@/components/statistics/CategoryFilterBar';
 import QuickInsightsGrid from '@/components/statistics/QuickInsightsGrid';
 import CategoryBreakdownPreview from '@/components/statistics/CategoryBreakdownPreview';
 import DailySpendingPreview from '@/components/statistics/DailySpendingPreview';
@@ -67,8 +68,10 @@ export default function StatisticsScreen() {
   });
   const [biggestExpenses, setBiggestExpenses] = useState<Expense[]>([]);
   const [settings, setSettings] = useState<Settings | null>(null);
+  const [categoryList, setCategoryList] = useState<Category[]>([]);
   const [categoryMap, setCategoryMap] = useState<Record<string, Category>>({});
   const [accountMap, setAccountMap] = useState<Record<number, Account>>({});
+  const [selectedCategoryIds, setSelectedCategoryIds] = useState<number[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
 
@@ -91,6 +94,7 @@ export default function StatisticsScreen() {
         setAvailableMonthKeys(keys);
 
         setSettings(sets);
+        setCategoryList(cats);
         const map: Record<string, Category> = {};
         cats.forEach((c) => (map[c.name] = c));
         setCategoryMap(map);
@@ -110,16 +114,16 @@ export default function StatisticsScreen() {
     setLoading(true);
     setError(false);
 
-    const spentPromise = isAllTime
-      ? getExpenseTotalAll()
-      : getExpenseTotalByMonth(selectedMonthKey);
+    const activeCatIds = selectedCategoryIds && selectedCategoryIds.length > 0 ? selectedCategoryIds : undefined;
+
+    const spentPromise = getFilteredExpenseTotalSql(selectedMonthKey, activeCatIds);
     const incomePromise = isAllTime
       ? getIncomeTotalAll()
       : getIncomeTotalByMonth(selectedMonthKey);
-    const insightsPromise = getQuickInsightsSql(selectedMonthKey);
-    const categoryPromise = getCategorySpendingSql(selectedMonthKey);
-    const dailyPromise = getDailySpendingSummarySql(selectedMonthKey);
-    const topExpensesPromise = getTopExpensesSql(selectedMonthKey, 5);
+    const insightsPromise = getQuickInsightsSql(selectedMonthKey, activeCatIds);
+    const categoryPromise = getCategorySpendingSql(selectedMonthKey, activeCatIds);
+    const dailyPromise = getDailySpendingSummarySql(selectedMonthKey, activeCatIds);
+    const topExpensesPromise = getTopExpensesSql(selectedMonthKey, 5, activeCatIds);
 
     Promise.all([
       spentPromise,
@@ -142,7 +146,7 @@ export default function StatisticsScreen() {
         setError(true);
         setLoading(false);
       });
-  }, [isAllTime, selectedMonthKey]);
+  }, [isAllTime, selectedMonthKey, selectedCategoryIds]);
 
   useFocusEffect(
     useCallback(() => {
@@ -153,7 +157,16 @@ export default function StatisticsScreen() {
 
   useEffect(() => {
     loadMonthData();
-  }, [selectedMonthKey, loadMonthData]);
+  }, [selectedMonthKey, selectedCategoryIds, loadMonthData]);
+
+  const handleSaveRoutinePreset = async (ids: number[]) => {
+    try {
+      await saveSettings({ routineCategoryIds: ids });
+      setSettings((prev) => (prev ? { ...prev, routineCategoryIds: ids } : prev));
+    } catch (err) {
+      console.error('Failed to save routine preset', err);
+    }
+  };
 
   const net = totalIncome - totalSpent;
   const currency = settings?.currency ?? 'EGP';
@@ -184,6 +197,15 @@ export default function StatisticsScreen() {
           }
           onSelectMonth={setSelectedMonthKey}
         />
+        {categoryList.length > 0 && (
+          <CategoryFilterBar
+            categories={categoryList}
+            selectedCategoryIds={selectedCategoryIds}
+            onSelectCategories={setSelectedCategoryIds}
+            routineCategoryIds={settings?.routineCategoryIds}
+            onSaveRoutinePreset={handleSaveRoutinePreset}
+          />
+        )}
         <ScrollView showsVerticalScrollIndicator={false}>
           <StatisticsLoadingSkeleton />
         </ScrollView>
@@ -220,6 +242,16 @@ export default function StatisticsScreen() {
         availableMonthKeys={availableMonthKeys}
         onSelectMonth={setSelectedMonthKey}
       />
+
+      {categoryList.length > 0 && (
+        <CategoryFilterBar
+          categories={categoryList}
+          selectedCategoryIds={selectedCategoryIds}
+          onSelectCategories={setSelectedCategoryIds}
+          routineCategoryIds={settings?.routineCategoryIds}
+          onSaveRoutinePreset={handleSaveRoutinePreset}
+        />
+      )}
 
       <ScrollView
         contentContainerStyle={styles.content}

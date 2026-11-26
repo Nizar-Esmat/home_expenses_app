@@ -44,6 +44,8 @@ export default function CategoryBreakdownPreview({ data, currency, onViewAll }: 
           categoryEmoji={item.categoryEmoji}
           categoryColor={item.categoryColor}
           currency={currency}
+          budgetLimit={item.budgetLimit}
+          budgetPercentage={item.budgetPercentage}
           isLast={index === top5.length - 1}
         />
       ))}

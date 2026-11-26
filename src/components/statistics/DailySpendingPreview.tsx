@@ -71,7 +71,17 @@ export default function DailySpendingPreview({
       <View style={styles.statRow}>
         <View style={styles.statLeft}>
           <Ionicons name='calculator' size={18} color={colors.textSecondary} />
-          <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Average daily spend</Text>
+          <View>
+            <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Average daily spend</Text>
+            {Boolean(summary.daysInPeriod && summary.daysInPeriod > 0) && (
+              <Text style={{ fontSize: 11, color: colors.textSecondary, marginTop: 1 }}>
+                Over {summary.daysInPeriod} day{summary.daysInPeriod === 1 ? '' : 's'}
+                {summary.activeSpendingDays !== undefined && summary.activeSpendingDays !== summary.daysInPeriod
+                  ? ` (${summary.activeSpendingDays} active)`
+                  : ''}
+              </Text>
+            )}
+          </View>
         </View>
         <Text style={[styles.statValue, { color: colors.textPrimary }]}>{avgFormatted}</Text>
       </View>

@@ -169,6 +169,8 @@ export default function AllCategorySpendingScreen() {
                 categoryEmoji={cat.categoryEmoji}
                 categoryColor={cat.categoryColor}
                 currency={currency}
+                budgetLimit={cat.budgetLimit}
+                budgetPercentage={cat.budgetPercentage}
               />
               <Ionicons
                 name={expandedCategory === cat.category ? 'chevron-up' : 'chevron-down'}
